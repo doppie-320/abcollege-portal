@@ -2,12 +2,22 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import LoginForm from "./LoginForm";
+import { createClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
 
 export const metadata: Metadata = {
   title: "Log In — SOE Student Portal",
 };
 
-export default function LoginPage() {
+export default async function LoginPage() {
+  const supabase = await createClient();
+
+  const { data: { user }, } = await supabase.auth.getUser();
+
+  if (user) {
+    redirect("/home");
+  }
+
   return (
     <div className="split">
       <div className="promo">

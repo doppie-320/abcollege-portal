@@ -4,6 +4,7 @@ import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import ForgotPasswordModal from "./ForgotPasswordModal";
+import { login } from "./actions";
 
 type Fields = {
   email: string;
@@ -80,11 +81,12 @@ export default function LoginForm() {
         </span>
       </div>
 
-      <form onSubmit={handleSubmit} noValidate>
+      <form>
         <div className="field">
           <label htmlFor="email">Email Address</label>
           <input
             id="email"
+            name="email"
             type="email"
             placeholder="e.g. lyarei@gmail.com"
             value={fields.email}
@@ -93,7 +95,7 @@ export default function LoginForm() {
           {errors.email && <p className="error">{errors.email}</p>}
         </div>
 
-        <div className="field">
+        {/* <div className="field">
           <label htmlFor="studentId">Student ID</label>
           <input
             id="studentId"
@@ -103,7 +105,7 @@ export default function LoginForm() {
             onChange={(e) => setField("studentId", e.target.value)}
           />
           {errors.studentId && <p className="error">{errors.studentId}</p>}
-        </div>
+        </div> */}
 
         <div className="field">
           <div className="labelRow">
@@ -119,6 +121,7 @@ export default function LoginForm() {
           <div className="passField">
             <input
               id="password"
+              name="password"
               type={showPassword ? "text" : "password"}
               placeholder="Enter your password"
               value={fields.password}
@@ -137,7 +140,7 @@ export default function LoginForm() {
         </div>
 
         <button
-          type="submit"
+          formAction={login}
           className="btn submitBtn"
           style={{ width: "100%", marginTop: 8 }}
         >
