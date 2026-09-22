@@ -128,6 +128,9 @@ export default function Select({
 
         .selectPlaceholder {
           color: var(--ink-soft);
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
         }
 
         .selectTrigger svg {
