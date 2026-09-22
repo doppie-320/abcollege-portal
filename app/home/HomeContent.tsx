@@ -53,7 +53,12 @@ function formatDateLine(date: Date) {
   return `${weekday}, ${month} ${date.getDate()} ${date.getFullYear()}`;
 }
 
-export default function HomeContent() {
+type HomeContentProps = {
+  last_name: string,
+  first_name: string,
+}
+
+export default async function HomeContent({last_name, first_name,}: HomeContentProps) {
   const [dateLine, setDateLine] = useState("");
 
   useEffect(() => {
@@ -81,7 +86,7 @@ export default function HomeContent() {
           <Link href="#">Transparency Reports</Link>
         </nav>
         <Link href="#" className="user-chip">
-          <span className="dot">JD</span> Juan Dela Cruz
+          <span className="dot">JD</span> {first_name} {last_name}
         </Link>
       </header>
       <div className="header-accent"></div>
