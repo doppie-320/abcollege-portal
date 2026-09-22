@@ -5,18 +5,24 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import DatePicker from "@/components/DatePicker";
 import Select from "@/components/Select";
+import { register } from "./actions";
 
-const YEAR_LEVELS = ["1st Year", "2nd Year", "3rd Year", "4th Year"];
+type Course = {
+  id: number;
+  name: string;
+};
+
+type YearLevel = {
+  id: number;
+  name: string;
+};
+
+type SignupFormProps = {
+  courses: Course[];
+  yearLevels: YearLevel[];
+};
 
 const TODAY_ISO = new Date().toISOString().slice(0, 10);
-
-const PROGRAMS = [
-  "BS Civil Engineering",
-  "BS Electrical Engineering",
-  "BS Mechanical Engineering",
-  "BS Computer Engineering",
-  "BS Industrial Engineering",
-];
 
 type Fields = {
   firstName: string;
@@ -118,7 +124,7 @@ function validateGoogleFields(fields: GoogleFields): GoogleErrors {
 
 type Step = "form" | "googleDetails" | "googleConfirm";
 
-export default function SignupForm() {
+export default function SignupForm({courses, yearLevels,}: SignupFormProps) {
   const [fields, setFields] = useState<Fields>(EMPTY_FIELDS);
   const [errors, setErrors] = useState<Errors>({});
   const [showPassword, setShowPassword] = useState(false);
@@ -130,6 +136,16 @@ export default function SignupForm() {
   const [googleErrors, setGoogleErrors] = useState<GoogleErrors>({});
   const [googleLoading, setGoogleLoading] = useState(false);
 
+  const courseOptions = courses.map((course) => ({
+    value: String(course.id),
+    label: course.name,
+  }));
+
+  const yearLevelsOptions = yearLevels.map((yearLevel) => ({
+    value: String(yearLevel.id),
+    label: yearLevel.name,
+  }));
+
   function setField<K extends keyof Fields>(key: K, value: Fields[K]) {
     setFields((prev) => ({ ...prev, [key]: value }));
   }
@@ -138,11 +154,20 @@ export default function SignupForm() {
     setGoogleFields((prev) => ({ ...prev, [key]: value }));
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
     const nextErrors = validate(fields);
     setErrors(nextErrors);
+
     if (Object.keys(nextErrors).length === 0) {
+      const formData = new FormData(event.currentTarget);
+
+      formData.set("yearLevelId", fields.yearLevel);
+      formData.set("courseId", fields.program);
+
+      await register(formData);      
+
       setSubmitted(true);
     }
   }
@@ -242,7 +267,7 @@ export default function SignupForm() {
                   id="gYearLevel"
                   value={googleFields.yearLevel}
                   onChange={(v) => setGoogleField("yearLevel", v)}
-                  options={YEAR_LEVELS}
+                  options={yearLevelsOptions}
                   placeholder="Select Year Level"
                 />
                 {googleErrors.yearLevel && <p className="error">{googleErrors.yearLevel}</p>}
@@ -253,7 +278,7 @@ export default function SignupForm() {
                   id="gProgram"
                   value={googleFields.program}
                   onChange={(v) => setGoogleField("program", v)}
-                  options={PROGRAMS}
+                  options={courseOptions}
                   placeholder="Select program"
                 />
                 {googleErrors.program && <p className="error">{googleErrors.program}</p>}
@@ -367,6 +392,7 @@ export default function SignupForm() {
                 <label htmlFor="firstName">First Name</label>
                 <input
                   id="firstName"
+                  name="firstName"
                   type="text"
                   placeholder="e.g. Iya"
                   value={fields.firstName}
@@ -378,6 +404,7 @@ export default function SignupForm() {
                 <label htmlFor="lastName">Last Name</label>
                 <input
                   id="lastName"
+                  name="lastName"
                   type="text"
                   placeholder="e.g. Rei"
                   value={fields.lastName}
@@ -391,6 +418,7 @@ export default function SignupForm() {
               <label htmlFor="email">Email Address</label>
               <input
                 id="email"
+                name="email"
                 type="email"
                 placeholder="e.g. lyarei@gmail.com"
                 value={fields.email}
@@ -404,6 +432,7 @@ export default function SignupForm() {
                 <label htmlFor="studentId">Student ID</label>
                 <input
                   id="studentId"
+                  name="studentId"
                   type="text"
                   placeholder="e.g. 20XX-XXXXX"
                   value={fields.studentId}
@@ -416,7 +445,7 @@ export default function SignupForm() {
                   Birthday <span className="optionalTag">(optional)</span>
                 </label>
                 <DatePicker
-                  id="birthday"
+                  id="birthday"                  
                   value={fields.birthday}
                   onChange={(v) => setField("birthday", v)}
                   placeholder="Select date"
@@ -447,7 +476,7 @@ export default function SignupForm() {
                   id="yearLevel"
                   value={fields.yearLevel}
                   onChange={(v) => setField("yearLevel", v)}
-                  options={YEAR_LEVELS}
+                  options={yearLevelsOptions}
                   placeholder="Select Year Level"
                 />
                 {errors.yearLevel && <p className="error">{errors.yearLevel}</p>}
@@ -458,7 +487,7 @@ export default function SignupForm() {
                   id="program"
                   value={fields.program}
                   onChange={(v) => setField("program", v)}
-                  options={PROGRAMS}
+                  options={courseOptions}
                   placeholder="Select program"
                 />
                 {errors.program && <p className="error">{errors.program}</p>}
@@ -470,6 +499,7 @@ export default function SignupForm() {
               <div className="passField">
                 <input
                   id="password"
+                  name="password"
                   type={showPassword ? "text" : "password"}
                   placeholder="Enter your password"
                   value={fields.password}

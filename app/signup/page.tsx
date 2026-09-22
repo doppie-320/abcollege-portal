@@ -1,13 +1,36 @@
+export const instant = false
+
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import SignupForm from "./SignupForm";
 
+import { createClient } from "@/lib/supabase/server";
+
 export const metadata: Metadata = {
   title: "Sign Up — SOE Student Portal",
 };
 
-export default function SignupPage() {
+export default async function SignupPage() {
+  const supabase = await createClient();
+
+  const [{ data: courses, error: coursesError },  { data: yearLevels, error: yearLevelErrors }] =
+    await Promise.all([
+      supabase
+        .from("courses")
+        .select("id, name")
+        .order("name"),
+
+      supabase
+        .from("yearlevels")
+        .select("id, name")
+        .order("name")
+    ]);
+
+  if(coursesError || yearLevelErrors) {
+    throw new Error("Failed to load signup options.");
+  }
+
   return (
     <div className="split">
       <div className="promo">
@@ -33,7 +56,10 @@ export default function SignupPage() {
       </div>
 
       <div className="formside">
-        <SignupForm />
+        <SignupForm 
+          courses = { courses ?? [] }
+          yearLevels = { yearLevels ?? [] }
+        />
       </div>
     </div>
   );
