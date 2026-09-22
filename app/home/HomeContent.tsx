@@ -5,17 +5,34 @@ export const instant = false;
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import AnnouncementCard from "./AnnouncementCard";
-import Select from "@/components/Select";
-import {
-  CURRENT_USER,
-  addComment,
-  fetchAnnouncements,
-  fetchTags,
-  toggleReaction,
-  type Announcement,
-  type TagKey,
-} from "@/lib/mock/social-db";
+import { createClient } from "../../lib/supabase/client"
+import { useRouter } from "next/navigation";
+
+type VideoMedia = {
+  url: string;
+  type: "video";
+  label: string;
+  duration: string;
+}
+
+type ImageMedia = {
+  url: string;
+  type: "image";
+  src: string;
+  alt: string;
+}
+
+type Media = VideoMedia | ImageMedia
+
+type Announcement = {
+  tag: string;
+  postedAt: string;
+  title: string;
+  body: string;
+  media?: Media;
+};
+
+const ANNOUNCEMENTS: Announcement[] = [];
 
 function formatDateLine(date: Date) {
   const weekday = date.toLocaleDateString("en-US", { weekday: "long" }).toUpperCase();
@@ -28,30 +45,67 @@ type HomeContentProps = {
   first_name: string,
 }
 
-export default async function HomeContent({last_name, first_name,}: HomeContentProps) {
+export default function HomeContent({last_name, first_name,}: HomeContentProps) {
   const [dateLine, setDateLine] = useState("");
-  const [announcements, setAnnouncements] = useState<Announcement[]>(() => fetchAnnouncements());
-  const [tags] = useState(() => fetchTags());
-  const [activeTag, setActiveTag] = useState<TagKey | "all">("all");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [announcements, setAnnouncements] = useState<Announcement[]>(ANNOUNCEMENTS);
+  const supabase = createClient();
+  const router = useRouter();
 
   useEffect(() => {
     setDateLine(formatDateLine(new Date()));
+    const loadAnnouncements = async() => {
+      try {
+        const { data, error } = await supabase
+          .from("announcements")
+          .select("id, tag, title, content, created_at, media, author_id");
+      
+        if (error) {
+          console.error("Error fetching announcements:", error);
+          return;
+        };
+
+        console.log(data)
+
+        const loadedAnnouncements: Announcement[] = (data || []).map((row) => ({
+          tag: row.tag,
+          postedAt: row.created_at,
+          title: row.title,
+          body: row.content,
+          media: row.media || undefined,
+        }));
+
+        setAnnouncements(loadedAnnouncements);
+
+      
+      
+      } catch (err) {
+        console.error(err);
+      };
+    };
+
+    loadAnnouncements();
   }, []);
 
-  const visibleAnnouncements = announcements.filter((a) => {
-    const matchesTag = activeTag === "all" || a.tag === activeTag;
-    const q = searchQuery.trim().toLowerCase();
-    const matchesQuery = q === "" || a.title.toLowerCase().includes(q) || a.body.toLowerCase().includes(q);
-    return matchesTag && matchesQuery;
-  });
+  function getRelativeTime(dateString: string): string {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
 
-  function handleToggleReaction(postId: string) {
-    setAnnouncements(toggleReaction(postId, CURRENT_USER.id));
-  }
+    // If the date is invalid or in the future
+    if (isNaN(diffInSeconds) || diffInSeconds < 0) return "Just now";
 
-  function handleAddComment(postId: string, body: string) {
-    setAnnouncements(addComment(postId, CURRENT_USER.id, body));
+    const minutes = Math.floor(diffInSeconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+    const months = Math.floor(days / 30);
+    const years = Math.floor(days / 365);
+
+    if (diffInSeconds < 60) return "Just now";
+    if (minutes < 60) return `${minutes} min${minutes > 1 ? "s" : ""} ago`;
+    if (hours < 24) return `${hours} hour${hours > 1 ? "s" : ""} ago`;
+    if (days < 30) return `${days} day${days > 1 ? "s" : ""} ago`;
+    if (months < 12) return `${months} month${months > 1 ? "s" : ""} ago`;
+    return `${years} year${years > 1 ? "s" : ""} ago`;
   }
 
   return (
@@ -72,6 +126,7 @@ export default async function HomeContent({last_name, first_name,}: HomeContentP
           <Link href="#">Calendar</Link>
           <Link href="#">Attendance</Link>
           <Link href="#">Suggestion Box</Link>
+          <Link href="#">Transparency Reports</Link>
         </nav>
         <Link href="#" className="user-chip">
           <span className="dot">JD</span> {first_name} {last_name}
@@ -101,61 +156,58 @@ export default async function HomeContent({last_name, first_name,}: HomeContentP
         </div>
 
         <div className="layout">
-          <div className="mainColumn">
-            <div className="toolbar tick-frame">
-              <span className="tick-bl"></span>
-              <span className="tick-br"></span>
-              <div className="toolbarInner">
-                <div className="searchWrap">
-                  <span className="searchIcon">
-                    <SearchIcon />
-                  </span>
-                  <input
-                    type="text"
-                    className="searchInput"
-                    placeholder="Search announcements..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    aria-label="Search announcements"
-                  />
+          <div className="tick-frame">
+            <span className="tick-bl"></span>
+            <span className="tick-br"></span>
+            <span className="eyebrow">ANNOUNCEMENTS</span>
+
+            {announcements.map((item) => (
+              <div key={item.title} className="announceItem">
+                <div className="announceMeta">
+                  <span className="mono">{getRelativeTime(item.postedAt)}</span>
                 </div>
-                <div className="tagFilterWrap">
-                  <Select
-                    id="tagFilter"
-                    value={activeTag}
-                    onChange={(v) => setActiveTag(v as TagKey | "all")}
-                    options={[
-                      { value: "all", label: "All" },
-                      ...tags.map((tag) => ({ value: tag.key, label: tag.label })),
-                    ]}
-                    aria-label="Filter announcements by tag"
-                    compact
-                  />
-                </div>
+
+                <h3>{item.title}</h3>
+                <p>{item.body}</p>
+
+                {item.media && (
+                  <div className="media">
+                    {item.media && (
+                      item.media.type === "image" ? (
+                        <Image
+                          src={item.media.src}
+                          alt={item.media.alt ?? "Media content"}
+                          width={800}
+                          height={456}
+                          className="mediaImage"
+                        />
+                      ) : (
+                        <div className="videoPlaceholder">
+                          <span className="playButton">
+                            <PlayIcon />
+                          </span>
+                          <span className="videoLabel">{item.media.label}</span>
+                          <span className="videoDuration mono">{item.media.duration}</span>
+                        </div>
+                      )
+                    )}
+                  </div>
+                )}
               </div>
-            </div>
-
-            <div className="tick-frame">
-              <span className="tick-bl"></span>
-              <span className="tick-br"></span>
-
-              {visibleAnnouncements.length === 0 ? (
-                <p className="emptyState">No announcements match your search.</p>
-              ) : (
-                visibleAnnouncements.map((item) => (
-                  <AnnouncementCard
-                    key={item.id}
-                    announcement={item}
-                    currentUser={CURRENT_USER}
-                    onToggleReaction={handleToggleReaction}
-                    onAddComment={handleAddComment}
-                  />
-                ))
-              )}
-            </div>
+            ))}
           </div>
 
           <div>
+            <div className="sideBlock tick-frame">
+              <span className="tick-bl"></span>
+              <span className="tick-br"></span>
+              <h4>Transparency reports</h4>
+              <div className="comingSoon">
+                <span className="badge">COMING SOON</span>
+                <p>Financial reports and GA minutes will show up here.</p>
+              </div>
+            </div>
+
             <div className="sideBlock tick-frame">
               <span className="tick-bl"></span>
               <span className="tick-br"></span>
@@ -193,7 +245,6 @@ export default async function HomeContent({last_name, first_name,}: HomeContentP
 
         .hero {
           margin-bottom: 28px;
-          animation: fadeInUp 0.5s ease backwards;
         }
 
         .heroTop {
@@ -231,7 +282,6 @@ export default async function HomeContent({last_name, first_name,}: HomeContentP
           align-items: center;
           justify-content: center;
           flex-shrink: 0;
-          transition: transform 0.2s ease, background 0.2s ease;
         }
 
         .socialLinks svg {
@@ -240,7 +290,6 @@ export default async function HomeContent({last_name, first_name,}: HomeContentP
 
         .socialLinks a:hover {
           background: var(--blue);
-          transform: translateY(-3px) rotate(-8deg);
         }
 
         .layout {
@@ -250,75 +299,86 @@ export default async function HomeContent({last_name, first_name,}: HomeContentP
           align-items: start;
         }
 
-        .mainColumn {
-          min-width: 0;
+        .announceItem {
+          padding: 28px 0;
+          border-top: 1px solid #c9bfa0;
         }
 
-        .toolbar {
-          padding: 12px 20px;
-          margin-bottom: 20px;
-          animation: fadeInUp 0.45s ease backwards;
-          animation-delay: 0.05s;
+        .announceItem:first-child {
+          border-top: none;
+          padding-top: 0;
         }
 
-        .toolbarInner {
+        .announceItem h3 {
+          font-size: 16px;
+          margin-bottom: 4px;
+        }
+
+        .announceMeta {
           display: flex;
           align-items: center;
-          justify-content: space-between;
-          gap: 12px;
-        }
-
-        .searchWrap {
-          position: relative;
-          flex: 1;
-          max-width: 320px;
-        }
-
-        .searchIcon {
-          position: absolute;
-          left: 10px;
-          top: 50%;
-          transform: translateY(-50%);
+          gap: 10px;
+          font-size: 12px;
           color: var(--ink-soft);
-          display: flex;
-          pointer-events: none;
+          margin-bottom: 8px;
         }
 
-        .searchInput {
-          width: 100%;
-          margin-bottom: 0 !important;
-          padding: 8px 12px 8px 32px !important;
-          font-size: 13px !important;
-          box-shadow: none !important;
+        .announceMeta .mono {
+          font-family: "IBM Plex Mono", monospace;
         }
 
-        .tagFilterWrap {
-          width: 140px;
-          flex-shrink: 0;
-          position: relative;
-          z-index: 10;
-        }
-
-        .emptyState {
-          font-size: 13px;
-          color: var(--ink-soft);
-          padding: 12px 0 0;
+        .announceItem p {
+          font-size: 14px;
+          color: var(--ink);
           margin-bottom: 0;
+        }
+
+        .media {
+          margin-top: 12px;
+          border: 1px solid #c9bfa0;
+          background: var(--vellum-2);
+          overflow: hidden;
+        }
+
+        .mediaImage {
+          display: block;
+          width: 100%;
+          height: auto;
+        }
+
+        .videoPlaceholder {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          padding: 40px 16px;
+        }
+
+        .playButton {
+          width: 44px;
+          height: 44px;
+          border-radius: 50%;
+          background: var(--navy);
+          color: var(--white);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .videoLabel {
+          font-size: 13px;
+          font-weight: 500;
+          color: var(--ink);
+        }
+
+        .videoDuration {
+          font-size: 11.5px;
+          color: var(--ink-soft);
         }
 
         .sideBlock {
           margin-bottom: 22px;
-          transition: transform 0.18s ease, box-shadow 0.18s ease;
-          animation: fadeInUp 0.4s ease backwards;
-        }
-
-        .sideBlock:nth-of-type(2) {
-          animation-delay: 0.08s;
-        }
-
-        .sideBlock:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 10px 24px rgba(19, 42, 77, 0.1);
         }
 
         .sideBlock:last-child {
@@ -389,11 +449,10 @@ function InstagramIcon() {
   );
 }
 
-function SearchIcon() {
+function PlayIcon() {
   return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <circle cx="11" cy="11" r="7" />
-      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M8 5v14l11-7z" />
     </svg>
   );
 }
