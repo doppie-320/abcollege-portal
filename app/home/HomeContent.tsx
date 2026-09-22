@@ -5,49 +5,17 @@ export const instant = false;
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-
-type Media =
-  | { type: "image"; src: string; alt: string }
-  | { type: "video"; label: string; duration: string };
-
-type Announcement = {
-  tag: string;
-  tagVariant?: "orange";
-  postedAt: string;
-  title: string;
-  body: string;
-  media?: Media;
-};
-
-const ANNOUNCEMENTS: Announcement[] = [
-  {
-    tag: "FINANCE",
-    tagVariant: "orange",
-    postedAt: "POSTED 2H AGO",
-    title: "Org dues balance reminder — ₱150",
-    body: "Students with an outstanding balance for AY 2026–2027 have until Oct 15 to settle at the SOE office before fines apply.",
-  },
-  {
-    tag: "EVENT",
-    postedAt: "POSTED 1D AGO",
-    title: "Engineering Days 2026 registration is open",
-    body: "Sign up for the sportsfest and talent night lineups through your block representative. Slots are first come, first served.",
-    media: { type: "image", src: "/promo-bg.png", alt: "Engineering Days 2026 banner" },
-  },
-  {
-    tag: "ACADEMIC",
-    postedAt: "POSTED 3D AGO",
-    title: "Midterm requirements deadline moved to Oct 20",
-    body: "Department heads approved a one-week extension following the class suspensions last week. Submit through your respective faculty.",
-  },
-  {
-    tag: "GENERAL",
-    postedAt: "POSTED 5D AGO",
-    title: "General assembly minutes now posted",
-    body: "Catch up on what was discussed at last week's GA under Transparency Reports on the sidebar.",
-    media: { type: "video", label: "GA_recording.mp4", duration: "42:10" },
-  },
-];
+import AnnouncementCard from "./AnnouncementCard";
+import Select from "@/components/Select";
+import {
+  CURRENT_USER,
+  addComment,
+  fetchAnnouncements,
+  fetchTags,
+  toggleReaction,
+  type Announcement,
+  type TagKey,
+} from "@/lib/mock/social-db";
 
 function formatDateLine(date: Date) {
   const weekday = date.toLocaleDateString("en-US", { weekday: "long" }).toUpperCase();
@@ -62,10 +30,29 @@ type HomeContentProps = {
 
 export default async function HomeContent({last_name, first_name,}: HomeContentProps) {
   const [dateLine, setDateLine] = useState("");
+  const [announcements, setAnnouncements] = useState<Announcement[]>(() => fetchAnnouncements());
+  const [tags] = useState(() => fetchTags());
+  const [activeTag, setActiveTag] = useState<TagKey | "all">("all");
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     setDateLine(formatDateLine(new Date()));
   }, []);
+
+  const visibleAnnouncements = announcements.filter((a) => {
+    const matchesTag = activeTag === "all" || a.tag === activeTag;
+    const q = searchQuery.trim().toLowerCase();
+    const matchesQuery = q === "" || a.title.toLowerCase().includes(q) || a.body.toLowerCase().includes(q);
+    return matchesTag && matchesQuery;
+  });
+
+  function handleToggleReaction(postId: string) {
+    setAnnouncements(toggleReaction(postId, CURRENT_USER.id));
+  }
+
+  function handleAddComment(postId: string, body: string) {
+    setAnnouncements(addComment(postId, CURRENT_USER.id, body));
+  }
 
   return (
     <>
@@ -85,7 +72,6 @@ export default async function HomeContent({last_name, first_name,}: HomeContentP
           <Link href="#">Calendar</Link>
           <Link href="#">Attendance</Link>
           <Link href="#">Suggestion Box</Link>
-          <Link href="#">Transparency Reports</Link>
         </nav>
         <Link href="#" className="user-chip">
           <span className="dot">JD</span> {first_name} {last_name}
@@ -115,57 +101,61 @@ export default async function HomeContent({last_name, first_name,}: HomeContentP
         </div>
 
         <div className="layout">
-          <div className="tick-frame">
-            <span className="tick-bl"></span>
-            <span className="tick-br"></span>
-            <span className="eyebrow">ANNOUNCEMENTS</span>
-
-            {ANNOUNCEMENTS.map((item) => (
-              <div key={item.title} className="announceItem">
-                <div className="announceMeta">
-                  <span className={`tag ${item.tagVariant ?? ""}`}>{item.tag}</span>
-                  <span className="mono">{item.postedAt}</span>
-                </div>
-
-                <h3>{item.title}</h3>
-                <p>{item.body}</p>
-
-                {item.media && (
-                  <div className="media">
-                    {item.media.type === "image" ? (
-                      <Image
-                        src={item.media.src}
-                        alt={item.media.alt}
-                        width={800}
-                        height={456}
-                        className="mediaImage"
-                      />
-                    ) : (
-                      <div className="videoPlaceholder">
-                        <span className="playButton">
-                          <PlayIcon />
-                        </span>
-                        <span className="videoLabel">{item.media.label}</span>
-                        <span className="videoDuration mono">{item.media.duration}</span>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-
-          <div>
-            <div className="sideBlock tick-frame">
+          <div className="mainColumn">
+            <div className="toolbar tick-frame">
               <span className="tick-bl"></span>
               <span className="tick-br"></span>
-              <h4>Transparency reports</h4>
-              <div className="comingSoon">
-                <span className="badge">COMING SOON</span>
-                <p>Financial reports and GA minutes will show up here.</p>
+              <div className="toolbarInner">
+                <div className="searchWrap">
+                  <span className="searchIcon">
+                    <SearchIcon />
+                  </span>
+                  <input
+                    type="text"
+                    className="searchInput"
+                    placeholder="Search announcements..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    aria-label="Search announcements"
+                  />
+                </div>
+                <div className="tagFilterWrap">
+                  <Select
+                    id="tagFilter"
+                    value={activeTag}
+                    onChange={(v) => setActiveTag(v as TagKey | "all")}
+                    options={[
+                      { value: "all", label: "All" },
+                      ...tags.map((tag) => ({ value: tag.key, label: tag.label })),
+                    ]}
+                    aria-label="Filter announcements by tag"
+                    compact
+                  />
+                </div>
               </div>
             </div>
 
+            <div className="tick-frame">
+              <span className="tick-bl"></span>
+              <span className="tick-br"></span>
+
+              {visibleAnnouncements.length === 0 ? (
+                <p className="emptyState">No announcements match your search.</p>
+              ) : (
+                visibleAnnouncements.map((item) => (
+                  <AnnouncementCard
+                    key={item.id}
+                    announcement={item}
+                    currentUser={CURRENT_USER}
+                    onToggleReaction={handleToggleReaction}
+                    onAddComment={handleAddComment}
+                  />
+                ))
+              )}
+            </div>
+          </div>
+
+          <div>
             <div className="sideBlock tick-frame">
               <span className="tick-bl"></span>
               <span className="tick-br"></span>
@@ -203,6 +193,7 @@ export default async function HomeContent({last_name, first_name,}: HomeContentP
 
         .hero {
           margin-bottom: 28px;
+          animation: fadeInUp 0.5s ease backwards;
         }
 
         .heroTop {
@@ -240,6 +231,7 @@ export default async function HomeContent({last_name, first_name,}: HomeContentP
           align-items: center;
           justify-content: center;
           flex-shrink: 0;
+          transition: transform 0.2s ease, background 0.2s ease;
         }
 
         .socialLinks svg {
@@ -248,6 +240,7 @@ export default async function HomeContent({last_name, first_name,}: HomeContentP
 
         .socialLinks a:hover {
           background: var(--blue);
+          transform: translateY(-3px) rotate(-8deg);
         }
 
         .layout {
@@ -257,86 +250,75 @@ export default async function HomeContent({last_name, first_name,}: HomeContentP
           align-items: start;
         }
 
-        .announceItem {
-          padding: 28px 0;
-          border-top: 1px solid #c9bfa0;
+        .mainColumn {
+          min-width: 0;
         }
 
-        .announceItem:first-child {
-          border-top: none;
-          padding-top: 0;
+        .toolbar {
+          padding: 12px 20px;
+          margin-bottom: 20px;
+          animation: fadeInUp 0.45s ease backwards;
+          animation-delay: 0.05s;
         }
 
-        .announceItem h3 {
-          font-size: 16px;
-          margin-bottom: 4px;
-        }
-
-        .announceMeta {
+        .toolbarInner {
           display: flex;
           align-items: center;
-          gap: 10px;
-          font-size: 12px;
+          justify-content: space-between;
+          gap: 12px;
+        }
+
+        .searchWrap {
+          position: relative;
+          flex: 1;
+          max-width: 320px;
+        }
+
+        .searchIcon {
+          position: absolute;
+          left: 10px;
+          top: 50%;
+          transform: translateY(-50%);
           color: var(--ink-soft);
-          margin-bottom: 8px;
+          display: flex;
+          pointer-events: none;
         }
 
-        .announceMeta .mono {
-          font-family: "IBM Plex Mono", monospace;
-        }
-
-        .announceItem p {
-          font-size: 14px;
-          color: var(--ink);
-          margin-bottom: 0;
-        }
-
-        .media {
-          margin-top: 12px;
-          border: 1px solid #c9bfa0;
-          background: var(--vellum-2);
-          overflow: hidden;
-        }
-
-        .mediaImage {
-          display: block;
+        .searchInput {
           width: 100%;
-          height: auto;
+          margin-bottom: 0 !important;
+          padding: 8px 12px 8px 32px !important;
+          font-size: 13px !important;
+          box-shadow: none !important;
         }
 
-        .videoPlaceholder {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          padding: 40px 16px;
+        .tagFilterWrap {
+          width: 140px;
+          flex-shrink: 0;
+          position: relative;
+          z-index: 10;
         }
 
-        .playButton {
-          width: 44px;
-          height: 44px;
-          border-radius: 50%;
-          background: var(--navy);
-          color: var(--white);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-
-        .videoLabel {
+        .emptyState {
           font-size: 13px;
-          font-weight: 500;
-          color: var(--ink);
-        }
-
-        .videoDuration {
-          font-size: 11.5px;
           color: var(--ink-soft);
+          padding: 12px 0 0;
+          margin-bottom: 0;
         }
 
         .sideBlock {
           margin-bottom: 22px;
+          transition: transform 0.18s ease, box-shadow 0.18s ease;
+          animation: fadeInUp 0.4s ease backwards;
+        }
+
+        .sideBlock:nth-of-type(2) {
+          animation-delay: 0.08s;
+        }
+
+        .sideBlock:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 10px 24px rgba(19, 42, 77, 0.1);
         }
 
         .sideBlock:last-child {
@@ -407,10 +389,11 @@ function InstagramIcon() {
   );
 }
 
-function PlayIcon() {
+function SearchIcon() {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-      <path d="M8 5v14l11-7z" />
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <circle cx="11" cy="11" r="7" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
     </svg>
   );
 }

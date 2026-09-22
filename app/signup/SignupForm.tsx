@@ -261,7 +261,7 @@ export default function SignupForm({courses, yearLevels,}: SignupFormProps) {
             </div>
 
             <div className="fieldRow">
-              <div className="field">
+              <div className="field fieldNarrow">
                 <label htmlFor="gYearLevel">Year Level</label>
                 <Select
                   id="gYearLevel"
@@ -272,7 +272,7 @@ export default function SignupForm({courses, yearLevels,}: SignupFormProps) {
                 />
                 {googleErrors.yearLevel && <p className="error">{googleErrors.yearLevel}</p>}
               </div>
-              <div className="field">
+              <div className="field fieldWide">
                 <label htmlFor="gProgram">Program</label>
                 <Select
                   id="gProgram"
@@ -427,6 +427,18 @@ export default function SignupForm({courses, yearLevels,}: SignupFormProps) {
               {errors.email && <p className="error">{errors.email}</p>}
             </div>
 
+            <div className="field">
+              <label htmlFor="studentId">Student ID</label>
+              <input
+                id="studentId"
+                type="text"
+                placeholder="e.g. 20XX-XXXXX"
+                value={fields.studentId}
+                onChange={(e) => setField("studentId", e.target.value)}
+              />
+              {errors.studentId && <p className="error">{errors.studentId}</p>}
+            </div>
+
             <div className="fieldRow">
               <div className="field">
                 <label htmlFor="studentId">Student ID</label>
@@ -452,6 +464,17 @@ export default function SignupForm({courses, yearLevels,}: SignupFormProps) {
                   max={TODAY_ISO}
                 />
                 {errors.birthday && <p className="error">{errors.birthday}</p>}
+              </div>
+              <div className="field">
+                <label htmlFor="yearLevel">Year Level</label>
+                <Select
+                  id="yearLevel"
+                  value={fields.yearLevel}
+                  onChange={(v) => setField("yearLevel", v)}
+                  options={yearLevelsOptions}
+                  placeholder="Year Level"
+                />
+                {errors.yearLevel && <p className="error">{errors.yearLevel}</p>}
               </div>
             </div>
 
@@ -756,6 +779,14 @@ export default function SignupForm({courses, yearLevels,}: SignupFormProps) {
           margin-bottom: 4px;
         }
 
+        .fieldRow > .fieldNarrow {
+          flex: 0 0 130px;
+        }
+
+        .fieldRow > .fieldWide {
+          flex: 1;
+        }
+
         .passField {
           position: relative;
         }
@@ -853,7 +884,7 @@ export default function SignupForm({courses, yearLevels,}: SignupFormProps) {
           margin: 0 auto 18px;
         }
 
-        @media (max-width: 860px) {
+        @media (max-width: 1024px), (orientation: portrait) {
           .split {
             grid-template-columns: 1fr;
             align-content: start;
