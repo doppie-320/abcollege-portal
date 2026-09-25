@@ -3,18 +3,16 @@
 import { useState } from "react";
 import PostContent from "./PostContent";
 import PostModal from "./PostModal";
-import type { Announcement, Person } from "@/lib/mock/social-db";
+import type { Announcement, User } from "@/app/home/HomeContent";
 
 export default function AnnouncementCard({
   announcement,
   currentUser,
   onToggleReaction,
-  onAddComment,
 }: {
   announcement: Announcement;
-  currentUser: Person;
+  currentUser: User;
   onToggleReaction: (postId: string) => void;
-  onAddComment: (postId: string, body: string) => void;
 }) {
   const [showPostModal, setShowPostModal] = useState(false);
 
@@ -24,7 +22,6 @@ export default function AnnouncementCard({
         announcement={announcement}
         currentUser={currentUser}
         onToggleReaction={onToggleReaction}
-        onCommentClick={() => setShowPostModal(true)}
       />
 
       {showPostModal && (
@@ -32,7 +29,6 @@ export default function AnnouncementCard({
           announcement={announcement}
           currentUser={currentUser}
           onToggleReaction={onToggleReaction}
-          onAddComment={onAddComment}
           onClose={() => setShowPostModal(false)}
         />
       )}

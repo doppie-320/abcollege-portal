@@ -2,22 +2,19 @@
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import PostContent from "./PostContent";
-import { formatRelativeTime, getPerson, type Announcement, type Person } from "@/lib/mock/social-db";
+import { type Announcement, type User } from "@/app/home/HomeContent";
 
 export default function PostModal({
   announcement,
   currentUser,
   onToggleReaction,
   onClose,
-  onAddComment,
 }: {
   announcement: Announcement;
-  currentUser: Person;
+  currentUser: User;
   onToggleReaction: (postId: string) => void;
   onClose: () => void;
-  onAddComment: (postId: string, body: string) => void;
 }) {
-  const [draft, setDraft] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -32,14 +29,6 @@ export default function PostModal({
       document.body.style.overflow = previousOverflow;
     };
   }, [onClose]);
-
-  function submitComment(event: FormEvent) {
-    event.preventDefault();
-    const trimmed = draft.trim();
-    if (!trimmed) return;
-    onAddComment(announcement.id, trimmed);
-    setDraft("");
-  }
 
   return (
     <div className="modalBackdrop" onClick={onClose}>
@@ -57,42 +46,8 @@ export default function PostModal({
             announcement={announcement}
             currentUser={currentUser}
             onToggleReaction={onToggleReaction}
-            onCommentClick={() => inputRef.current?.focus()}
           />
-
-          {announcement.comments.length > 0 && (
-            <div className="commentsList">
-              {announcement.comments.map((comment) => {
-                const author = getPerson(comment.authorId);
-                return (
-                  <div className="commentItem" key={comment.id}>
-                    <span className="avatar avatarSm">{author.initials}</span>
-                    <div className="commentBubble">
-                      <div className="commentAuthor">{author.name}</div>
-                      <div className="commentBody">{comment.body}</div>
-                      <div className="commentTime">{formatRelativeTime(comment.postedAt)}</div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
         </div>
-
-        <form className="commentForm" onSubmit={submitComment}>
-          <span className="avatar avatarSm">{currentUser.initials}</span>
-          <input
-            ref={inputRef}
-            type="text"
-            className="commentInput"
-            placeholder="Write a comment..."
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-          />
-          <button type="submit" className="commentPostBtn" disabled={!draft.trim()}>
-            Post
-          </button>
-        </form>
       </div>
 
       <style jsx>{`
