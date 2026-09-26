@@ -14,15 +14,19 @@ export default async function HomePage() {
 
   const { data: authUser, error: authError } = await supabase.auth.getUser();
 
-  if (!authError) {
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select()
-      .eq('id', authUser.user!.id)
-      .single();
+  if (authError) throw authError;
 
-    return <HomeContent last_name={userData.last_name} first_name={userData.first_name} />;
-  } else {
-    return <HomeContent last_name="LASTNAME" first_name="FIRSTNAME" />;
-  }
+  const { data: userData, error: userError } = await supabase
+    .from("users")
+    .select("id, first_name, last_name")
+    .eq('id', authUser.user.id)
+    .single();
+
+  if (userError) throw userError;
+
+  console.log(userData);
+
+  return <HomeContent current_user={userData as any}/>;
+  
 }
+

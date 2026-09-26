@@ -4,50 +4,63 @@ export const instant = false;
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import AnnouncementCard from "./AnnouncementCard";
+import Select from "@/components/Select";
+import { useEffect, useRef, useState } from "react";
+import { createClient } from "../../lib/supabase/client"
+import { useRouter } from "next/navigation";
 
-type Media =
-  | { type: "image"; src: string; alt: string }
-  | { type: "video"; label: string; duration: string };
-
-type Announcement = {
-  tag: string;
-  tagVariant?: "orange";
-  postedAt: string;
-  title: string;
-  body: string;
-  media?: Media;
+export type User = {
+  id: string;
+  name: string;
+  initials: string;
+  isAdmin?: AdminRole;
 };
 
-const ANNOUNCEMENTS: Announcement[] = [
-  {
-    tag: "FINANCE",
-    tagVariant: "orange",
-    postedAt: "POSTED 2H AGO",
-    title: "Org dues balance reminder — ₱150",
-    body: "Students with an outstanding balance for AY 2026–2027 have until Oct 15 to settle at the SOE office before fines apply.",
-  },
-  {
-    tag: "EVENT",
-    postedAt: "POSTED 1D AGO",
-    title: "Engineering Days 2026 registration is open",
-    body: "Sign up for the sportsfest and talent night lineups through your block representative. Slots are first come, first served.",
-    media: { type: "image", src: "/promo-bg.png", alt: "Engineering Days 2026 banner" },
-  },
-  {
-    tag: "ACADEMIC",
-    postedAt: "POSTED 3D AGO",
-    title: "Midterm requirements deadline moved to Oct 20",
-    body: "Department heads approved a one-week extension following the class suspensions last week. Submit through your respective faculty.",
-  },
-  {
-    tag: "GENERAL",
-    postedAt: "POSTED 5D AGO",
-    title: "General assembly minutes now posted",
-    body: "Catch up on what was discussed at last week's GA under Transparency Reports on the sidebar.",
-    media: { type: "video", label: "GA_recording.mp4", duration: "42:10" },
-  },
-];
+type AdminRole = {
+  role: string;
+}
+
+type VideoMedia = {
+  url: string;
+  type: "video";
+  label: string;
+  duration: string;
+}
+
+type ImageMedia = {
+  url: string;
+  type: "image";
+  items: Images[]
+}
+
+type Images = {
+  src: string; 
+  alt: string
+}
+
+
+export type Announcement = {
+  id: string;
+  tag: string;
+  postedAt: string;
+  authorId: string;
+  title: string;
+  body: string;
+  media?: VideoMedia | ImageMedia;
+  reactedBy: string[];
+};
+
+type TagKey = "FINANCE" | "EVENT" | "ACADEMIC" | "TRANSPARENCY" | "GENERAL"
+
+type Tag = {
+  key: TagKey;
+  label: string;
+};
+
+const ANNOUNCEMENTS: Announcement[] = [];
+
+const Tags: Tag[] = [];
 
 function formatDateLine(date: Date) {
   const weekday = date.toLocaleDateString("en-US", { weekday: "long" }).toUpperCase();
@@ -56,16 +69,179 @@ function formatDateLine(date: Date) {
 }
 
 type HomeContentProps = {
-  last_name: string,
-  first_name: string,
+  current_user: User;
 }
 
-export default async function HomeContent({last_name, first_name,}: HomeContentProps) {
+export function getRelativeTime(dateString: string): string {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+  // If the date is invalid or in the future
+  if (isNaN(diffInSeconds) || diffInSeconds < 0) return "Just now";
+
+  const minutes = Math.floor(diffInSeconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+  const months = Math.floor(days / 30);
+  const years = Math.floor(days / 365);
+
+  if (diffInSeconds < 60) return "Just now";
+  if (minutes < 60) return `${minutes} min${minutes > 1 ? "s" : ""} ago`;
+  if (hours < 24) return `${hours} hour${hours > 1 ? "s" : ""} ago`;
+  if (days < 30) return `${days} day${days > 1 ? "s" : ""} ago`;
+  if (months < 12) return `${months} month${months > 1 ? "s" : ""} ago`;
+  return `${years} year${years > 1 ? "s" : ""} ago`;
+}
+
+export async function getAdmin(announcement_id: string): Promise<User> {
+  const supabase = createClient();
+  const { data: adminUser, error: adminError } = await supabase
+    .from("announcements")
+    .select("id, author_id")
+    .eq("id", announcement_id)
+    .single()
+  
+    if (adminError) throw adminError;
+
+    return getPerson(adminUser.author_id);
+}
+
+export async function getPerson(user_id: string): Promise<User> {
+  const supabase = createClient();
+  const { data: userData, error: userError } = await supabase
+    .from("users")
+    .select("id, first_name, last_name")
+    .eq("id", user_id)
+    .single();
+
+  if (userError) throw userError;
+
+  const firstName = userData.first_name ?? "";
+  const lastName = userData.last_name ?? "";
+  const initials = `${firstName.trim().charAt(0)}${lastName.trim().charAt(0)}`.toUpperCase();
+
+  return {
+    id: userData.id,
+    name: `${firstName} ${lastName}`.trim(),
+    initials,
+  };
+}
+
+export default function HomeContent({current_user}: HomeContentProps) {
   const [dateLine, setDateLine] = useState("");
+  var [announcements, setAnnouncements] = useState<Announcement[]>(ANNOUNCEMENTS);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const pendingReactionIds = useRef(new Set<string>());
+  const supabase = createClient();
+  const router = useRouter();
+  const [tags, setTags] = useState<Tag[]>(Tags);
+  const [activeTag, setActiveTag] = useState<TagKey | "all">("all");
+  const [searchQuery, setSearchQuery] = useState("");
+
 
   useEffect(() => {
     setDateLine(formatDateLine(new Date()));
+    const loadAnnouncements = async() => {
+      try {
+        setCurrentUser(current_user);
+
+        const { data: announcementData, error: announcementError } = await supabase
+          .from("announcements")
+          .select("id, tag, title, content, created_at, media, author_id");
+      
+        if (announcementError) {
+          console.error("Error fetching announcements:", announcementError);
+          return;
+        };
+
+        const { data: announcementReacts, error: reactsError } = await supabase
+          .from("announcement_reactions")
+          .select("announcement_id, user_id")
+
+        if (reactsError) throw reactsError;
+
+        const loadedAnnouncements: Announcement[] = (announcementData || []).map((row) => ({
+          id: row.id,
+          tag: row.tag,
+          postedAt: row.created_at,
+          title: row.title,
+          body: row.content,
+          authorId: row.author_id || undefined,
+          media: row.media || undefined,
+          reactedBy: (announcementReacts || [])
+            .filter((reaction) => reaction.announcement_id === row.id)
+            .map((reaction) => reaction.user_id),
+        }));
+
+        console.log(loadedAnnouncements);
+
+        const loadedTags = (announcementData || []).map((row) => ({
+          key: row.tag,
+          label: row.tag
+        }));
+
+        setTags(loadedTags)
+        setAnnouncements(loadedAnnouncements);
+
+      
+      
+      } catch (err) {
+        console.error(err);
+      };
+    };
+
+    loadAnnouncements();
   }, []);
+
+  const visibleAnnouncements = announcements.filter((a) => {
+    const matchesTag = activeTag === "all" || a.tag === activeTag;
+    const q = searchQuery.trim().toLowerCase();
+    const matchesQuery = q === "" || a.title.toLowerCase().includes(q) || a.body.toLowerCase().includes(q);
+    return matchesTag && matchesQuery;
+  });
+
+  async function handleToggleReaction(postId: string) {
+    if (!currentUser || pendingReactionIds.current.has(postId)) return;
+
+    const announcement = announcements.find((item) => item.id === postId);
+    if (!announcement) return;
+
+    pendingReactionIds.current.add(postId);
+    const hasReacted = announcement.reactedBy.includes(currentUser.id);
+
+    try {
+      const result = hasReacted
+        ? await supabase
+            .from("announcement_reactions")
+            .delete()
+            .eq("announcement_id", postId)
+            .eq("user_id", currentUser.id)
+        : await supabase
+            .from("announcement_reactions")
+            .insert({ announcement_id: postId, user_id: currentUser.id });
+
+      if (result.error) throw result.error;
+
+      setAnnouncements((current) =>
+        current.map((item) => {
+          if (item.id !== postId) return item;
+
+          return {
+            ...item,
+            reactedBy: hasReacted
+              ? item.reactedBy.filter((userId) => userId !== currentUser.id)
+              : [...item.reactedBy, currentUser.id],
+          };
+        })
+      );
+    } catch (error) {
+      console.error("Error toggling announcement reaction:", error);
+    } finally {
+      pendingReactionIds.current.delete(postId);
+    }
+  }
+  
 
   return (
     <>
@@ -88,7 +264,7 @@ export default async function HomeContent({last_name, first_name,}: HomeContentP
           <Link href="#">Transparency Reports</Link>
         </nav>
         <Link href="#" className="user-chip">
-          <span className="dot">JD</span> {first_name} {last_name}
+          <span className="dot">{current_user.initials}</span> {current_user.name}
         </Link>
       </header>
       <div className="header-accent"></div>
@@ -114,58 +290,61 @@ export default async function HomeContent({last_name, first_name,}: HomeContentP
           <div className="date mono">{dateLine}</div>
         </div>
 
+        
         <div className="layout">
-          <div className="tick-frame">
-            <span className="tick-bl"></span>
-            <span className="tick-br"></span>
-            <span className="eyebrow">ANNOUNCEMENTS</span>
-
-            {ANNOUNCEMENTS.map((item) => (
-              <div key={item.title} className="announceItem">
-                <div className="announceMeta">
-                  <span className={`tag ${item.tagVariant ?? ""}`}>{item.tag}</span>
-                  <span className="mono">{item.postedAt}</span>
-                </div>
-
-                <h3>{item.title}</h3>
-                <p>{item.body}</p>
-
-                {item.media && (
-                  <div className="media">
-                    {item.media.type === "image" ? (
-                      <Image
-                        src={item.media.src}
-                        alt={item.media.alt}
-                        width={800}
-                        height={456}
-                        className="mediaImage"
-                      />
-                    ) : (
-                      <div className="videoPlaceholder">
-                        <span className="playButton">
-                          <PlayIcon />
-                        </span>
-                        <span className="videoLabel">{item.media.label}</span>
-                        <span className="videoDuration mono">{item.media.duration}</span>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-
-          <div>
-            <div className="sideBlock tick-frame">
+          <div className="mainColumn">
+            <div className="toolbar tick-frame">
               <span className="tick-bl"></span>
               <span className="tick-br"></span>
-              <h4>Transparency reports</h4>
-              <div className="comingSoon">
-                <span className="badge">COMING SOON</span>
-                <p>Financial reports and GA minutes will show up here.</p>
+              <div className="toolbarInner">
+                <div className="searchWrap">
+                  <span className="searchIcon">
+                    <SearchIcon />
+                  </span>
+                  <input
+                    type="text"
+                    className="searchInput"
+                    placeholder="Search announcements..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    aria-label="Search announcements"
+                  />
+                </div>
+                <div className="tagFilterWrap">
+                  <Select
+                    id="tagFilter"
+                    value={activeTag}
+                    onChange={(v) => setActiveTag(v as TagKey | "all")}
+                    options={[
+                      { value: "all", label: "All" },
+                      ...tags.map((tag) => ({ value: tag.key, label: tag.label })),
+                    ]}
+                    aria-label="Filter announcements by tag"
+                    compact
+                  />
+                </div>
               </div>
             </div>
 
+            <div className="tick-frame">
+              <span className="tick-bl"></span>
+              <span className="tick-br"></span>
+
+              {!currentUser ? null : visibleAnnouncements.length === 0 ? (
+                <p className="emptyState">No announcements match your search.</p>
+              ) : (
+                visibleAnnouncements.map((item) => (
+                  <AnnouncementCard
+                    key={item.id}
+                    announcement={item}
+                    currentUser={currentUser}
+                    onToggleReaction={handleToggleReaction}
+                  />
+                ))
+              )}
+            </div>
+
+            
             <div className="sideBlock tick-frame">
               <span className="tick-bl"></span>
               <span className="tick-br"></span>
@@ -337,6 +516,17 @@ export default async function HomeContent({last_name, first_name,}: HomeContentP
 
         .sideBlock {
           margin-bottom: 22px;
+          transition: transform 0.18s ease, box-shadow 0.18s ease;
+          animation: fadeInUp 0.4s ease backwards;
+        }
+
+        .sideBlock:nth-of-type(2) {
+          animation-delay: 0.08s;
+        }
+
+        .sideBlock:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 10px 24px rgba(19, 42, 77, 0.1);
         }
 
         .sideBlock:last-child {
@@ -407,10 +597,11 @@ function InstagramIcon() {
   );
 }
 
-function PlayIcon() {
+function SearchIcon() {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-      <path d="M8 5v14l11-7z" />
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <circle cx="11" cy="11" r="7" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
     </svg>
   );
 }

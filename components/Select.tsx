@@ -11,6 +11,7 @@ type Props = {
   options: (string | Option)[];
   placeholder?: string;
   "aria-label"?: string;
+  compact?: boolean;
 };
 
 function normalize(options: (string | Option)[]): Option[] {
@@ -24,6 +25,7 @@ export default function Select({
   options,
   placeholder = "Select an option",
   "aria-label": ariaLabel,
+  compact = false,
 }: Props) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -60,7 +62,7 @@ export default function Select({
       <button
         type="button"
         id={id}
-        className="selectTrigger"
+        className={`selectTrigger${compact ? " compact" : ""}`}
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="listbox"
         aria-expanded={open}
@@ -120,6 +122,12 @@ export default function Select({
           outline-offset: 1px;
         }
 
+        .selectTrigger.compact {
+          padding: 6px 10px;
+          font-size: 12.5px;
+          box-shadow: none;
+        }
+
         .selectValue {
           overflow: hidden;
           text-overflow: ellipsis;
@@ -128,6 +136,9 @@ export default function Select({
 
         .selectPlaceholder {
           color: var(--ink-soft);
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
         }
 
         .selectTrigger svg {
