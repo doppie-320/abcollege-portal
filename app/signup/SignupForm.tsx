@@ -253,7 +253,7 @@ export default function SignupForm({courses, yearLevels,}: SignupFormProps) {
               <input
                 id="gStudentId"
                 type="text"
-                placeholder="e.g. 20XX-XXXXX"
+                placeholder="e.g. SOE12345678"
                 value={googleFields.studentId}
                 onChange={(e) => setGoogleField("studentId", e.target.value)}
               />
@@ -474,7 +474,7 @@ export default function SignupForm({courses, yearLevels,}: SignupFormProps) {
                 id="studentId"
                 name="studentId"
                 type="text"
-                placeholder="e.g. 20XX-XXXXX"
+                placeholder="e.g. SOE12345678"
                 value={fields.studentId}
                 onChange={(e) => setField("studentId", e.target.value)}
               />
