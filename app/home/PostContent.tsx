@@ -60,10 +60,11 @@ export default function PostContent({
         <div className="postHeaderText">
           <div className="postAuthorName">{author?.name ?? "Unknown"}</div>
           <div className="postMetaLine">
-            <span className="postAuthorRole">{author?.isAdmin?.role}</span>
+            {author?.isAdmin?.role && <span className="postAuthorRole">{author.isAdmin.role}</span>}
             <span className="mono postTime">POSTED {getRelativeTime(announcement.postedAt).toUpperCase()}</span>
           </div>
         </div>
+        {announcement.tag && <span className="tag postTag">{announcement.tag}</span>}
       </div>
 
       <h3>{announcement.title}</h3>
@@ -139,14 +140,17 @@ export default function PostContent({
 
       <style jsx>{`
         .postContent h3 {
-          font-size: 16px;
-          margin-bottom: 4px;
+          font-size: 18px;
+          line-height: 1.3;
+          margin-bottom: 6px;
         }
 
         .postContent p {
           font-size: 14px;
+          line-height: 1.65;
           color: var(--ink);
           margin-bottom: 0;
+          white-space: pre-line;
         }
 
         .postHeader {
@@ -169,11 +173,13 @@ export default function PostContent({
           font-weight: 600;
           font-size: 13px;
           flex-shrink: 0;
-          transition: transform 0.15s ease;
         }
 
-        .postHeader:hover .avatar {
-          transform: scale(1.08);
+        .postTag {
+          align-self: flex-start;
+          text-transform: uppercase;
+          letter-spacing: 0.04em;
+          border-radius: 3px;
         }
 
         .postHeaderText {
@@ -206,9 +212,9 @@ export default function PostContent({
         }
 
         .media {
-          margin-top: 12px;
-          border: none;
-          background: #fbfaf6;
+          margin-top: 14px;
+          border: 1px solid #c9bfa0;
+          background: var(--vellum);
           overflow: hidden;
           border-radius: 6px;
         }
@@ -253,7 +259,8 @@ export default function PostContent({
           border: none;
           padding: 2px 4px;
           color: var(--ink-soft);
-          font-size: 12.5px;
+          font-family: "IBM Plex Mono", monospace;
+          font-size: 12px;
           cursor: pointer;
         }
 
@@ -281,8 +288,10 @@ export default function PostContent({
           display: flex;
           align-items: center;
           justify-content: flex-start;
-          gap: 16px;
-          margin-top: 12px;
+          gap: 12px;
+          margin-top: 14px;
+          padding-top: 10px;
+          border-top: 1px dashed #d8cfb4;
         }
 
         .actionGroup {
@@ -301,16 +310,22 @@ export default function PostContent({
           color: var(--ink-soft);
           cursor: pointer;
           border-radius: 4px;
-          transition: background 0.15s ease, transform 0.15s ease, color 0.15s ease;
+          transition: background 0.15s ease, color 0.15s ease;
         }
 
         .actionBtn:hover {
           background: var(--vellum-2);
-          transform: scale(1.1);
+          color: var(--navy);
         }
 
-        .actionBtn:active {
-          transform: scale(0.9);
+        .actionBtn.active:hover {
+          color: var(--orange);
+        }
+
+        .actionBtn:focus-visible,
+        .countBtn:focus-visible {
+          outline: 2px solid var(--blue);
+          outline-offset: 1px;
         }
 
         .actionBtn.active {

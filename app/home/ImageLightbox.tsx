@@ -111,7 +111,6 @@ export default function ImageLightbox({
 
         .lightboxClose:hover {
           background: rgba(255, 255, 255, 0.22);
-          transform: scale(1.1) rotate(90deg);
         }
 
         .lightboxNav {
@@ -131,7 +130,7 @@ export default function ImageLightbox({
 
         .lightboxNav:hover {
           background: rgba(255, 255, 255, 0.22);
-          transform: translateY(-50%) scale(1.15);
+          transform: translateY(-50%);
         }
 
         .lightboxPrev {
