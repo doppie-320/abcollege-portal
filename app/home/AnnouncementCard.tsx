@@ -9,10 +9,12 @@ export default function AnnouncementCard({
   announcement,
   currentUser,
   onToggleReaction,
+  onAddComment,
 }: {
   announcement: Announcement;
   currentUser: User;
   onToggleReaction: (postId: string) => void;
+  onAddComment: (postId: string, body: string) => Promise<void>;
 }) {
   const [showPostModal, setShowPostModal] = useState(false);
 
@@ -22,6 +24,7 @@ export default function AnnouncementCard({
         announcement={announcement}
         currentUser={currentUser}
         onToggleReaction={onToggleReaction}
+        onCommentClick={() => setShowPostModal(true)}
       />
 
       {showPostModal && (
@@ -29,6 +32,7 @@ export default function AnnouncementCard({
           announcement={announcement}
           currentUser={currentUser}
           onToggleReaction={onToggleReaction}
+          onAddComment={onAddComment}
           onClose={() => setShowPostModal(false)}
         />
       )}

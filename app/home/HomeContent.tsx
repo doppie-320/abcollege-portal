@@ -49,7 +49,44 @@ export type Announcement = {
   body: string;
   media?: VideoMedia | ImageMedia;
   reactedBy: string[];
+  comments: Comment[];
 };
+
+export type Comment = {
+  id: string;
+  authorId: string;
+  authorName: string;
+  authorInitials: string;
+  body: string;
+  postedAt: string;
+};
+
+type CommentRow = {
+  id: string;
+  announcement_id: string;
+  user_id: string;
+  content: string;
+  created_at: string;
+};
+
+type UserRow = {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+};
+
+function toComment(row: CommentRow, author?: UserRow): Comment {
+  const firstName = author?.first_name?.trim() ?? "";
+  const lastName = author?.last_name?.trim() ?? "";
+  return {
+    id: row.id,
+    authorId: row.user_id,
+    authorName: `${firstName} ${lastName}`.trim() || "Unknown",
+    authorInitials: `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase() || "?",
+    body: row.content,
+    postedAt: row.created_at,
+  };
+}
 
 type TagKey = "FINANCE" | "EVENT" | "ACADEMIC" | "TRANSPARENCY" | "GENERAL"
 
@@ -161,6 +198,21 @@ export default function HomeContent({current_user}: HomeContentProps) {
 
         if (reactsError) throw reactsError;
 
+        // Comments are optional: if the table is unavailable, posts still render without them.
+        const { data: commentData, error: commentsError } = await supabase
+          .from("announcement_comments")
+          .select("id, announcement_id, user_id, content, created_at")
+          .order("created_at", { ascending: true });
+
+        if (commentsError) console.error("Error fetching announcement comments:", commentsError);
+
+        const commentRows: CommentRow[] = commentData || [];
+        const commenterIds = [...new Set(commentRows.map((comment) => comment.user_id))];
+        const { data: commenterData } = commenterIds.length
+          ? await supabase.from("users").select("id, first_name, last_name").in("id", commenterIds)
+          : { data: [] as UserRow[] };
+        const commenters = new Map((commenterData || []).map((user: UserRow) => [user.id, user]));
+
         const loadedAnnouncements: Announcement[] = (announcementData || []).map((row) => ({
           id: row.id,
           tag: row.tag,
@@ -172,6 +224,9 @@ export default function HomeContent({current_user}: HomeContentProps) {
           reactedBy: (announcementReacts || [])
             .filter((reaction) => reaction.announcement_id === row.id)
             .map((reaction) => reaction.user_id),
+          comments: commentRows
+            .filter((comment) => comment.announcement_id === row.id)
+            .map((comment) => toComment(comment, commenters.get(comment.user_id))),
         }));
 
         console.log(loadedAnnouncements);
@@ -241,6 +296,44 @@ export default function HomeContent({current_user}: HomeContentProps) {
       pendingReactionIds.current.delete(postId);
     }
   }
+
+  async function handleAddComment(postId: string, body: string) {
+    if (!currentUser) return;
+
+    const tempId = `temp-${Date.now()}`;
+    const pending: Comment = {
+      id: tempId,
+      authorId: currentUser.id,
+      authorName: currentUser.name,
+      authorInitials: currentUser.initials,
+      body,
+      postedAt: new Date().toISOString(),
+    };
+
+    const updateComments = (update: (comments: Comment[]) => Comment[]) =>
+      setAnnouncements((current) =>
+        current.map((item) => (item.id === postId ? { ...item, comments: update(item.comments) } : item))
+      );
+
+    // Show the comment immediately, then swap in the saved row (or roll back on failure).
+    updateComments((comments) => [...comments, pending]);
+
+    const { data, error } = await supabase
+      .from("announcement_comments")
+      .insert({ announcement_id: postId, user_id: currentUser.id, content: body })
+      .select("id, announcement_id, user_id, content, created_at")
+      .single();
+
+    if (error) {
+      console.error("Error adding announcement comment:", error);
+      updateComments((comments) => comments.filter((comment) => comment.id !== tempId));
+      throw error;
+    }
+
+    updateComments((comments) =>
+      comments.map((comment) => (comment.id === tempId ? { ...pending, id: data.id, postedAt: data.created_at } : comment))
+    );
+  }
   
 
   return (
@@ -261,7 +354,6 @@ export default function HomeContent({current_user}: HomeContentProps) {
           <Link href="#">Calendar</Link>
           <Link href="#">Attendance</Link>
           <Link href="#">Suggestion Box</Link>
-          <Link href="#">Transparency Reports</Link>
         </nav>
         <Link href="#" className="user-chip">
           <span className="dot">{current_user.initials}</span> {current_user.name}
@@ -290,7 +382,6 @@ export default function HomeContent({current_user}: HomeContentProps) {
           <div className="date mono">{dateLine}</div>
         </div>
 
-        
         <div className="layout">
           <div className="mainColumn">
             <div className="toolbar tick-frame">
@@ -339,12 +430,14 @@ export default function HomeContent({current_user}: HomeContentProps) {
                     announcement={item}
                     currentUser={currentUser}
                     onToggleReaction={handleToggleReaction}
+                    onAddComment={handleAddComment}
                   />
                 ))
               )}
             </div>
+          </div>
 
-            
+          <div>
             <div className="sideBlock tick-frame">
               <span className="tick-bl"></span>
               <span className="tick-br"></span>
@@ -382,6 +475,7 @@ export default function HomeContent({current_user}: HomeContentProps) {
 
         .hero {
           margin-bottom: 28px;
+          animation: fadeInUp 0.5s ease backwards;
         }
 
         .heroTop {
@@ -419,6 +513,7 @@ export default function HomeContent({current_user}: HomeContentProps) {
           align-items: center;
           justify-content: center;
           flex-shrink: 0;
+          transition: transform 0.2s ease, background 0.2s ease;
         }
 
         .socialLinks svg {
@@ -427,6 +522,7 @@ export default function HomeContent({current_user}: HomeContentProps) {
 
         .socialLinks a:hover {
           background: var(--blue);
+          transform: translateY(-3px) rotate(-8deg);
         }
 
         .layout {
@@ -436,82 +532,60 @@ export default function HomeContent({current_user}: HomeContentProps) {
           align-items: start;
         }
 
-        .announceItem {
-          padding: 28px 0;
-          border-top: 1px solid #c9bfa0;
+        .mainColumn {
+          min-width: 0;
         }
 
-        .announceItem:first-child {
-          border-top: none;
-          padding-top: 0;
+        .toolbar {
+          padding: 12px 20px;
+          margin-bottom: 20px;
+          animation: fadeInUp 0.45s ease backwards;
+          animation-delay: 0.05s;
         }
 
-        .announceItem h3 {
-          font-size: 16px;
-          margin-bottom: 4px;
-        }
-
-        .announceMeta {
+        .toolbarInner {
           display: flex;
           align-items: center;
-          gap: 10px;
-          font-size: 12px;
+          justify-content: space-between;
+          gap: 12px;
+        }
+
+        .searchWrap {
+          position: relative;
+          flex: 1;
+          max-width: 320px;
+        }
+
+        .searchIcon {
+          position: absolute;
+          left: 10px;
+          top: 50%;
+          transform: translateY(-50%);
           color: var(--ink-soft);
-          margin-bottom: 8px;
+          display: flex;
+          pointer-events: none;
         }
 
-        .announceMeta .mono {
-          font-family: "IBM Plex Mono", monospace;
-        }
-
-        .announceItem p {
-          font-size: 14px;
-          color: var(--ink);
-          margin-bottom: 0;
-        }
-
-        .media {
-          margin-top: 12px;
-          border: 1px solid #c9bfa0;
-          background: var(--vellum-2);
-          overflow: hidden;
-        }
-
-        .mediaImage {
-          display: block;
+        .searchInput {
           width: 100%;
-          height: auto;
+          margin-bottom: 0 !important;
+          padding: 8px 12px 8px 32px !important;
+          font-size: 13px !important;
+          box-shadow: none !important;
         }
 
-        .videoPlaceholder {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          padding: 40px 16px;
+        .tagFilterWrap {
+          width: 140px;
+          flex-shrink: 0;
+          position: relative;
+          z-index: 10;
         }
 
-        .playButton {
-          width: 44px;
-          height: 44px;
-          border-radius: 50%;
-          background: var(--navy);
-          color: var(--white);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-
-        .videoLabel {
+        .emptyState {
           font-size: 13px;
-          font-weight: 500;
-          color: var(--ink);
-        }
-
-        .videoDuration {
-          font-size: 11.5px;
           color: var(--ink-soft);
+          padding: 12px 0 0;
+          margin-bottom: 0;
         }
 
         .sideBlock {

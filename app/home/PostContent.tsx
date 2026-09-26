@@ -16,11 +16,13 @@ async function reactorNames(reactedBy: string[], currentUserId: string): Promise
 export default function PostContent({
   announcement,
   currentUser,
-  onToggleReaction
+  onToggleReaction,
+  onCommentClick,
 }: {
   announcement: Announcement;
   currentUser: User;
   onToggleReaction: (postId: string) => void;
+  onCommentClick: () => void;
 }) {
   const [showReactors, setShowReactors] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
@@ -123,6 +125,16 @@ export default function PostContent({
           )}
         </div>
 
+        <div className="actionGroup">
+          <button type="button" className="actionBtn" onClick={onCommentClick} aria-label="Comment">
+            <CommentIcon />
+          </button>
+          {announcement.comments.length > 0 && (
+            <button type="button" className="countBtn" onClick={onCommentClick}>
+              {announcement.comments.length}
+            </button>
+          )}
+        </div>
       </div>
 
       <style jsx>{`
@@ -324,6 +336,14 @@ function HeartIcon({ filled }: { filled?: boolean }) {
       strokeWidth="2"
     >
       <path d="M12 21s-7.5-4.6-10-9.1C.4 8.2 2 4.5 5.6 4a5 5 0 0 1 6.4 2.3A5 5 0 0 1 18.4 4c3.6.5 5.2 4.2 3.6 7.9C19.5 16.4 12 21 12 21Z" />
+    </svg>
+  );
+}
+
+function CommentIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5Z" />
     </svg>
   );
 }

@@ -24,9 +24,18 @@ export default async function HomePage() {
 
   if (userError) throw userError;
 
-  console.log(userData);
+  const firstName = userData.first_name?.trim() ?? "";
+  const lastName = userData.last_name?.trim() ?? "";
 
-  return <HomeContent current_user={userData as any}/>;
+  return (
+    <HomeContent
+      current_user={{
+        id: userData.id,
+        name: `${firstName} ${lastName}`.trim(),
+        initials: `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase(),
+      }}
+    />
+  );
   
 }
 

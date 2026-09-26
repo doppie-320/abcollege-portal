@@ -5,14 +5,14 @@ import Image from "next/image";
 import Link from "next/link";
 import SignupForm from "./SignupForm";
 
-import { createClient } from "@/lib/supabase/server";
+import { createPublicClient } from "@/lib/supabase/public";
 
 export const metadata: Metadata = {
   title: "Sign Up — SOE Student Portal",
 };
 
 export default async function SignupPage() {
-  const supabase = await createClient();
+  const supabase = createPublicClient();
 
   const [{ data: courses, error: coursesError },  { data: yearLevels, error: yearLevelErrors }] =
     await Promise.all([
