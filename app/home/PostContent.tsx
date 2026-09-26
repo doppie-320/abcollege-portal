@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import MediaGrid from "./MediaGrid";
 import ImageLightbox from "./ImageLightbox";
+import RichTextBody from "./RichTextBody";
+import PostMenu from "./PostMenu";
 import { type Announcement, type User, getPerson, getRelativeTime, getAdmin } from "@/app/home/HomeContent";
 
 async function reactorNames(reactedBy: string[], currentUserId: string): Promise<string[]> {
@@ -18,20 +20,33 @@ export default function PostContent({
   currentUser,
   onToggleReaction,
   onCommentClick,
+  authorOverride,
+  collapsible = false,
+  onEdit,
+  onDelete,
 }: {
   announcement: Announcement;
   currentUser: User;
   onToggleReaction: (postId: string) => void;
   onCommentClick: () => void;
+  // Known author (e.g. the Create post preview); skips the author lookup.
+  authorOverride?: User;
+  // Clip long bodies behind "Show more" (feed cards, not the full post view).
+  collapsible?: boolean;
+  // Shown in the "..." menu; omit both to hide the menu (e.g. not the author).
+  onEdit?: () => void;
+  onDelete?: () => void;
 }) {
   const [showReactors, setShowReactors] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [names, setNames] = useState<string[]>([]);
 
-  const [author, setAuthor] = useState<User | null>(null);
+  const [fetchedAuthor, setAuthor] = useState<User | null>(null);
+  const author = authorOverride ?? fetchedAuthor;
   const reacted = announcement.reactedBy.includes(currentUser.id);
 
   useEffect(() => {
+    if (authorOverride) return;
     let active = true;
     getAdmin(announcement.authorId).then((resolvedAuthor) => {
       if (active) setAuthor(resolvedAuthor);
@@ -40,7 +55,7 @@ export default function PostContent({
     return () => {
       active = false;
     };
-  }, [announcement.authorId]);
+  }, [announcement.authorId, authorOverride]);
 
   useEffect(() => {
     let active = true;
@@ -62,13 +77,14 @@ export default function PostContent({
           <div className="postMetaLine">
             {author?.isAdmin?.role && <span className="postAuthorRole">{author.isAdmin.role}</span>}
             <span className="mono postTime">POSTED {getRelativeTime(announcement.postedAt).toUpperCase()}</span>
+            {announcement.tag && <span className="tag postTag">{announcement.tag}</span>}
           </div>
         </div>
-        {announcement.tag && <span className="tag postTag">{announcement.tag}</span>}
+        {onEdit && onDelete && <PostMenu onEdit={onEdit} onDelete={onDelete} />}
       </div>
 
-      <h3>{announcement.title}</h3>
-      <p>{announcement.body}</p>
+      <h3 className="postTitle">{announcement.title}</h3>
+      <RichTextBody content={announcement.body} collapsible={collapsible} />
 
       {announcement.media && (
         <div className="media">
@@ -139,18 +155,13 @@ export default function PostContent({
       </div>
 
       <style jsx>{`
-        .postContent h3 {
-          font-size: 18px;
-          line-height: 1.3;
-          margin-bottom: 6px;
-        }
-
-        .postContent p {
-          font-size: 14px;
-          line-height: 1.65;
-          color: var(--ink);
-          margin-bottom: 0;
-          white-space: pre-line;
+        .postTitle {
+          font-size: 24px;
+          line-height: 1.25;
+          margin-bottom: 12px;
+          padding-bottom: 10px;
+          border-bottom: 1px dashed #d8cfb4;
+          overflow-wrap: anywhere;
         }
 
         .postHeader {
@@ -176,10 +187,11 @@ export default function PostContent({
         }
 
         .postTag {
-          align-self: flex-start;
           text-transform: uppercase;
           letter-spacing: 0.04em;
           border-radius: 3px;
+          font-size: 9.5px;
+          padding: 1px 6px;
         }
 
         .postHeaderText {

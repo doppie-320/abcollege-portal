@@ -5,10 +5,12 @@ export const instant = false;
 import Image from "next/image";
 import Link from "next/link";
 import AnnouncementCard from "./AnnouncementCard";
+import CreatePostModal, { type NewPost } from "./CreatePostModal";
 import Select from "@/components/Select";
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "../../lib/supabase/client"
 import { useRouter } from "next/navigation";
+import { richTextToPlain } from "@/lib/richText";
 
 export type User = {
   id: string;
@@ -75,6 +77,20 @@ type UserRow = {
   last_name: string | null;
 };
 
+function toAnnouncement(row: AnnouncementRow): Announcement {
+  return {
+    id: row.id,
+    tag: row.tag,
+    postedAt: row.created_at,
+    title: row.title,
+    body: row.content,
+    authorId: row.author_id ?? "",
+    media: row.media || undefined,
+    reactedBy: [],
+    comments: [],
+  };
+}
+
 function toComment(row: CommentRow, author?: UserRow): Comment {
   const firstName = author?.first_name?.trim() ?? "";
   const lastName = author?.last_name?.trim() ?? "";
@@ -89,6 +105,18 @@ function toComment(row: CommentRow, author?: UserRow): Comment {
 }
 
 type TagKey = "FINANCE" | "EVENT" | "ACADEMIC" | "TRANSPARENCY" | "GENERAL"
+
+const POST_TAGS: TagKey[] = ["GENERAL", "ACADEMIC", "EVENT", "FINANCE", "TRANSPARENCY"];
+
+type AnnouncementRow = {
+  id: string;
+  tag: string;
+  title: string;
+  content: string;
+  created_at: string;
+  media: Announcement["media"] | null;
+  author_id: string | null;
+};
 
 type Tag = {
   key: TagKey;
@@ -175,6 +203,7 @@ export default function HomeContent({current_user}: HomeContentProps) {
   const [tags, setTags] = useState<Tag[]>(Tags);
   const [activeTag, setActiveTag] = useState<TagKey | "all">("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [showCreatePost, setShowCreatePost] = useState(false);
 
 
   useEffect(() => {
@@ -185,7 +214,8 @@ export default function HomeContent({current_user}: HomeContentProps) {
 
         const { data: announcementData, error: announcementError } = await supabase
           .from("announcements")
-          .select("id, tag, title, content, created_at, media, author_id");
+          .select("id, tag, title, content, created_at, media, author_id")
+          .order("created_at", { ascending: false });
       
         if (announcementError) {
           console.error("Error fetching announcements:", announcementError);
@@ -214,13 +244,7 @@ export default function HomeContent({current_user}: HomeContentProps) {
         const commenters = new Map((commenterData || []).map((user: UserRow) => [user.id, user]));
 
         const loadedAnnouncements: Announcement[] = (announcementData || []).map((row) => ({
-          id: row.id,
-          tag: row.tag,
-          postedAt: row.created_at,
-          title: row.title,
-          body: row.content,
-          authorId: row.author_id || undefined,
-          media: row.media || undefined,
+          ...toAnnouncement(row),
           reactedBy: (announcementReacts || [])
             .filter((reaction) => reaction.announcement_id === row.id)
             .map((reaction) => reaction.user_id),
@@ -252,9 +276,66 @@ export default function HomeContent({current_user}: HomeContentProps) {
   const visibleAnnouncements = announcements.filter((a) => {
     const matchesTag = activeTag === "all" || a.tag === activeTag;
     const q = searchQuery.trim().toLowerCase();
-    const matchesQuery = q === "" || a.title.toLowerCase().includes(q) || a.body.toLowerCase().includes(q);
+    const matchesQuery =
+      q === "" || a.title.toLowerCase().includes(q) || richTextToPlain(a.body).toLowerCase().includes(q);
     return matchesTag && matchesQuery;
   });
+
+  async function handleCreatePost(post: NewPost) {
+    if (!currentUser) return;
+
+    const { data, error } = await supabase
+      .from("announcements")
+      .insert({ tag: post.tag, title: post.title, content: post.content, author_id: currentUser.id })
+      .select("id, tag, title, content, created_at, media, author_id")
+      .single();
+
+    if (error) {
+      console.error("Error creating announcement:", error);
+      throw error;
+    }
+
+    setAnnouncements((current) => [toAnnouncement(data), ...current]);
+    addTagOption(post.tag);
+  }
+
+  async function handleUpdatePost(postId: string, post: NewPost) {
+    const { data, error } = await supabase
+      .from("announcements")
+      .update({ tag: post.tag, title: post.title, content: post.content })
+      .eq("id", postId)
+      .select("id, tag, title, content, created_at, media, author_id")
+      .single();
+
+    if (error) {
+      console.error("Error updating announcement:", error);
+      throw error;
+    }
+
+    const updated = toAnnouncement(data);
+    setAnnouncements((current) =>
+      current.map((item) =>
+        item.id === postId ? { ...updated, reactedBy: item.reactedBy, comments: item.comments } : item
+      )
+    );
+    addTagOption(post.tag);
+  }
+
+  async function handleDeletePost(postId: string) {
+    // Select the deleted row back: a delete blocked by RLS returns no error, just no rows.
+    const { data, error } = await supabase.from("announcements").delete().eq("id", postId).select("id");
+
+    if (error || !data?.length) {
+      console.error("Error deleting announcement:", error ?? "no rows deleted");
+      throw error ?? new Error("Announcement was not deleted.");
+    }
+
+    setAnnouncements((current) => current.filter((item) => item.id !== postId));
+  }
+
+  function addTagOption(tag: string) {
+    setTags((current) => (current.some((t) => t.key === tag) ? current : [...current, { key: tag as TagKey, label: tag }]));
+  }
 
   async function handleToggleReaction(postId: string) {
     if (!currentUser || pendingReactionIds.current.has(postId)) return;
@@ -418,7 +499,7 @@ export default function HomeContent({current_user}: HomeContentProps) {
                       compact
                     />
                   </div>
-                  <button type="button" className="btn createPostBtn">
+                  <button type="button" className="btn createPostBtn" onClick={() => setShowCreatePost(true)}>
                     <PlusIcon />
                     Create post
                   </button>
@@ -449,8 +530,11 @@ export default function HomeContent({current_user}: HomeContentProps) {
                     key={item.id}
                     announcement={item}
                     currentUser={currentUser}
+                    tags={POST_TAGS}
                     onToggleReaction={handleToggleReaction}
                     onAddComment={handleAddComment}
+                    onUpdatePost={handleUpdatePost}
+                    onDeletePost={handleDeletePost}
                   />
                 ))
               )}
@@ -484,6 +568,15 @@ export default function HomeContent({current_user}: HomeContentProps) {
           </div>
         </div>
       </div>
+
+      {showCreatePost && currentUser && (
+        <CreatePostModal
+          currentUser={currentUser}
+          tags={POST_TAGS}
+          onClose={() => setShowCreatePost(false)}
+          onSubmit={handleCreatePost}
+        />
+      )}
 
       <style jsx global>{`
         .brandLink {
