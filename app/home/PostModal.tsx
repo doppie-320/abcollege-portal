@@ -2,20 +2,35 @@
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import PostContent from "./PostContent";
-import { type Announcement, type User } from "@/app/home/HomeContent";
+import { getRelativeTime, type Announcement, type User } from "@/app/home/HomeContent";
 
 export default function PostModal({
   announcement,
   currentUser,
   onToggleReaction,
   onClose,
+  onAddComment,
 }: {
   announcement: Announcement;
   currentUser: User;
   onToggleReaction: (postId: string) => void;
   onClose: () => void;
+  onAddComment: (postId: string, body: string) => Promise<void>;
 }) {
+  const [draft, setDraft] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [commentError, setCommentError] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const commentCount = announcement.comments.length;
+  const previousCommentCount = useRef(commentCount);
+
+  useEffect(() => {
+    if (commentCount > previousCommentCount.current) {
+      scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+    }
+    previousCommentCount.current = commentCount;
+  }, [commentCount]);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -30,6 +45,23 @@ export default function PostModal({
     };
   }, [onClose]);
 
+  async function submitComment(event: FormEvent) {
+    event.preventDefault();
+    const trimmed = draft.trim();
+    if (!trimmed || submitting) return;
+    setSubmitting(true);
+    setCommentError("");
+    setDraft("");
+    try {
+      await onAddComment(announcement.id, trimmed);
+    } catch {
+      setDraft(trimmed);
+      setCommentError("Couldn't post your comment. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   return (
     <div className="modalBackdrop" onClick={onClose}>
       <div className="modalPanel" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
@@ -41,13 +73,48 @@ export default function PostModal({
         </div>
         <div className="modalAccent"></div>
 
-        <div className="modalScroll">
+        <div className="modalScroll" ref={scrollRef}>
           <PostContent
             announcement={announcement}
             currentUser={currentUser}
             onToggleReaction={onToggleReaction}
+            onCommentClick={() => inputRef.current?.focus()}
           />
+
+          {announcement.comments.length > 0 && (
+            <div className="commentsList">
+              {announcement.comments.map((comment) => (
+                <div className="commentItem" key={comment.id}>
+                  <span className="avatar avatarSm">{comment.authorInitials}</span>
+                  <div className="commentBubble">
+                    <div className="commentAuthor">{comment.authorName}</div>
+                    <div className="commentBody">{comment.body}</div>
+                    <div className="commentTime">{getRelativeTime(comment.postedAt)}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
+
+        <form className="commentForm" onSubmit={submitComment}>
+          <span className="avatar avatarSm">{currentUser.initials}</span>
+          <input
+            ref={inputRef}
+            type="text"
+            className="commentInput"
+            placeholder="Write a comment..."
+            value={draft}
+            onChange={(e) => {
+              setDraft(e.target.value);
+              if (commentError) setCommentError("");
+            }}
+          />
+          <button type="submit" className="commentPostBtn" disabled={!draft.trim() || submitting}>
+            Post
+          </button>
+        </form>
+        {commentError && <p className="commentError" role="alert">{commentError}</p>}
       </div>
 
       <style jsx>{`
@@ -222,6 +289,14 @@ export default function PostModal({
 
         .commentPostBtn:active:not(:disabled) {
           transform: scale(0.94);
+        }
+
+        .commentError {
+          margin: 0;
+          padding: 0 18px 12px;
+          font-size: 12px;
+          color: #b3261e;
+          background: var(--vellum-2);
         }
 
         .commentPostBtn:disabled {
