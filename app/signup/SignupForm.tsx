@@ -427,44 +427,7 @@ export default function SignupForm({courses, yearLevels,}: SignupFormProps) {
               {errors.email && <p className="error">{errors.email}</p>}
             </div>
 
-            <div className="field">
-              <label htmlFor="studentId">Student ID</label>
-              <input
-                id="studentId"
-                type="text"
-                placeholder="e.g. 20XX-XXXXX"
-                value={fields.studentId}
-                onChange={(e) => setField("studentId", e.target.value)}
-              />
-              {errors.studentId && <p className="error">{errors.studentId}</p>}
-            </div>
-
             <div className="fieldRow">
-              <div className="field">
-                <label htmlFor="studentId">Student ID</label>
-                <input
-                  id="studentId"
-                  name="studentId"
-                  type="text"
-                  placeholder="e.g. 20XX-XXXXX"
-                  value={fields.studentId}
-                  onChange={(e) => setField("studentId", e.target.value)}
-                />
-                {errors.studentId && <p className="error">{errors.studentId}</p>}
-              </div>
-              <div className="field">
-                <label htmlFor="birthday">
-                  Birthday <span className="optionalTag">(optional)</span>
-                </label>
-                <DatePicker
-                  id="birthday"                  
-                  value={fields.birthday}
-                  onChange={(v) => setField("birthday", v)}
-                  placeholder="Select date"
-                  max={TODAY_ISO}
-                />
-                {errors.birthday && <p className="error">{errors.birthday}</p>}
-              </div>
               <div className="field">
                 <label htmlFor="yearLevel">Year Level</label>
                 <Select
@@ -472,9 +435,22 @@ export default function SignupForm({courses, yearLevels,}: SignupFormProps) {
                   value={fields.yearLevel}
                   onChange={(v) => setField("yearLevel", v)}
                   options={yearLevelsOptions}
-                  placeholder="Year Level"
+                  placeholder="Select Year Level"
                 />
                 {errors.yearLevel && <p className="error">{errors.yearLevel}</p>}
+              </div>
+              <div className="field">
+                <label htmlFor="birthday">
+                  Birthday <span className="optionalTag">(optional)</span>
+                </label>
+                <DatePicker
+                  id="birthday"
+                  value={fields.birthday}
+                  onChange={(v) => setField("birthday", v)}
+                  placeholder="Select date"
+                  max={TODAY_ISO}
+                />
+                {errors.birthday && <p className="error">{errors.birthday}</p>}
               </div>
             </div>
 
@@ -492,29 +468,29 @@ export default function SignupForm({courses, yearLevels,}: SignupFormProps) {
               </label>
             )}
 
-            <div className="fieldRow">
-              <div className="field">
-                <label htmlFor="yearLevel">Year Level</label>
-                <Select
-                  id="yearLevel"
-                  value={fields.yearLevel}
-                  onChange={(v) => setField("yearLevel", v)}
-                  options={yearLevelsOptions}
-                  placeholder="Select Year Level"
-                />
-                {errors.yearLevel && <p className="error">{errors.yearLevel}</p>}
-              </div>
-              <div className="field">
-                <label htmlFor="program">Program</label>
-                <Select
-                  id="program"
-                  value={fields.program}
-                  onChange={(v) => setField("program", v)}
-                  options={courseOptions}
-                  placeholder="Select program"
-                />
-                {errors.program && <p className="error">{errors.program}</p>}
-              </div>
+            <div className="field">
+              <label htmlFor="studentId">Student ID</label>
+              <input
+                id="studentId"
+                name="studentId"
+                type="text"
+                placeholder="e.g. 20XX-XXXXX"
+                value={fields.studentId}
+                onChange={(e) => setField("studentId", e.target.value)}
+              />
+              {errors.studentId && <p className="error">{errors.studentId}</p>}
+            </div>
+
+            <div className="field">
+              <label htmlFor="program">Program</label>
+              <Select
+                id="program"
+                value={fields.program}
+                onChange={(v) => setField("program", v)}
+                options={courseOptions}
+                placeholder="Select program"
+              />
+              {errors.program && <p className="error">{errors.program}</p>}
             </div>
 
             <div className="field">
