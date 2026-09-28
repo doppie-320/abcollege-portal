@@ -24,6 +24,15 @@ export default async function HomePage() {
 
   if (userError) throw userError;
 
+  // A row in "admins" (keyed by users.id) is what makes an account an admin.
+  const { data: adminRow, error: adminError } = await supabase
+    .from("admins")
+    .select("id")
+    .eq("id", userData.id)
+    .maybeSingle();
+
+  if (adminError) throw adminError;  
+
   const firstName = userData.first_name?.trim() ?? "";
   const lastName = userData.last_name?.trim() ?? "";
 
@@ -34,6 +43,7 @@ export default async function HomePage() {
         name: `${firstName} ${lastName}`.trim(),
         initials: `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase(),
       }}
+      is_admin={adminRow !== null}
     />
   );
   

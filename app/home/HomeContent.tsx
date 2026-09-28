@@ -37,7 +37,7 @@ type ImageMedia = {
 }
 
 type Images = {
-  src: string; 
+  src: string;
   alt: string
 }
 
@@ -135,6 +135,7 @@ function formatDateLine(date: Date) {
 
 type HomeContentProps = {
   current_user: User;
+  is_admin: boolean;
 }
 
 export function getRelativeTime(dateString: string): string {
@@ -166,10 +167,10 @@ export async function getAdmin(announcement_id: string): Promise<User> {
     .select("id, author_id")
     .eq("id", announcement_id)
     .single()
-  
-    if (adminError) throw adminError;
 
-    return getPerson(adminUser.author_id);
+  if (adminError) throw adminError;
+
+  return getPerson(adminUser.author_id);
 }
 
 export async function getPerson(user_id: string): Promise<User> {
@@ -182,18 +183,18 @@ export async function getPerson(user_id: string): Promise<User> {
 
   if (userError) throw userError;
 
-  const firstName = userData.first_name ?? "";
-  const lastName = userData.last_name ?? "";
-  const initials = `${firstName.trim().charAt(0)}${lastName.trim().charAt(0)}`.toUpperCase();
+  const firstName = userData.first_name?.trim() ?? "";
+  const lastName = userData.last_name?.trim() ?? "";
+  const initials = `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
 
   return {
     id: userData.id,
-    name: `${firstName} ${lastName}`.trim(),
+    name: [firstName, lastName].filter(Boolean).join(" "),
     initials,
   };
 }
 
-export default function HomeContent({current_user}: HomeContentProps) {
+export default function HomeContent({ current_user, is_admin }: HomeContentProps) {
   const [dateLine, setDateLine] = useState("");
   var [announcements, setAnnouncements] = useState<Announcement[]>(ANNOUNCEMENTS);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -208,7 +209,7 @@ export default function HomeContent({current_user}: HomeContentProps) {
 
   useEffect(() => {
     setDateLine(formatDateLine(new Date()));
-    const loadAnnouncements = async() => {
+    const loadAnnouncements = async () => {
       try {
         setCurrentUser(current_user);
 
@@ -216,7 +217,7 @@ export default function HomeContent({current_user}: HomeContentProps) {
           .from("announcements")
           .select("id, tag, title, content, created_at, media, author_id")
           .order("created_at", { ascending: false });
-      
+
         if (announcementError) {
           console.error("Error fetching announcements:", announcementError);
           return;
@@ -263,8 +264,8 @@ export default function HomeContent({current_user}: HomeContentProps) {
         setTags(loadedTags)
         setAnnouncements(loadedAnnouncements);
 
-      
-      
+
+
       } catch (err) {
         console.error(err);
       };
@@ -349,13 +350,13 @@ export default function HomeContent({current_user}: HomeContentProps) {
     try {
       const result = hasReacted
         ? await supabase
-            .from("announcement_reactions")
-            .delete()
-            .eq("announcement_id", postId)
-            .eq("user_id", currentUser.id)
+          .from("announcement_reactions")
+          .delete()
+          .eq("announcement_id", postId)
+          .eq("user_id", currentUser.id)
         : await supabase
-            .from("announcement_reactions")
-            .insert({ announcement_id: postId, user_id: currentUser.id });
+          .from("announcement_reactions")
+          .insert({ announcement_id: postId, user_id: currentUser.id });
 
       if (result.error) throw result.error;
 
@@ -415,7 +416,7 @@ export default function HomeContent({current_user}: HomeContentProps) {
       comments.map((comment) => (comment.id === tempId ? { ...pending, id: data.id, postedAt: data.created_at } : comment))
     );
   }
-  
+
 
   return (
     <>
@@ -499,10 +500,15 @@ export default function HomeContent({current_user}: HomeContentProps) {
                       compact
                     />
                   </div>
-                  <button type="button" className="btn createPostBtn" onClick={() => setShowCreatePost(true)}>
+                  {is_admin && <button
+                    type="button"
+                    className="btn createPostBtn"
+                    onClick={() => setShowCreatePost(true)}
+                  >
                     <PlusIcon />
                     Create post
                   </button>
+                  }
                 </div>
               </div>
             </div>
@@ -736,13 +742,13 @@ export default function HomeContent({current_user}: HomeContentProps) {
           transition: background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
         }
 
-        .createPostBtn:hover {
+        .createPostBtn:not(:disabled):hover {
           background: var(--navy-deep);
           transform: translate(-2px, -2px);
           box-shadow: 3px 3px 0 var(--orange), 6px 6px 0 var(--yellow);
         }
 
-        .createPostBtn:active {
+        .createPostBtn:not(:disabled):active {
           transform: none;
           box-shadow: 0 0 0 var(--orange), 0 0 0 var(--yellow);
         }

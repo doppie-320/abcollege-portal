@@ -5,7 +5,7 @@ import MediaGrid from "./MediaGrid";
 import ImageLightbox from "./ImageLightbox";
 import RichTextBody from "./RichTextBody";
 import PostMenu from "./PostMenu";
-import { type Announcement, type User, getPerson, getRelativeTime, getAdmin } from "@/app/home/HomeContent";
+import { type Announcement, type User, getPerson, getRelativeTime } from "@/app/home/HomeContent";
 
 async function reactorNames(reactedBy: string[], currentUserId: string): Promise<string[]> {
   const names = await Promise.all(
@@ -46,11 +46,14 @@ export default function PostContent({
   const reacted = announcement.reactedBy.includes(currentUser.id);
 
   useEffect(() => {
-    if (authorOverride) return;
+    // Posts with no author_id keep the "Unknown" fallback.
+    if (authorOverride || !announcement.authorId) return;
     let active = true;
-    getAdmin(announcement.authorId).then((resolvedAuthor) => {
-      if (active) setAuthor(resolvedAuthor);
-    });
+    getPerson(announcement.authorId)
+      .then((resolvedAuthor) => {
+        if (active) setAuthor(resolvedAuthor);
+      })
+      .catch((error) => console.error("Error fetching announcement author:", error));
 
     return () => {
       active = false;
