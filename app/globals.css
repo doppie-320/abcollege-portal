@@ -16,6 +16,7 @@
   --white: #fbfaf6;
   --rule: #c9bfa0;
   --rule-soft: #e4dcc9;
+  --control-h: 40px;
 }
 
 @theme inline {

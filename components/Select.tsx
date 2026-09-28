@@ -12,6 +12,7 @@ type Props = {
   placeholder?: string;
   "aria-label"?: string;
   compact?: boolean;
+  inTable?: boolean;
 };
 
 function normalize(options: (string | Option)[]): Option[] {
@@ -26,6 +27,7 @@ export default function Select({
   placeholder = "Select an option",
   "aria-label": ariaLabel,
   compact = false,
+  inTable = false,
 }: Props) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -62,7 +64,9 @@ export default function Select({
       <button
         type="button"
         id={id}
-        className={`selectTrigger${compact ? " compact" : ""}`}
+        className={
+          `selectTrigger${compact ? " compact" : ""}${inTable ? " row" : ""}`
+        }
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="listbox"
         aria-expanded={open}
@@ -71,7 +75,7 @@ export default function Select({
         <span className={selected ? "selectValue" : "selectPlaceholder"}>
           {selected ? selected.label : placeholder}
         </span>
-        <ChevronIcon open={open} />
+        <ChevronIcon open={open} size={inTable ? 14 : 16} />
       </button>
 
       {open && (
@@ -126,6 +130,13 @@ export default function Select({
           padding: 6px 10px;
           font-size: 12.5px;
           box-shadow: none;
+        }
+
+        .selectTrigger.row {
+          box-sizing: border-box;
+          height: var(--control-h);
+          padding: 8px 12px;
+          font-size: 13px;
         }
 
         .selectValue {
@@ -192,11 +203,11 @@ export default function Select({
   );
 }
 
-function ChevronIcon({ open }: { open: boolean }) {
+function ChevronIcon({ open, size = 16 }: { open: boolean; size?: number }) {
   return (
     <svg
-      width="16"
-      height="16"
+      width={size}
+      height={size}
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"

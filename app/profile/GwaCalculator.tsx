@@ -138,42 +138,39 @@ export default function GwaCalculator() {
     subjects.length === 1 && !only.code && !only.units && !only.grade;
 
   return (
-    <div>
-      <div className="flex flex-wrap items-start justify-between gap-5">
+    <div className="@container mx-auto w-full max-w-[520px]">
+      <div className="flex flex-wrap items-start justify-between gap-5 mb-4">
         <div>
           <span className="eyebrow mb-1.5">GWA CALCULATOR</span>
           <h2 className="mb-0 text-lg">Running general weighted average</h2>
         </div>
-        <div className="flex flex-col items-end gap-0.5 max-[620px]:items-start">
+        <div className="flex flex-col items-end gap-0.5 @max-[380px]:items-start">
           <span className="font-mono text-[34px] font-bold leading-none text-orange">
             {gwa === null ? "—" : gwa.toFixed(2)}
           </span>
-          <span className="font-mono text-[9.5px] tracking-[0.04em] text-ink-soft">
-            GENERAL WEIGHTED AVERAGE
-          </span>
+         
         </div>
       </div>
 
-      <hr className="my-3.5 border-0 border-t border-rule" />
 
       <table className="w-full table-fixed border-collapse">
         <thead>
           <tr>
             <th
               scope="col"
-              className="pb-2 pr-2 text-left font-mono text-[10.5px] font-medium uppercase tracking-[0.04em] text-ink-soft"
+              className="pb-2 pr-2 text-left font-mono text-[11px] font-medium uppercase tracking-[0.04em] text-ink-soft"
             >
               Subject
             </th>
             <th
               scope="col"
-              className="w-[108px] pb-2 pr-2 text-left font-mono text-[10.5px] font-medium uppercase tracking-[0.04em] text-ink-soft max-[620px]:w-[84px]"
+              className="w-[96px] pb-2 pr-2 text-left font-mono text-[11px] font-medium uppercase tracking-[0.04em] text-ink-soft @max-[420px]:w-[78px]"
             >
               Units
             </th>
             <th
               scope="col"
-              className="w-[108px] pb-2 pr-2 text-left font-mono text-[10.5px] font-medium uppercase tracking-[0.04em] text-ink-soft max-[620px]:w-[84px]"
+              className="w-[96px] pb-2 pr-2 text-left font-mono text-[11px] font-medium uppercase tracking-[0.04em] text-ink-soft @max-[420px]:w-[78px]"
             >
               Grade
             </th>
@@ -182,16 +179,17 @@ export default function GwaCalculator() {
             </th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-vellum-2">
+        <tbody>
           {subjects.map((subject) => {
             const errors = validate(subject);
 
             return (
               <tr key={subject.id}>
-                <td className="py-0 pr-2 align-top text-[13px]">
+                <td className="py-1 pr-2 align-top text-[13px]">
+                  {/* subject code */}
                   <input
                     type="text"
-                    className="mb-0 w-full p-2 text-[13.5px] shadow-none"
+                    className="mb-0 w-full p-2 text-[13px] shadow-none h-[length:var(--control-h)]"
                     placeholder="e.g. CS 101"
                     aria-label="Subject code"
                     value={subject.code}
@@ -200,16 +198,16 @@ export default function GwaCalculator() {
                     }
                   />
                   {errors.code && (
-                    <p className="mt-1 mb-0 text-[11px] text-orange">
+                    <p className="mt-1 mb-0 text-[9px] text-orange">
                       {errors.code}
                     </p>
                   )}
                 </td>
-                <td className="py-0 pr-2 align-top text-[13px]">
+                <td className="py-1 pr-2 align-top text-[13px]">
                   <input
                     type="text"
                     inputMode="decimal"
-                    className="mb-0 w-full p-2 text-center text-[13.5px] shadow-none"
+                    className="mb-0 w-full p-2 text-center text-[13px] shadow-none h-[length:var(--control-h)]"
                     placeholder="3"
                     aria-label="Units"
                     value={subject.units}
@@ -218,14 +216,15 @@ export default function GwaCalculator() {
                     }
                   />
                   {errors.units && (
-                    <p className="mt-1 mb-0 text-[11px] text-orange">
+                    <p className="mt-1 mb-0 text-[9px] text-orange">
                       {errors.units}
                     </p>
                   )}
                 </td>
-                <td className="py-0 pr-2 align-top text-[13px]">
+                <td className="py-1 pr-2 align-top text-[13px]">
                   <Select
                     compact
+                    inTable
                     aria-label="Grade point"
                     value={subject.grade}
                     onChange={(value) =>
@@ -235,15 +234,15 @@ export default function GwaCalculator() {
                     placeholder="Grade"
                   />
                   {errors.grade && (
-                    <p className="mt-1 mb-0 text-[11px] text-orange">
+                    <p className="mt-1 mb-0 text-[9px] text-orange">
                       {errors.grade}
                     </p>
                   )}
                 </td>
-                <td className="w-10 py-0 align-top">
+                <td className="w-10 py-1 align-top">
                   <button
                     type="button"
-                    className="cursor-pointer rounded-[5px] border border-transparent bg-transparent p-1.5 text-ink-soft hover:border-rule hover:text-orange"
+                    className="mb-4 cursor-pointer rounded-[5px] border border-transparent bg-transparent p-1.5 text-ink-soft hover:border-rule hover:text-orange"
                     aria-label={`Remove ${subject.code.trim() || "subject"}`}
                     onClick={() => removeSubject(subject.id)}
                   >
@@ -258,15 +257,15 @@ export default function GwaCalculator() {
           <tr>
             <td
               colSpan={2}
-              className="border-t border-rule pt-3 pr-2 text-[12.5px] text-ink-soft"
+              className="pt-3 pr-2 text-[12.5px] text-ink-soft"
             >
               {countedSubjects} of {subjects.length} subject
               {subjects.length === 1 ? "" : "s"} counted
             </td>
-            <td className="border-t border-rule pt-3 pr-2 font-mono text-[14px] text-ink">
+            <td className="pt-3 pr-2 font-mono text-[14px] text-ink">
               {units || "—"}
             </td>
-            <td className="w-10 border-t border-rule pt-3">
+            <td className=" pt-3">
               <span className="font-mono text-[9.5px] tracking-[0.04em] text-ink-soft">
                 UNITS
               </span>
@@ -275,10 +274,10 @@ export default function GwaCalculator() {
         </tfoot>
       </table>
 
-      <div className="mt-1 flex flex-wrap gap-2.5">
+      <div className="mt-4 flex flex-wrap gap-2.5">
         <button
           type="button"
-          className="btn ghost px-4 py-2 text-[13px]"
+          className="btn ghost px-2 py-1 text-[10px]"
           onClick={addSubject}
         >
           <PlusIcon />
@@ -286,7 +285,7 @@ export default function GwaCalculator() {
         </button>
         <button
           type="button"
-          className="btn ghost px-4 py-2 text-[13px]"
+          className="btn ghost px-2 py-1 text-[10px]"
           onClick={clearAll}
           disabled={isBlank}
         >
@@ -294,7 +293,7 @@ export default function GwaCalculator() {
         </button>
       </div>
 
-      <p className="mt-3.5 mb-0 text-xs text-ink-soft">
+      <p className="mt-4 mb-4 text-xs text-ink-soft">
         GWA = &Sigma;(grade point &times; units) &divide; total units. Rows still
         missing a subject code, units, or grade are skipped. This calculator is a
         scratchpad and is not saved to your account.
