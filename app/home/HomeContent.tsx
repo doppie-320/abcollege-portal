@@ -1,7 +1,5 @@
 "use client";
 
-export const instant = false;
-
 import Image from "next/image";
 import Link from "next/link";
 import AnnouncementCard from "./AnnouncementCard";
@@ -263,7 +261,7 @@ export default function HomeContent({current_user}: HomeContentProps) {
           <Link href="#">Suggestion Box</Link>
           <Link href="#">Transparency Reports</Link>
         </nav>
-        <Link href="#" className="user-chip">
+        <Link href="/profile" className="user-chip">
           <span className="dot">{current_user.initials}</span> {current_user.name}
         </Link>
       </header>
