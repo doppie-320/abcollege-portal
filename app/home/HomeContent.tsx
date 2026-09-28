@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import AnnouncementCard from "./AnnouncementCard";
 import Select from "@/components/Select";
+import UserMenu from "@/components/UserMenu";
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "../../lib/supabase/client"
 import { useRouter } from "next/navigation";
@@ -261,9 +262,7 @@ export default function HomeContent({current_user}: HomeContentProps) {
           <Link href="#">Suggestion Box</Link>
           <Link href="#">Transparency Reports</Link>
         </nav>
-        <Link href="/profile" className="user-chip">
-          <span className="dot">{current_user.initials}</span> {current_user.name}
-        </Link>
+        <UserMenu initials={current_user.initials} name={current_user.name} />
       </header>
       <div className="header-accent"></div>
 
