@@ -537,6 +537,7 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
                     announcement={item}
                     currentUser={currentUser}
                     tags={POST_TAGS}
+                    canManage={is_admin}
                     onToggleReaction={handleToggleReaction}
                     onAddComment={handleAddComment}
                     onUpdatePost={handleUpdatePost}

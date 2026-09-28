@@ -11,6 +11,7 @@ export default function AnnouncementCard({
   announcement,
   currentUser,
   tags,
+  canManage,
   onToggleReaction,
   onAddComment,
   onUpdatePost,
@@ -19,6 +20,8 @@ export default function AnnouncementCard({
   announcement: Announcement;
   currentUser: User;
   tags: string[];
+  // Admins get the "..." menu with Edit post / Delete post.
+  canManage: boolean;
   onToggleReaction: (postId: string) => void;
   onAddComment: (postId: string, body: string) => Promise<void>;
   onUpdatePost: (postId: string, post: NewPost) => Promise<void>;
@@ -27,9 +30,6 @@ export default function AnnouncementCard({
   const [showPostModal, setShowPostModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  // TEMP: every post shows the edit/delete menu for now. Restore the author check
-  // (announcement.authorId === currentUser.id) once roles/permissions are decided.
-  const canManage = true;
 
   return (
     <div className="announceItem">
