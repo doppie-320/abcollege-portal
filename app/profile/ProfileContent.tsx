@@ -2,6 +2,10 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import AvatarEditor, {
+  AvatarEditButton,
+  AvatarRemoveButton,
+} from "./AvatarEditor";
 import GwaCalculator from "./GwaCalculator";
 import UserMenu from "@/components/UserMenu";
 import type { Profile } from "@/lib/auth";
@@ -33,13 +37,18 @@ export default function ProfileContent({ profile }: ProfileContentProps) {
           <Link href="#">Suggestion Box</Link>
           <Link href="#">Transparency Reports</Link>
         </nav>
-        <UserMenu initials={profile.initials} name={profile.name} isProfilePage />
+        <UserMenu
+          initials={profile.initials}
+          name={profile.name}
+          userId={profile.id}
+          isProfilePage
+        />
       </header>
       <div className="header-accent" />
 
       <div className="page-wrap">
         <div className="mb-6">
-          <h1 className="mb-1 text-[30px] leading-none">Welcome, {profile.name}</h1>
+          <h1 className="mb-1 text-[30px] leading-none">Student Profile</h1>
           <p className="mb-0 text-xs text-ink-soft">
             Your student record and a scratchpad for working out your GWA.
           </p>
@@ -50,22 +59,24 @@ export default function ProfileContent({ profile }: ProfileContentProps) {
             <span className="tick-bl" />
             <span className="tick-br" />
 
-            <div className="flex items-center gap-4">
-              <div
-                aria-hidden="true"
-                className="flex size-16 shrink-0 items-center justify-center rounded-full border border-navy-tint bg-blue font-display text-[22px] font-semibold text-paper"
-              >
-                {profile.initials}
-              </div>
+            <AvatarEditor
+              userId={profile.id}
+              initials={profile.initials}
+              name={profile.name}
+            >
               <div className="min-w-0">
-                <h2 className="mb-2 text-xl [overflow-wrap:anywhere]">
+                <h2 className="mb-2 text-2xl [overflow-wrap:anywhere]">
                   {profile.name}
                 </h2>
-                <div className="flex flex-wrap gap-1.5 mb-4">
-                  <span className="tag orange">{profile.yearLevel}</span>
+                <div className="mb-4 flex flex-wrap gap-1.5">
+                  <span className="tag orange">{profile.program}</span>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <AvatarEditButton />
+                  <AvatarRemoveButton />
                 </div>
               </div>
-            </div>
+            </AvatarEditor>
 
             <ul className="mt-4 mb-4 list-none divide-y divide-rule-soft overflow-hidden rounded-[6px] border border-rule bg-paper">
               <li className="flex justify-between gap-3 px-3.5 py-2.5 text-[13px]">

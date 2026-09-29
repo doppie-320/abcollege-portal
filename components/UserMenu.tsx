@@ -1,16 +1,20 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { logout } from "@/app/profile/actions";
+import { useAvatarValue } from "@/lib/avatar";
 
 type Props = {
   initials: string;
   name: string;
+  userId?: string;
   isProfilePage?: boolean;
 };
 
-export default function UserMenu({ initials, name, isProfilePage = false }: Props) {
+export default function UserMenu({ initials, name, userId, isProfilePage = false }: Props) {
+  const avatarUrl = useAvatarValue(userId);
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const panelId = useId();
@@ -44,7 +48,17 @@ export default function UserMenu({ initials, name, isProfilePage = false }: Prop
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
       >
-        <span className="dot">{initials}</span>
+        {avatarUrl ? (
+          <Image
+            src={avatarUrl}
+            alt=""
+            width={30}
+            height={30}
+            className="size-[30px] shrink-0 rounded-full border border-navy-tint object-cover"
+          />
+        ) : (
+          <span className="dot">{initials}</span>
+        )}
         <span className="userMenuName">{name}</span>
         <ChevronIcon open={open} />
       </button>
