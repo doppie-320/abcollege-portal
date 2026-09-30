@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import MediaGrid from "./MediaGrid";
 import ImageLightbox from "./ImageLightbox";
-import { type Announcement, type User, getPerson, getRelativeTime, getAdmin } from "@/app/home/HomeContent";
+import RichTextBody from "./RichTextBody";
+import PostMenu from "./PostMenu";
+import { type Announcement, type User, getPerson, getRelativeTime } from "@/app/home/HomeContent";
 
 async function reactorNames(reactedBy: string[], currentUserId: string): Promise<string[]> {
   const names = await Promise.all(
@@ -18,29 +20,45 @@ export default function PostContent({
   currentUser,
   onToggleReaction,
   onCommentClick,
+  authorOverride,
+  collapsible = false,
+  onEdit,
+  onDelete,
 }: {
   announcement: Announcement;
   currentUser: User;
   onToggleReaction: (postId: string) => void;
   onCommentClick: () => void;
+  // Known author (e.g. the Create post preview); skips the author lookup.
+  authorOverride?: User;
+  // Clip long bodies behind "Show more" (feed cards, not the full post view).
+  collapsible?: boolean;
+  // Shown in the "..." menu; omit both to hide the menu (e.g. not the author).
+  onEdit?: () => void;
+  onDelete?: () => void;
 }) {
   const [showReactors, setShowReactors] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [names, setNames] = useState<string[]>([]);
 
-  const [author, setAuthor] = useState<User | null>(null);
+  const [fetchedAuthor, setAuthor] = useState<User | null>(null);
+  const author = authorOverride ?? fetchedAuthor;
   const reacted = announcement.reactedBy.includes(currentUser.id);
 
   useEffect(() => {
+    // Posts with no author_id keep the "Unknown" fallback.
+    if (authorOverride || !announcement.authorId) return;
     let active = true;
-    getAdmin(announcement.authorId).then((resolvedAuthor) => {
-      if (active) setAuthor(resolvedAuthor);
-    });
+    getPerson(announcement.authorId)
+      .then((resolvedAuthor) => {
+        if (active) setAuthor(resolvedAuthor);
+      })
+      .catch((error) => console.error("Error fetching announcement author:", error));
 
     return () => {
       active = false;
     };
-  }, [announcement.authorId]);
+  }, [announcement.authorId, authorOverride]);
 
   useEffect(() => {
     let active = true;
@@ -60,14 +78,16 @@ export default function PostContent({
         <div className="postHeaderText">
           <div className="postAuthorName">{author?.name ?? "Unknown"}</div>
           <div className="postMetaLine">
-            <span className="postAuthorRole">{author?.isAdmin?.role}</span>
+            {author?.isAdmin?.role && <span className="postAuthorRole">{author.isAdmin.role}</span>}
             <span className="mono postTime">POSTED {getRelativeTime(announcement.postedAt).toUpperCase()}</span>
+            {announcement.tag && <span className="tag postTag">{announcement.tag}</span>}
           </div>
         </div>
+        {onEdit && onDelete && <PostMenu onEdit={onEdit} onDelete={onDelete} />}
       </div>
 
-      <h3>{announcement.title}</h3>
-      <p>{announcement.body}</p>
+      <h3 className="postTitle">{announcement.title}</h3>
+      <RichTextBody content={announcement.body} collapsible={collapsible} />
 
       {announcement.media && (
         <div className="media">
@@ -138,15 +158,13 @@ export default function PostContent({
       </div>
 
       <style jsx>{`
-        .postContent h3 {
-          font-size: 16px;
-          margin-bottom: 4px;
-        }
-
-        .postContent p {
-          font-size: 14px;
-          color: var(--ink);
-          margin-bottom: 0;
+        .postTitle {
+          font-size: 24px;
+          line-height: 1.25;
+          margin-bottom: 12px;
+          padding-bottom: 10px;
+          border-bottom: 1px dashed #d8cfb4;
+          overflow-wrap: anywhere;
         }
 
         .postHeader {
@@ -169,11 +187,14 @@ export default function PostContent({
           font-weight: 600;
           font-size: 13px;
           flex-shrink: 0;
-          transition: transform 0.15s ease;
         }
 
-        .postHeader:hover .avatar {
-          transform: scale(1.08);
+        .postTag {
+          text-transform: uppercase;
+          letter-spacing: 0.04em;
+          border-radius: 3px;
+          font-size: 9.5px;
+          padding: 1px 6px;
         }
 
         .postHeaderText {
@@ -206,9 +227,9 @@ export default function PostContent({
         }
 
         .media {
-          margin-top: 12px;
-          border: none;
-          background: #fbfaf6;
+          margin-top: 14px;
+          border: 1px solid #c9bfa0;
+          background: var(--vellum);
           overflow: hidden;
           border-radius: 6px;
         }
@@ -253,7 +274,8 @@ export default function PostContent({
           border: none;
           padding: 2px 4px;
           color: var(--ink-soft);
-          font-size: 12.5px;
+          font-family: "IBM Plex Mono", monospace;
+          font-size: 12px;
           cursor: pointer;
         }
 
@@ -281,8 +303,10 @@ export default function PostContent({
           display: flex;
           align-items: center;
           justify-content: flex-start;
-          gap: 16px;
-          margin-top: 12px;
+          gap: 12px;
+          margin-top: 14px;
+          padding-top: 10px;
+          border-top: 1px dashed #d8cfb4;
         }
 
         .actionGroup {
@@ -301,16 +325,22 @@ export default function PostContent({
           color: var(--ink-soft);
           cursor: pointer;
           border-radius: 4px;
-          transition: background 0.15s ease, transform 0.15s ease, color 0.15s ease;
+          transition: background 0.15s ease, color 0.15s ease;
         }
 
         .actionBtn:hover {
           background: var(--vellum-2);
-          transform: scale(1.1);
+          color: var(--navy);
         }
 
-        .actionBtn:active {
-          transform: scale(0.9);
+        .actionBtn.active:hover {
+          color: var(--orange);
+        }
+
+        .actionBtn:focus-visible,
+        .countBtn:focus-visible {
+          outline: 2px solid var(--blue);
+          outline-offset: 1px;
         }
 
         .actionBtn.active {

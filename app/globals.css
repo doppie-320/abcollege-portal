@@ -425,3 +425,190 @@ select:focus {
 .btn:active {
   transform: scale(0.97);
 }
+
+/* ---------- Rich text (announcement bodies + Create post editor) ---------- */
+.richText {
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.richText > * + * {
+  margin-top: 0.7em;
+}
+
+.richText p {
+  margin: 0;
+}
+
+.richText h1,
+.richText h2,
+.richText h3 {
+  margin: 1em 0 0;
+  line-height: 1.25;
+}
+
+.richText > :first-child {
+  margin-top: 0;
+}
+
+.richText h1 {
+  font-size: 22px;
+}
+
+.richText h2 {
+  font-size: 19px;
+}
+
+.richText h3 {
+  font-size: 16.5px;
+}
+
+.richText ul,
+.richText ol {
+  padding-left: 1.4em;
+}
+
+.richText li + li {
+  margin-top: 0.25em;
+}
+
+.richText li p {
+  margin: 0;
+}
+
+.richText ul li::marker {
+  color: var(--orange);
+}
+
+.richText ol li::marker {
+  color: var(--navy);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.9em;
+}
+
+.richText blockquote {
+  border-left: 3px solid var(--orange);
+  background: var(--vellum);
+  padding: 8px 14px;
+  color: var(--ink-soft);
+  border-radius: 0 4px 4px 0;
+}
+
+.richText code {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.88em;
+  background: var(--vellum-2);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+.richText pre {
+  background: var(--navy-deep);
+  color: #e7edf6;
+  padding: 12px 14px;
+  border-radius: 6px;
+  overflow-x: auto;
+}
+
+.richText pre code {
+  background: none;
+  padding: 0;
+  color: inherit;
+}
+
+.richText hr {
+  border: none;
+  border-top: 1px dashed #c9bfa0;
+  margin: 1.2em 0;
+}
+
+.richText a {
+  color: var(--blue);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.richText mark {
+  background: #fdf78a;
+  color: inherit;
+  padding: 0 2px;
+  border-radius: 2px;
+}
+
+.richText img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+  border: 1px solid #c9bfa0;
+}
+
+.richText video {
+  display: block;
+  width: 100%;
+  max-height: 480px;
+  border-radius: 6px;
+  border: 1px solid #c9bfa0;
+  background: var(--navy-deep);
+}
+
+.richText a.fileAttachment {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 420px;
+  padding: 10px 12px;
+  border: 1px solid #c9bfa0;
+  border-radius: 6px;
+  background: var(--vellum);
+  color: var(--ink);
+  text-decoration: none;
+  transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.richText a.fileAttachment:hover {
+  border-color: var(--navy);
+  transform: translate(-1px, -1px);
+  box-shadow: 2px 2px 0 var(--orange);
+}
+
+.richText .fileExt {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  background: var(--navy);
+  color: var(--white);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+
+.richText .fileMeta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.richText .fileName {
+  font-weight: 600;
+  font-size: 13.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.richText .fileSize {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+
+.richText.plain {
+  white-space: pre-line;
+}
