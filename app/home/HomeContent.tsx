@@ -1,12 +1,11 @@
 "use client";
 
-export const instant = false;
-
 import Image from "next/image";
 import Link from "next/link";
 import AnnouncementCard from "./AnnouncementCard";
 import CreatePostModal, { type NewPost } from "./CreatePostModal";
 import Select from "@/components/Select";
+import UserMenu from "@/components/UserMenu";
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "../../lib/supabase/client"
 import { useRouter } from "next/navigation";
@@ -17,6 +16,7 @@ export type User = {
   name: string;
   initials: string;
   isAdmin?: AdminRole;
+  avatar_path: string;
 };
 
 type AdminRole = {
@@ -177,7 +177,7 @@ export async function getPerson(user_id: string): Promise<User> {
   const supabase = createClient();
   const { data: userData, error: userError } = await supabase
     .from("users")
-    .select("id, first_name, last_name")
+    .select("id, first_name, last_name, avatar_path")
     .eq("id", user_id)
     .single();
 
@@ -191,6 +191,9 @@ export async function getPerson(user_id: string): Promise<User> {
     id: userData.id,
     name: [firstName, lastName].filter(Boolean).join(" "),
     initials,
+    avatar_path: userData.avatar_path
+      ? supabase.storage.from("avatars").getPublicUrl(userData.avatar_path).data.publicUrl
+      : "",
   };
 }
 
@@ -437,9 +440,7 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
           <Link href="#">Attendance</Link>
           <Link href="#">Suggestion Box</Link>
         </nav>
-        <Link href="#" className="user-chip">
-          <span className="dot">{current_user.initials}</span> {current_user.name}
-        </Link>
+        <UserMenu initials={current_user.initials} name={current_user.name} userId={current_user.id} avatarUrl={current_user.avatar_path}/>
       </header>
       <div className="header-accent"></div>
 

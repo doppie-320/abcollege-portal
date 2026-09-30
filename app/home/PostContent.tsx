@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import MediaGrid from "./MediaGrid";
 import ImageLightbox from "./ImageLightbox";
 import RichTextBody from "./RichTextBody";
@@ -74,7 +75,17 @@ export default function PostContent({
   return (
     <div className="postContent">
       <div className="postHeader">
-        <span className="avatar">{author?.initials ?? "?"}</span>
+        {author?.avatar_path ? (
+          <Image
+            src={author.avatar_path}
+            alt=""
+            width={36}
+            height={36}
+            className="size-9 shrink-0 rounded-full border border-navy-tint object-cover"
+          />
+        ) : (
+          <span className="avatar">{author?.initials ?? "?"}</span>
+        )}
         <div className="postHeaderText">
           <div className="postAuthorName">{author?.name ?? "Unknown"}</div>
           <div className="postMetaLine">

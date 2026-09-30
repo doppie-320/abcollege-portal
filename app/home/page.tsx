@@ -18,7 +18,7 @@ export default async function HomePage() {
 
   const { data: userData, error: userError } = await supabase
     .from("users")
-    .select("id, first_name, last_name")
+    .select("id, first_name, last_name, avatar_path")
     .eq('id', authUser.user.id)
     .single();
 
@@ -36,12 +36,17 @@ export default async function HomePage() {
   const firstName = userData.first_name?.trim() ?? "";
   const lastName = userData.last_name?.trim() ?? "";
 
+  const avatarUrl = userData.avatar_path
+    ? supabase.storage.from("avatars").getPublicUrl(userData.avatar_path).data.publicUrl
+    : "";
+
   return (
     <HomeContent
       current_user={{
         id: userData.id,
         name: `${firstName} ${lastName}`.trim(),
         initials: `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase(),
+        avatar_path: avatarUrl,
       }}
       is_admin={adminRow !== null}
     />
