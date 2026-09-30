@@ -11,6 +11,7 @@ export type Profile = {
   email: string;
   program: string;
   yearLevel: string;
+  avatarUrl: string;
 };
 
 const UNKNOWN = "—";
@@ -48,7 +49,7 @@ export async function getProfile(): Promise<Profile> {
 
   const { data: user } = await supabase
     .from("users")
-    .select("id, first_name, last_name")
+    .select("id, first_name, last_name, avatar_path")
     .eq("id", authUser.id)
     .maybeSingle();
 
@@ -56,6 +57,7 @@ export async function getProfile(): Promise<Profile> {
 
   const firstName = clean(user?.first_name ?? metadata.first_name);
   const lastName = clean(user?.last_name ?? metadata.last_name);
+  const avatarPath = user?.avatar_path;
 
   const courseId = toId(metadata.course_id);
   const yearLevelId = toId(metadata.year_level);
@@ -73,6 +75,10 @@ export async function getProfile(): Promise<Profile> {
           .maybeSingle(),
   ]);
 
+  const avatarUrl = avatarPath? 
+    supabase.storage.from("avatars").getPublicUrl(avatarPath).data.publicUrl
+    : "";
+
   return {
     id: authUser.id,
     firstName,
@@ -83,5 +89,6 @@ export async function getProfile(): Promise<Profile> {
     email: toDisplay(authUser.email),
     program: toDisplay(course?.name),
     yearLevel: toDisplay(yearLevel?.name),
+    avatarUrl: avatarUrl
   };
 }

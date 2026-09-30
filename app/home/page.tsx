@@ -18,7 +18,7 @@ export default async function HomePage() {
 
   const { data: userData, error: userError } = await supabase
     .from("users")
-    .select("id, first_name, last_name")
+    .select("id, first_name, last_name, avatar_path")
     .eq('id', authUser.user.id)
     .single();
 

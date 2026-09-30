@@ -76,6 +76,7 @@ type AvatarEditorProps = {
   name: string;
   /** Rendered beside the picture, so callers control the side column layout. */
   children?: ReactNode;
+  avatarUrl: string;
 };
 
 export default function AvatarEditor({
@@ -83,8 +84,9 @@ export default function AvatarEditor({
   initials,
   name,
   children,
+  avatarUrl
 }: AvatarEditorProps) {
-  const { avatarUrl, isSaving, error, save, reset } = useAvatarEditor(userId);
+  const { isSaving, error, save, reset } = useAvatarEditor(avatarUrl, userId);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const actions = useMemo<AvatarActions>(

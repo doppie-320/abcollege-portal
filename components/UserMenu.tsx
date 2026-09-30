@@ -4,17 +4,16 @@ import { useEffect, useId, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { logout } from "@/app/profile/actions";
-import { useAvatarValue } from "@/lib/avatar";
 
 type Props = {
   initials: string;
   name: string;
   userId?: string;
   isProfilePage?: boolean;
+  avatarUrl: string;
 };
 
-export default function UserMenu({ initials, name, userId, isProfilePage = false }: Props) {
-  const avatarUrl = useAvatarValue(userId);
+export default function UserMenu({ initials, name, userId, avatarUrl, isProfilePage = false }: Props) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const panelId = useId();

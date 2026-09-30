@@ -14,6 +14,7 @@ export type User = {
   name: string;
   initials: string;
   isAdmin?: AdminRole;
+  avatar_path: string;
 };
 
 type AdminRole = {
@@ -110,7 +111,7 @@ export async function getPerson(user_id: string): Promise<User> {
   const supabase = createClient();
   const { data: userData, error: userError } = await supabase
     .from("users")
-    .select("id, first_name, last_name")
+    .select("id, first_name, last_name, avatar_path")
     .eq("id", user_id)
     .single();
 
@@ -124,6 +125,7 @@ export async function getPerson(user_id: string): Promise<User> {
     id: userData.id,
     name: `${firstName} ${lastName}`.trim(),
     initials,
+    avatar_path: userData.avatar_path ?? ""
   };
 }
 
@@ -262,7 +264,7 @@ export default function HomeContent({current_user}: HomeContentProps) {
           <Link href="#">Suggestion Box</Link>
           <Link href="#">Transparency Reports</Link>
         </nav>
-        <UserMenu initials={current_user.initials} name={current_user.name} userId={current_user.id} />
+        <UserMenu initials={current_user.initials} name={current_user.name} userId={current_user.id} avatarUrl={current_user.avatar_path}/>
       </header>
       <div className="header-accent"></div>
 

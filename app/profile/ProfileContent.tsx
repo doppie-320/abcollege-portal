@@ -41,6 +41,7 @@ export default function ProfileContent({ profile }: ProfileContentProps) {
           initials={profile.initials}
           name={profile.name}
           userId={profile.id}
+          avatarUrl={profile.avatarUrl}
           isProfilePage
         />
       </header>
@@ -63,6 +64,7 @@ export default function ProfileContent({ profile }: ProfileContentProps) {
               userId={profile.id}
               initials={profile.initials}
               name={profile.name}
+              avatarUrl={profile.avatarUrl}
             >
               <div className="min-w-0">
                 <h2 className="mb-2 text-2xl [overflow-wrap:anywhere]">
