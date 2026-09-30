@@ -7,6 +7,7 @@ import StarterKit from "@tiptap/starter-kit";
 import TextAlign from "@tiptap/extension-text-align";
 import Highlight from "@tiptap/extension-highlight";
 import Image from "@tiptap/extension-image";
+import NextImage from "next/image";
 import { CharacterCount, Placeholder } from "@tiptap/extensions";
 import FileHandler from "@tiptap/extension-file-handler";
 import Select from "@/components/Select";
@@ -259,7 +260,17 @@ export default function CreatePostModal({
             <div className="sideSection">
               <span className="sideLabel mono">Posting as</span>
               <div className="authorRow">
-                <span className="avatar">{currentUser.initials}</span>
+                {currentUser.avatar_path ? (
+                  <NextImage
+                    src={currentUser.avatar_path}
+                    alt=""
+                    width={32}
+                    height={32}
+                    className="size-8 shrink-0 rounded-full border border-navy-tint object-cover"
+                  />
+                ) : (
+                  <span className="avatar">{currentUser.initials}</span>
+                )}
                 <span className="authorName">{currentUser.name}</span>
               </div>
             </div>

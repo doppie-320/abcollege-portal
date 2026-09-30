@@ -191,7 +191,9 @@ export async function getPerson(user_id: string): Promise<User> {
     id: userData.id,
     name: [firstName, lastName].filter(Boolean).join(" "),
     initials,
-    avatar_path: userData.avatar_path ?? ""
+    avatar_path: userData.avatar_path
+      ? supabase.storage.from("avatars").getPublicUrl(userData.avatar_path).data.publicUrl
+      : "",
   };
 }
 
