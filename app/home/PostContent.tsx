@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import MediaGrid from "./MediaGrid";
 import ImageLightbox from "./ImageLightbox";
-import { type Announcement, type User, getPerson, getRelativeTime, getAdmin } from "@/app/home/HomeContent";
+import RichTextBody from "./RichTextBody";
+import PostMenu from "./PostMenu";
+import { type Announcement, type User, getPerson, getRelativeTime } from "@/app/home/HomeContent";
 
 async function reactorNames(reactedBy: string[], currentUserId: string): Promise<string[]> {
   const names = await Promise.all(
@@ -16,29 +18,47 @@ async function reactorNames(reactedBy: string[], currentUserId: string): Promise
 export default function PostContent({
   announcement,
   currentUser,
-  onToggleReaction
+  onToggleReaction,
+  onCommentClick,
+  authorOverride,
+  collapsible = false,
+  onEdit,
+  onDelete,
 }: {
   announcement: Announcement;
   currentUser: User;
   onToggleReaction: (postId: string) => void;
+  onCommentClick: () => void;
+  // Known author (e.g. the Create post preview); skips the author lookup.
+  authorOverride?: User;
+  // Clip long bodies behind "Show more" (feed cards, not the full post view).
+  collapsible?: boolean;
+  // Shown in the "..." menu; omit both to hide the menu (e.g. not the author).
+  onEdit?: () => void;
+  onDelete?: () => void;
 }) {
   const [showReactors, setShowReactors] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [names, setNames] = useState<string[]>([]);
 
-  const [author, setAuthor] = useState<User | null>(null);
+  const [fetchedAuthor, setAuthor] = useState<User | null>(null);
+  const author = authorOverride ?? fetchedAuthor;
   const reacted = announcement.reactedBy.includes(currentUser.id);
 
   useEffect(() => {
+    // Posts with no author_id keep the "Unknown" fallback.
+    if (authorOverride || !announcement.authorId) return;
     let active = true;
-    getAdmin(announcement.authorId).then((resolvedAuthor) => {
-      if (active) setAuthor(resolvedAuthor);
-    });
+    getPerson(announcement.authorId)
+      .then((resolvedAuthor) => {
+        if (active) setAuthor(resolvedAuthor);
+      })
+      .catch((error) => console.error("Error fetching announcement author:", error));
 
     return () => {
       active = false;
     };
-  }, [announcement.authorId]);
+  }, [announcement.authorId, authorOverride]);
 
   useEffect(() => {
     let active = true;
@@ -58,14 +78,16 @@ export default function PostContent({
         <div className="postHeaderText">
           <div className="postAuthorName">{author?.name ?? "Unknown"}</div>
           <div className="postMetaLine">
-            <span className="postAuthorRole">{author?.isAdmin?.role}</span>
+            {author?.isAdmin?.role && <span className="postAuthorRole">{author.isAdmin.role}</span>}
             <span className="mono postTime">POSTED {getRelativeTime(announcement.postedAt).toUpperCase()}</span>
+            {announcement.tag && <span className="tag postTag">{announcement.tag}</span>}
           </div>
         </div>
+        {onEdit && onDelete && <PostMenu onEdit={onEdit} onDelete={onDelete} />}
       </div>
 
-      <h3>{announcement.title}</h3>
-      <p>{announcement.body}</p>
+      <h3 className="postTitle">{announcement.title}</h3>
+      <RichTextBody content={announcement.body} collapsible={collapsible} />
 
       {announcement.media && (
         <div className="media">
@@ -123,18 +145,26 @@ export default function PostContent({
           )}
         </div>
 
+        <div className="actionGroup">
+          <button type="button" className="actionBtn" onClick={onCommentClick} aria-label="Comment">
+            <CommentIcon />
+          </button>
+          {announcement.comments.length > 0 && (
+            <button type="button" className="countBtn" onClick={onCommentClick}>
+              {announcement.comments.length}
+            </button>
+          )}
+        </div>
       </div>
 
       <style jsx>{`
-        .postContent h3 {
-          font-size: 16px;
-          margin-bottom: 4px;
-        }
-
-        .postContent p {
-          font-size: 14px;
-          color: var(--ink);
-          margin-bottom: 0;
+        .postTitle {
+          font-size: 24px;
+          line-height: 1.25;
+          margin-bottom: 12px;
+          padding-bottom: 10px;
+          border-bottom: 1px dashed #d8cfb4;
+          overflow-wrap: anywhere;
         }
 
         .postHeader {
@@ -157,11 +187,14 @@ export default function PostContent({
           font-weight: 600;
           font-size: 13px;
           flex-shrink: 0;
-          transition: transform 0.15s ease;
         }
 
-        .postHeader:hover .avatar {
-          transform: scale(1.08);
+        .postTag {
+          text-transform: uppercase;
+          letter-spacing: 0.04em;
+          border-radius: 3px;
+          font-size: 9.5px;
+          padding: 1px 6px;
         }
 
         .postHeaderText {
@@ -194,9 +227,9 @@ export default function PostContent({
         }
 
         .media {
-          margin-top: 12px;
-          border: none;
-          background: #fbfaf6;
+          margin-top: 14px;
+          border: 1px solid #c9bfa0;
+          background: var(--vellum);
           overflow: hidden;
           border-radius: 6px;
         }
@@ -241,7 +274,8 @@ export default function PostContent({
           border: none;
           padding: 2px 4px;
           color: var(--ink-soft);
-          font-size: 12.5px;
+          font-family: "IBM Plex Mono", monospace;
+          font-size: 12px;
           cursor: pointer;
         }
 
@@ -269,8 +303,10 @@ export default function PostContent({
           display: flex;
           align-items: center;
           justify-content: flex-start;
-          gap: 16px;
-          margin-top: 12px;
+          gap: 12px;
+          margin-top: 14px;
+          padding-top: 10px;
+          border-top: 1px dashed #d8cfb4;
         }
 
         .actionGroup {
@@ -289,16 +325,22 @@ export default function PostContent({
           color: var(--ink-soft);
           cursor: pointer;
           border-radius: 4px;
-          transition: background 0.15s ease, transform 0.15s ease, color 0.15s ease;
+          transition: background 0.15s ease, color 0.15s ease;
         }
 
         .actionBtn:hover {
           background: var(--vellum-2);
-          transform: scale(1.1);
+          color: var(--navy);
         }
 
-        .actionBtn:active {
-          transform: scale(0.9);
+        .actionBtn.active:hover {
+          color: var(--orange);
+        }
+
+        .actionBtn:focus-visible,
+        .countBtn:focus-visible {
+          outline: 2px solid var(--blue);
+          outline-offset: 1px;
         }
 
         .actionBtn.active {
@@ -324,6 +366,14 @@ function HeartIcon({ filled }: { filled?: boolean }) {
       strokeWidth="2"
     >
       <path d="M12 21s-7.5-4.6-10-9.1C.4 8.2 2 4.5 5.6 4a5 5 0 0 1 6.4 2.3A5 5 0 0 1 18.4 4c3.6.5 5.2 4.2 3.6 7.9C19.5 16.4 12 21 12 21Z" />
+    </svg>
+  );
+}
+
+function CommentIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5Z" />
     </svg>
   );
 }

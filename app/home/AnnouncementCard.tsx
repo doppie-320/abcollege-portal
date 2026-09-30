@@ -3,18 +3,33 @@
 import { useState } from "react";
 import PostContent from "./PostContent";
 import PostModal from "./PostModal";
+import CreatePostModal, { type NewPost } from "./CreatePostModal";
+import ConfirmDialog from "./ConfirmDialog";
 import type { Announcement, User } from "@/app/home/HomeContent";
 
 export default function AnnouncementCard({
   announcement,
   currentUser,
+  tags,
+  canManage,
   onToggleReaction,
+  onAddComment,
+  onUpdatePost,
+  onDeletePost,
 }: {
   announcement: Announcement;
   currentUser: User;
+  tags: string[];
+  // Admins get the "..." menu with Edit post / Delete post.
+  canManage: boolean;
   onToggleReaction: (postId: string) => void;
+  onAddComment: (postId: string, body: string) => Promise<void>;
+  onUpdatePost: (postId: string, post: NewPost) => Promise<void>;
+  onDeletePost: (postId: string) => Promise<void>;
 }) {
   const [showPostModal, setShowPostModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   return (
     <div className="announceItem">
@@ -22,6 +37,10 @@ export default function AnnouncementCard({
         announcement={announcement}
         currentUser={currentUser}
         onToggleReaction={onToggleReaction}
+        onCommentClick={() => setShowPostModal(true)}
+        collapsible
+        onEdit={canManage ? () => setShowEditModal(true) : undefined}
+        onDelete={canManage ? () => setShowDeleteDialog(true) : undefined}
       />
 
       {showPostModal && (
@@ -29,7 +48,40 @@ export default function AnnouncementCard({
           announcement={announcement}
           currentUser={currentUser}
           onToggleReaction={onToggleReaction}
+          onAddComment={onAddComment}
           onClose={() => setShowPostModal(false)}
+        />
+      )}
+
+      {showEditModal && (
+        <CreatePostModal
+          currentUser={currentUser}
+          tags={tags}
+          initialPost={{
+            title: announcement.title,
+            tag: announcement.tag,
+            content: announcement.body,
+            postedAt: announcement.postedAt,
+          }}
+          onClose={() => setShowEditModal(false)}
+          onSubmit={(post) => onUpdatePost(announcement.id, post)}
+        />
+      )}
+
+      {showDeleteDialog && (
+        <ConfirmDialog
+          title="Delete this post?"
+          message={
+            <>
+              <strong>&ldquo;{announcement.title}&rdquo;</strong> will be removed from the bulletin board along with its
+              reactions and comments. This can&apos;t be undone.
+            </>
+          }
+          confirmLabel="Delete"
+          busyLabel="Deleting..."
+          errorMessage="Couldn't delete this post. Please try again."
+          onCancel={() => setShowDeleteDialog(false)}
+          onConfirm={() => onDeletePost(announcement.id)}
         />
       )}
 

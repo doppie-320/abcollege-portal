@@ -24,9 +24,33 @@ export default async function HomePage() {
 
   if (userError) throw userError;
 
-  console.log(userData);
+  // A row in "admins" (keyed by users.id) is what makes an account an admin.
+  const { data: adminRow, error: adminError } = await supabase
+    .from("admins")
+    .select("id")
+    .eq("id", userData.id)
+    .maybeSingle();
 
-  return <HomeContent current_user={userData as any}/>;
+  if (adminError) throw adminError;  
+
+  const firstName = userData.first_name?.trim() ?? "";
+  const lastName = userData.last_name?.trim() ?? "";
+
+  const avatarUrl = userData.avatar_path
+    ? supabase.storage.from("avatars").getPublicUrl(userData.avatar_path).data.publicUrl
+    : "";
+
+  return (
+    <HomeContent
+      current_user={{
+        id: userData.id,
+        name: `${firstName} ${lastName}`.trim(),
+        initials: `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase(),
+        avatar_path: avatarUrl,
+      }}
+      is_admin={adminRow !== null}
+    />
+  );
   
 }
 
