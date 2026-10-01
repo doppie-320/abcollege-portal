@@ -1,11 +1,10 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import AnnouncementCard from "./AnnouncementCard";
 import CreatePostModal, { type NewPost } from "./CreatePostModal";
 import Select from "@/components/Select";
-import UserMenu from "@/components/UserMenu";
+import SiteNav from "@/components/NavigationHeader";
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "../../lib/supabase/client"
 import { useRouter } from "next/navigation";
@@ -423,26 +422,12 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
 
   return (
     <>
-      <header className="site-header">
-        <Link href="/home" className="brand brandLink">
-          <Image
-            src="/logo.png"
-            alt="Andres Bonifacio College seal"
-            width={28}
-            height={28}
-            className="seal"
-          />
-          SOE HUB
-        </Link>
-        <nav className="main-nav">
-          <Link href="/home" className="current">Home</Link>
-          <Link href="#">Calendar</Link>
-          <Link href="#">Attendance</Link>
-          <Link href="#">Suggestion Box</Link>
-        </nav>
-        <UserMenu initials={current_user.initials} name={current_user.name} userId={current_user.id} avatarUrl={current_user.avatar_path}/>
-      </header>
-      <div className="header-accent"></div>
+      <SiteNav
+        initials={current_user.initials}
+        name={current_user.name}
+        userId={current_user.id}
+        avatarUrl={current_user.avatar_path}
+      />
 
       <div className="page-wrap">
         <div className="hero">
@@ -587,17 +572,6 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
       )}
 
       <style jsx global>{`
-        .brandLink {
-          font-size: 16px;
-        }
-
-        .seal {
-          width: 28px;
-          height: 28px;
-          flex-shrink: 0;
-          object-fit: contain;
-        }
-
         .hero {
           margin-bottom: 28px;
           animation: fadeInUp 0.5s ease backwards;

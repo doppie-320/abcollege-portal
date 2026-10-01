@@ -1,13 +1,11 @@
 "use client";
 
-import Image from "next/image";
-import Link from "next/link";
 import AvatarEditor, {
   AvatarEditButton,
   AvatarRemoveButton,
 } from "./AvatarEditor";
 import GwaCalculator from "./GwaCalculator";
-import UserMenu from "@/components/UserMenu";
+import SiteNav from "@/components/NavigationHeader";
 import type { Profile } from "@/lib/auth";
 
 type ProfileContentProps = {
@@ -19,33 +17,13 @@ export default function ProfileContent({ profile }: ProfileContentProps) {
 
   return (
     <>
-      <header className="site-header">
-        <Link href="/home" className="brand text-base">
-          <Image
-            src="/logo.png"
-            alt="Andres Bonifacio College seal"
-            width={28}
-            height={28}
-            className="size-7 shrink-0 object-contain"
-          />
-          SOE HUB
-        </Link>
-        <nav className="main-nav">
-          <Link href="/home">Home</Link>
-          <Link href="#">Calendar</Link>
-          <Link href="#">Attendance</Link>
-          <Link href="#">Suggestion Box</Link>
-          <Link href="#">Transparency Reports</Link>
-        </nav>
-        <UserMenu
-          initials={profile.initials}
-          name={profile.name}
-          userId={profile.id}
-          avatarUrl={profile.avatarUrl}
-          isProfilePage
-        />
-      </header>
-      <div className="header-accent" />
+      <SiteNav
+        initials={profile.initials}
+        name={profile.name}
+        userId={profile.id}
+        avatarUrl={profile.avatarUrl}
+        isProfilePage
+      />
 
       <div className="page-wrap">
         <div className="mb-6">

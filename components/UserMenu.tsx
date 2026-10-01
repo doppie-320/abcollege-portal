@@ -64,26 +64,18 @@ export default function UserMenu({ initials, name, userId, avatarUrl, isProfileP
 
       {open && (
         <div className="userMenuPanel" id={panelId}>
-          {isProfilePage ? (
-            <span className="userMenuItem userMenuItemCurrent" aria-current="page">
-              Student profile
-            </span>
-          ) : (
-            <Link
-              href="/profile"
-              className="userMenuItem"
-              onClick={() => setOpen(false)}
-            >
-              Student profile
-            </Link>
-          )}
+          <Link
+            href="/profile"
+            className="userMenuItem"
+            aria-current={isProfilePage ? "page" : undefined}
+            onClick={() => setOpen(false)}
+          >
+            <span className="userMenuItemFace">Student profile</span>
+          </Link>
 
-          <form action={logout}>
-            <button
-              type="submit"
-              className="userMenuItem userMenuItemDanger"
-            >
-              Log out
+          <form action={logout} className="userMenuForm">
+            <button type="submit" className="userMenuItem userMenuItemDanger">
+              <span className="userMenuItemFace">Log out</span>
             </button>
           </form>
         </div>
@@ -102,6 +94,12 @@ export default function UserMenu({ initials, name, userId, avatarUrl, isProfileP
           cursor: pointer;
         }
 
+        .userMenuTrigger:focus-visible {
+          outline: 2px solid var(--grid);
+          outline-offset: 3px;
+          border-radius: 6px;
+        }
+
         .userMenuName {
           max-width: 150px;
           overflow: hidden;
@@ -111,49 +109,85 @@ export default function UserMenu({ initials, name, userId, avatarUrl, isProfileP
 
         .userMenuPanel {
           position: absolute;
-          top: calc(100% + 10px);
+          top: calc(100% + 8px);
           right: 0;
           z-index: 60;
-          min-width: 190px;
+          width: 200px;
           display: flex;
           flex-direction: column;
-          padding: 6px;
+          padding: 4px;
           background: var(--white);
-          border: 1px solid #c9bfa0;
-          border-radius: 8px;
-          box-shadow: 0 16px 36px rgba(13, 30, 56, 0.2);
+          border: 1px solid var(--rule);
+          border-radius: 6px;
+          box-shadow: 0 10px 24px rgba(13, 30, 56, 0.16);
+          transform-origin: top right;
+          animation: popIn 0.12s ease backwards;
+        }
+
+        .userMenuForm {
+          display: contents;
         }
 
         .userMenuItem {
           display: block;
+          align-self: stretch;
           width: 100%;
-          text-align: left;
-          padding: 9px 10px;
+          box-sizing: border-box;
+          padding: 0;
+          margin: 0;
           border: none;
           background: none;
-          border-radius: 5px;
-          font-family: 'Inter', sans-serif;
-          font-size: 13.5px;
-          color: var(--ink);
+          appearance: none;
+          font: inherit;
+          color: inherit;
+          text-align: left;
+          text-indent: 0;
           text-decoration: none;
           cursor: pointer;
         }
 
-        .userMenuItem:hover {
-          background: var(--vellum-2);
+        .userMenuItem:focus {
+          outline: none;
         }
 
-        .userMenuItemCurrent {
-          color: var(--ink-soft);
-          cursor: default;
+        .userMenuItemFace {
+          display: flex;
+          align-items: center;
+          justify-content: flex-start;
+          box-sizing: border-box;
+          width: 100%;
+          padding: 8px 10px;
+          border-radius: 4px;
+          font-family: 'Inter', sans-serif;
+          font-size: 13px;
+          font-weight: 500;
+          line-height: 1.4;
+          color: var(--ink);
+          transition: background 0.15s ease, color 0.15s ease;
         }
 
-        .userMenuItemCurrent:hover {
-          background: none;
+        .userMenuItem:hover .userMenuItemFace,
+        .userMenuItem:focus-visible .userMenuItemFace {
+          background: var(--vellum);
         }
 
-        .userMenuItemDanger {
+        .userMenuItem:focus-visible {
+          outline: 2px solid var(--blue);
+          outline-offset: -2px;
+        }
+
+        .userMenuItem[aria-current='page'] .userMenuItemFace {
           color: var(--orange);
+          font-weight: 600;
+        }
+
+        .userMenuItemDanger .userMenuItemFace {
+          color: var(--orange);
+        }
+
+        .userMenuItemDanger:hover .userMenuItemFace,
+        .userMenuItemDanger:focus-visible .userMenuItemFace {
+          background: #fbe9e7;
         }
       `}</style>
     </div>
