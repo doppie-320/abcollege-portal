@@ -5,12 +5,17 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import UserMenu from "./UserMenu";
 
-const NAV_LINKS = [
+export type NavLink = {
+  href: string;
+  label: string;
+};
+
+const NAV_LINKS: readonly NavLink[] = [
   { href: "/home", label: "Home" },
   { href: "#", label: "Calendar" },
   { href: "#", label: "Attendance" },
   { href: "#", label: "Suggestion Box" },
-] as const;
+];
 
 type SiteNavProps = {
   initials: string;
@@ -18,6 +23,8 @@ type SiteNavProps = {
   userId: string;
   avatarUrl: string;
   isProfilePage?: boolean;
+  links?: readonly NavLink[];
+  brandHref?: string;
 };
 
 export default function SiteNav({
@@ -26,13 +33,15 @@ export default function SiteNav({
   userId,
   avatarUrl,
   isProfilePage = false,
+  links = NAV_LINKS,
+  brandHref = "/home",
 }: SiteNavProps) {
   const pathname = usePathname();
 
   return (
     <>
       <header className="site-header">
-        <Link href="/home" className="brand text-base">
+        <Link href={brandHref} className="brand text-base">
           <Image
             src="/logo.png"
             alt="Andres Bonifacio College seal"
@@ -43,7 +52,7 @@ export default function SiteNav({
           SOE HUB
         </Link>
         <nav className="main-nav">
-          {NAV_LINKS.map((link) => (
+          {links.map((link) => (
             <Link
               key={link.label}
               href={link.href}

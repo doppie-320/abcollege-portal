@@ -92,3 +92,20 @@ export async function getProfile(): Promise<Profile> {
     avatarUrl: avatarUrl
   };
 }
+
+export async function isAdmin(): Promise<boolean> {
+  const supabase = await createClient();
+
+  const { data: authData } = await supabase.auth.getUser();
+  if (!authData?.user) return false;
+
+  const { data: adminRow, error } = await supabase
+    .from("admins")
+    .select("id")
+    .eq("id", authData.user.id)
+    .maybeSingle();
+
+  if (error) throw error;
+
+  return adminRow !== null;
+}
