@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import SiteNav from "@/components/NavigationHeader";
 import {
@@ -32,6 +32,26 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
   const [pageIndex, setPageIndex] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(applicants[0]?.id ?? null);
   const [decisions, setDecisions] = useState<Record<string, ApplicantStatus>>({});
+  const [rejectOpen, setRejectOpen] = useState(false);
+  const rejectRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!rejectOpen) return;
+
+    function onDocMouseDown(e: MouseEvent) {
+      if (rejectRef.current && !rejectRef.current.contains(e.target as Node)) setRejectOpen(false);
+    }
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setRejectOpen(false);
+    }
+
+    document.addEventListener("mousedown", onDocMouseDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onDocMouseDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [rejectOpen]);
 
   function statusOf(applicant: Applicant): ApplicantStatus {
     return decisions[applicant.id] ?? applicant.status;
@@ -78,6 +98,11 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
   function decide(status: ApplicantStatus) {
     if (!selected) return;
     setDecisions((prev) => ({ ...prev, [selected.id]: status }));
+  }
+
+  function reject() {
+    setRejectOpen(false);
+    decide("declined");
   }
 
   return (
@@ -274,13 +299,58 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
                     Accept application
                   </button>
 
-                  <button
-                    type="button"
-                    className="btn font-normal rounded-lg ghost border-[#b3261e] px-2 py-1 text-sm text-[#b3261e] hover:bg-[rgba(205,79,60,0.08)]"
-                    onClick={() => decide("declined")}
-                  >
-                    Reject
-                  </button>
+                  <div className="relative shrink-0" ref={rejectRef}>
+                    <button
+                      type="button"
+                      className="btn font-normal rounded-lg ghost border-[#b3261e] px-2 py-1 text-sm text-[#b3261e] hover:bg-[rgba(205,79,60,0.08)]"
+                      onClick={() => setRejectOpen((v) => !v)}
+                      aria-haspopup="menu"
+                      aria-expanded={rejectOpen}
+                    >
+                      Reject
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                        className={`transition-transform duration-150 ${
+                          rejectOpen ? "rotate-180" : ""
+                        }`}
+                      >
+                        <path d="m6 9 6 6 6-6" />
+                      </svg>
+                    </button>
+
+                    {rejectOpen && (
+                      <div
+                        role="menu"
+                        aria-label="Reject options"
+                        className="animate-pop-in absolute right-0 top-full z-20 mt-1.5 w-max min-w-[216px] origin-top-right rounded-lg border border-rule bg-paper p-1 shadow-[0_10px_24px_rgba(13,30,56,0.16)]"
+                      >
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={reject}
+                          className="block w-full cursor-pointer rounded-md border-none bg-transparent px-2.5 py-2 text-left text-[13px] leading-snug text-[#b3261e] transition-colors duration-150 ease-in-out hover:bg-[rgba(205,79,60,0.08)]"
+                        >
+                          Reject (auto delete in 7 days)
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={reject}
+                          className="block w-full cursor-pointer rounded-md border-none bg-transparent px-2.5 py-2 text-left text-[13px] leading-snug text-[#b3261e] transition-colors duration-150 ease-in-out hover:bg-[rgba(205,79,60,0.08)]"
+                        >
+                          Reject (immediate)
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </>
             ) : (
