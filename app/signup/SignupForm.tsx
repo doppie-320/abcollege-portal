@@ -546,8 +546,8 @@ export default function SignupForm({courses, yearLevels,}: SignupFormProps) {
               Request account
             </button>
           </form>
-
-          <div className="divider">
+          {/*
+            <div className="divider">
             <span>or</span>
           </div>
 
@@ -560,6 +560,8 @@ export default function SignupForm({courses, yearLevels,}: SignupFormProps) {
             <GoogleIcon />
             Sign up with Google
           </button>
+          */}
+          
         </div>
       )}
 
