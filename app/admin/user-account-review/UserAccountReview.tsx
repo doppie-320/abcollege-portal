@@ -112,8 +112,11 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
         name={profile.name}
         userId={profile.id}
         avatarUrl={profile.avatarUrl}
+        nameOverride="ADMIN"
         links={[]}
         brandHref="/admin"
+        profileHref="/admin/profile"
+        profileLabel="My profile"
       />
 
       <div className="page-wrap">

@@ -20,21 +20,29 @@ const NAV_LINKS: readonly NavLink[] = [
 type SiteNavProps = {
   initials: string;
   name: string;
+  /** Replaces the user chip text, e.g. admins get "ADMIN" instead of their name. */
+  nameOverride?: string;
   userId: string;
   avatarUrl: string;
   isProfilePage?: boolean;
   links?: readonly NavLink[];
   brandHref?: string;
+  /** Overrides the user menu's profile entry so admins skip the student page. */
+  profileHref?: string;
+  profileLabel?: string;
 };
 
 export default function SiteNav({
   initials,
   name,
+  nameOverride,
   userId,
   avatarUrl,
   isProfilePage = false,
   links = NAV_LINKS,
   brandHref = "/home",
+  profileHref,
+  profileLabel
 }: SiteNavProps) {
   const pathname = usePathname();
 
@@ -65,9 +73,12 @@ export default function SiteNav({
         <UserMenu
           initials={initials}
           name={name}
+          nameOverride={nameOverride}
           userId={userId}
           avatarUrl={avatarUrl}
           isProfilePage={isProfilePage}
+          profileHref={profileHref}
+          profileLabel={profileLabel}
         />
       </header>
       <div className="header-accent" />

@@ -12,6 +12,8 @@ export type Profile = {
   program: string;
   yearLevel: string;
   avatarUrl: string;
+  /** Council role from the admins table. Empty for non-admins or when unset. */
+  role: string;
 };
 
 const UNKNOWN = "—";
@@ -62,7 +64,7 @@ export async function getProfile(): Promise<Profile> {
   const courseId = toId(metadata.course_id);
   const yearLevelId = toId(metadata.year_level);
 
-  const [{ data: course }, { data: yearLevel }] = await Promise.all([
+  const [{ data: course }, { data: yearLevel }, { data: adminRow }] = await Promise.all([
     courseId === null
       ? Promise.resolve({ data: null })
       : supabase.from("courses").select("id, name").eq("id", courseId).maybeSingle(),
@@ -73,6 +75,9 @@ export async function getProfile(): Promise<Profile> {
           .select("id, name")
           .eq("id", yearLevelId)
           .maybeSingle(),
+    // The admins table has no role column yet, so a failed read just means
+    // "no role" rather than failing the whole profile.
+    supabase.from("admins").select("role").eq("id", authUser.id).maybeSingle(),
   ]);
 
   const avatarUrl = avatarPath? 
@@ -89,7 +94,8 @@ export async function getProfile(): Promise<Profile> {
     email: toDisplay(authUser.email),
     program: toDisplay(course?.name),
     yearLevel: toDisplay(yearLevel?.name),
-    avatarUrl: avatarUrl
+    avatarUrl: avatarUrl,
+    role: clean(adminRow?.role)
   };
 }
 
