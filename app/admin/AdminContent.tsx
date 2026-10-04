@@ -53,8 +53,7 @@ export default function AdminContent({ profile }: AdminContentProps) {
             <Link
               key={module.href}
               href={module.href}
-              className="tick-frame animate-fade-in-up group flex flex-col gap-3 no-underline transition-transform duration-150 hover:-translate-x-px hover:-translate-y-px hover:shadow-[2px_2px_0_var(--orange)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue"
-              style={{ animationDelay: `${index * 70}ms` }}
+              className="tick-frame animate-fade-in-up group flex flex-col gap-3 no-underline transition-all duration-150 hover:-translate-x-px hover:-translate-y-px hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue" style={{ animationDelay: `${index * 70}ms` }}
             >
               <span className="tick-bl" />
               <span className="tick-br" />

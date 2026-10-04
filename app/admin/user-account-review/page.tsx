@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import UserAccountReview from "./UserAccountReview";
 import { getProfile, isAdmin } from "@/lib/auth";
+import { fetchApplicants } from "@/lib/mock/applicants-db";
 
 export const metadata: Metadata = {
   title: "User Account Review — Admin",
@@ -14,5 +15,7 @@ export default async function UserAccountReviewPage() {
 
   if (!admin) redirect("/home");
 
-  return <UserAccountReview profile={profile} />;
+  const applicants = fetchApplicants();
+
+  return <UserAccountReview profile={profile} applicants={applicants} />;
 }
