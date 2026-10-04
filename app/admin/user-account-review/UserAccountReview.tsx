@@ -81,7 +81,7 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
           </p>
         </div>
 
-        <div className="grid grid-cols-[340px_1fr] items-start gap-6 max-[980px]:grid-cols-1">
+        <div className="grid grid-cols-[440px_1fr] items-start gap-6 max-[980px]:grid-cols-1">
           <section className="tick-frame animate-fade-in-up p-0">
             <span className="tick-bl" />
             <span className="tick-br" />
@@ -89,7 +89,7 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
             <div className="border-b border-rule-soft px-4 py-3">
               <label
                 htmlFor="applicant-search"
-                className="mono mb-1 block text-[10px] tracking-[0.08em] text-ink-soft uppercase"
+                className="mono mb-2 block text-[10px] tracking-[0.08em] text-ink-soft uppercase"
               >
                 Search applicants
               </label>
@@ -100,7 +100,7 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Name, ID, email, program"
                 autoComplete="off"
-                className="mb-0 py-2 text-[13px]"
+                className="mb-0 py-2 text-[13px] outline-none focus:outline-none focus:ring-0 shadow-none"
               />
               <p className="mono mt-2 mb-0 text-[10px] text-ink-soft">
                 {visible.length} of {applicants.length} shown
@@ -112,7 +112,7 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
                 No applicants match &ldquo;{query.trim()}&rdquo;.
               </p>
             ) : (
-              <ul className="list m-0 list-none">
+              <ul className="m-0 max-h-[520px] list-none overflow-y-auto">
                 {visible.map((applicant) => {
                   const isSelected = applicant.id === selected?.id;
                   const status = statusOf(applicant);
@@ -123,20 +123,23 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
                         type="button"
                         aria-current={isSelected ? "true" : undefined}
                         onClick={() => setSelectedId(applicant.id)}
-                        className={`row ${isSelected ? "selected" : ""} flex w-full items-center gap-3 border-b border-rule-soft px-4 py-3 text-left last:border-b-0`}
+                        className={`flex w-full cursor-pointer items-center gap-3 border-b border-rule-soft px-4 py-3 text-left transition-colors duration-150 ease-in-out last:border-b-0 focus-visible:outline-2 focus-visible:outline-(--grey) focus-visible:-outline-offset-[2px] ${isSelected
+                            ? "bg-[#e6f3ff]"
+                            : "bg-transparent hover:bg-[rgba(0,0,0,0.04)]"
+                          }`}
                       >
-                        <span className="rowAvatar mono flex size-9 shrink-0 items-center justify-center border border-navy bg-vellum text-[12px] font-semibold text-navy-deep">
+                        <span className="mono flex size-9 shrink-0 items-center justify-center rounded-full border border-navy bg-vellum text-[12px] font-semibold text-navy-deep">
                           {applicantInitials(applicant)}
                         </span>
                         <span className="min-w-0 flex-1">
-                          <span className="rowName block truncate text-[13.5px] font-semibold text-navy-deep">
+                          <span className="block truncate text-[13.5px] font-semibold text-navy-deep">
                             {applicantName(applicant)}
                           </span>
-                          <span className="rowMeta mono block truncate text-[11px] text-ink-soft">
+                          <span className="mono block truncate text-[11px] text-ink-soft">
                             {applicant.studentId} &middot; {applicant.program}
                           </span>
                         </span>
-                        <span className={`tag ${status === "pending" ? "orange" : ""}`}>
+                        <span className={`tag rounded-lg ${status === "pending" ? "orange" : ""}`}>
                           {STATUS_LABELS[status]}
                         </span>
                       </button>
@@ -155,7 +158,7 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
               <>
                 <div className="mb-4 flex items-start justify-between gap-4">
                   <div className="flex min-w-0 items-center gap-3">
-                    <span className="mono flex size-12 shrink-0 items-center justify-center border border-navy bg-vellum text-[15px] font-semibold text-navy-deep">
+                    <span className="mono flex size-12 shrink-0 items-center justify-center border border-navy rounded-full bg-vellum text-[15px] font-semibold text-navy-deep">
                       {applicantInitials(selected)}
                     </span>
                     <div className="min-w-0">
@@ -167,7 +170,7 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
                       </p>
                     </div>
                   </div>
-                  <span className={`tag ${selectedStatus === "pending" ? "orange" : ""}`}>
+                  <span className={`tag rounded-lg ${selectedStatus === "pending" ? "orange" : ""}`}>
                     {selectedStatus && STATUS_LABELS[selectedStatus]}
                   </span>
                 </div>
@@ -192,22 +195,29 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
                   Birthday is optional &mdash; applicants may leave it blank when signing up.
                 </p>
 
-                <div className="decision">
-                  <button
-                    type="button"
-                    className="btn primary"
-                    onClick={() => decide("approved")}
-                  >
-                    Accept application
-                  </button>
-                  <button type="button" className="btn ghost reject" onClick={() => decide("declined")}>
-                    Reject
-                  </button>
-                  <span className="decisionNote mono">
+                <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-rule-soft pt-4">
+                  <span className="mono text-[11px] text-ink-soft left">
                     {selectedStatus === null || selectedStatus === "pending"
                       ? "No decision recorded yet."
                       : `Marked ${STATUS_LABELS[selectedStatus].toLowerCase()} — not saved yet.`}
                   </span>
+
+                  <button
+                    type="button"
+                    className="ml-auto btn rounded-lg primary px-2 py-1 text-sm font-normal"
+                    onClick={() => decide("approved")}
+                  >
+                    Accept application
+                  </button>
+
+                  <button
+                    type="button"
+                    className="btn font-normal rounded-lg ghost border-[#b3261e] px-2 py-1 text-sm text-[#b3261e] hover:bg-[rgba(205,79,60,0.08)]"
+                    onClick={() => decide("declined")}
+                  >
+                    Reject
+                  </button>
+
                 </div>
               </>
             ) : (
@@ -221,81 +231,6 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
           </section>
         </div>
       </div>
-
-      <style jsx>{`
-        .list {
-          max-height: 520px;
-          overflow-y: auto;
-        }
-
-        .row {
-          background: transparent;
-          cursor: pointer;
-          transition: background 0.15s ease;
-        }
-
-        .row:hover {
-          background: var(--vellum);
-        }
-
-        .row:focus-visible {
-          outline: 2px solid var(--blue);
-          outline-offset: -2px;
-        }
-
-        .row.selected,
-        .row.selected:hover {
-          background: var(--navy);
-        }
-
-        .row.selected .rowName {
-          color: var(--white);
-        }
-
-        .row.selected .rowMeta {
-          color: var(--navy-tint);
-        }
-
-        .row.selected .rowAvatar {
-          background: var(--yellow);
-          border-color: var(--yellow);
-        }
-
-        .row.selected :global(.tag) {
-          border-color: var(--yellow);
-          color: var(--yellow);
-        }
-
-        .decision {
-          display: flex;
-          flex-wrap: wrap;
-          align-items: center;
-          gap: 8px;
-          margin-top: 16px;
-          padding-top: 16px;
-          border-top: 1px solid var(--rule-soft);
-        }
-
-        .decision :global(.btn) {
-          padding: 9px 18px;
-          font-size: 13.5px;
-        }
-
-        .decision .reject {
-          color: #b3261e;
-          border-color: #b3261e;
-        }
-
-        .decision .reject:hover {
-          background: rgba(179, 38, 30, 0.08);
-        }
-
-        .decisionNote {
-          margin-left: auto;
-          font-size: 11px;
-          color: var(--ink-soft);
-        }
-      `}</style>
     </>
   );
 }
