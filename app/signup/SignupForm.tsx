@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { startTransition, useActionState, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import DatePicker from "@/components/DatePicker";
@@ -128,13 +128,16 @@ export default function SignupForm({courses, yearLevels,}: SignupFormProps) {
   const [fields, setFields] = useState<Fields>(EMPTY_FIELDS);
   const [errors, setErrors] = useState<Errors>({});
   const [showPassword, setShowPassword] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);  
+  const [successDismissed, setSuccessDismissed] = useState(false);
 
   const [step, setStep] = useState<Step>("form");
   const [googleFields, setGoogleFields] = useState<GoogleFields>(EMPTY_GOOGLE_FIELDS);
   const [googleErrors, setGoogleErrors] = useState<GoogleErrors>({});
   const [googleLoading, setGoogleLoading] = useState(false);
+
+  const [state, formAction, pending] = useActionState(register, {});
+  const showSuccess = state.success && !pending && !successDismissed;
 
   const courseOptions = courses.map((course) => ({
     value: String(course.id),
@@ -166,9 +169,8 @@ export default function SignupForm({courses, yearLevels,}: SignupFormProps) {
       formData.set("yearLevelId", fields.yearLevel);
       formData.set("courseId", fields.program);
 
-      await register(formData);      
-
-      setSubmitted(true);
+      setSuccessDismissed(false);
+      startTransition(() => formAction(formData));
     }
   }
 
@@ -213,7 +215,7 @@ export default function SignupForm({courses, yearLevels,}: SignupFormProps) {
 
   return (
     <>
-      {submitted ? (
+      {showSuccess ? (
         <div className="success">
           <div className="successIcon">✓</div>
           <h2>Request submitted</h2>
@@ -228,7 +230,7 @@ export default function SignupForm({courses, yearLevels,}: SignupFormProps) {
             onClick={() => {
               setFields(EMPTY_FIELDS);
               setErrors({});
-              setSubmitted(false);
+              setSuccessDismissed(true);
             }}
           >
             Back to form
@@ -538,13 +540,16 @@ export default function SignupForm({courses, yearLevels,}: SignupFormProps) {
               {errors.confirmPassword && <p className="error">{errors.confirmPassword}</p>}
             </div>
 
+            {state.error && <p className="formError" role="alert">{state.error}</p>}
+
             <button
               type="submit"
+              disabled={pending}
               className="btn submitBtn"
               style={{ width: "100%", marginTop: 8 }}
             >
-              Request account
-            </button>
+              {pending ? "Working..." : "Request account" }
+            </button> 
           </form>
           {/*
             <div className="divider">
@@ -659,6 +664,10 @@ export default function SignupForm({courses, yearLevels,}: SignupFormProps) {
           font-size: 11.5px;
           color: var(--ink-soft);
           margin-top: 4px;
+        }
+
+        .formError {
+          border-radius: 5px;
         }
 
         .consentRow {
