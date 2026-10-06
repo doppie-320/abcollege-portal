@@ -58,6 +58,8 @@ export type Comment = {
   authorId: string;
   authorName: string;
   authorInitials: string;
+  // Public URL of the commenter's profile picture, or "" to fall back to initials.
+  authorAvatar: string;
   body: string;
   postedAt: string;
 };
@@ -65,7 +67,7 @@ export type Comment = {
 type CommentRow = {
   id: string;
   announcement_id: string;
-  user_id: string;
+  author_id: string;
   content: string;
   created_at: string;
 };
@@ -74,6 +76,7 @@ type UserRow = {
   id: string;
   first_name: string | null;
   last_name: string | null;
+  avatar_path: string | null;
 };
 
 function toAnnouncement(row: AnnouncementRow): Announcement {
@@ -90,14 +93,15 @@ function toAnnouncement(row: AnnouncementRow): Announcement {
   };
 }
 
-function toComment(row: CommentRow, author?: UserRow): Comment {
+function toComment(row: CommentRow, author?: UserRow, authorAvatar = ""): Comment {
   const firstName = author?.first_name?.trim() ?? "";
   const lastName = author?.last_name?.trim() ?? "";
   return {
     id: row.id,
-    authorId: row.user_id,
+    authorId: row.author_id,
     authorName: `${firstName} ${lastName}`.trim() || "Unknown",
     authorInitials: `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase() || "?",
+    authorAvatar,
     body: row.content,
     postedAt: row.created_at,
   };
@@ -234,17 +238,21 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
         // Comments are optional: if the table is unavailable, posts still render without them.
         const { data: commentData, error: commentsError } = await supabase
           .from("announcement_comments")
-          .select("id, announcement_id, user_id, content, created_at")
+          .select("id, announcement_id, author_id, content, created_at")
           .order("created_at", { ascending: true });
 
         if (commentsError) console.error("Error fetching announcement comments:", commentsError);
 
         const commentRows: CommentRow[] = commentData || [];
-        const commenterIds = [...new Set(commentRows.map((comment) => comment.user_id))];
+        const commenterIds = [...new Set(commentRows.map((comment) => comment.author_id))];
         const { data: commenterData } = commenterIds.length
-          ? await supabase.from("users").select("id, first_name, last_name").in("id", commenterIds)
+          ? await supabase.from("users").select("id, first_name, last_name, avatar_path").in("id", commenterIds)
           : { data: [] as UserRow[] };
         const commenters = new Map((commenterData || []).map((user: UserRow) => [user.id, user]));
+        const commenterAvatar = (userId: string) => {
+          const path = commenters.get(userId)?.avatar_path;
+          return path ? supabase.storage.from("avatars").getPublicUrl(path).data.publicUrl : "";
+        };
 
         const loadedAnnouncements: Announcement[] = (announcementData || []).map((row) => ({
           ...toAnnouncement(row),
@@ -253,7 +261,9 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
             .map((reaction) => reaction.user_id),
           comments: commentRows
             .filter((comment) => comment.announcement_id === row.id)
-            .map((comment) => toComment(comment, commenters.get(comment.user_id))),
+            .map((comment) =>
+              toComment(comment, commenters.get(comment.author_id), commenterAvatar(comment.author_id))
+            ),
         }));
 
         console.log(loadedAnnouncements);
@@ -390,6 +400,7 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
       authorId: currentUser.id,
       authorName: currentUser.name,
       authorInitials: currentUser.initials,
+      authorAvatar: currentUser.avatar_path,
       body,
       postedAt: new Date().toISOString(),
     };

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import Image from "next/image";
 import PostContent from "./PostContent";
 import { getRelativeTime, type Announcement, type User } from "@/app/home/HomeContent";
 
@@ -92,7 +93,7 @@ export default function PostModal({
             ) : (
               announcement.comments.map((comment) => (
                 <div className="commentItem" key={comment.id}>
-                  <span className="avatar avatarSm">{comment.authorInitials}</span>
+                  <CommentAvatar src={comment.authorAvatar} initials={comment.authorInitials} />
                   <div className="commentBubble">
                     <div className="commentMeta">
                       <span className="commentAuthor">{comment.authorName}</span>
@@ -107,7 +108,7 @@ export default function PostModal({
         </div>
 
         <form className="commentForm" onSubmit={submitComment}>
-          <span className="avatar avatarSm">{currentUser.initials}</span>
+          <CommentAvatar src={currentUser.avatar_path} initials={currentUser.initials} />
           <input
             ref={inputRef}
             type="text"
@@ -230,27 +231,6 @@ export default function PostModal({
           margin: 8px 0 4px;
         }
 
-        .avatar {
-          width: 36px;
-          height: 36px;
-          border-radius: 50%;
-          background: var(--navy);
-          color: var(--white);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-family: "Space Grotesk", sans-serif;
-          font-weight: 600;
-          font-size: 13px;
-          flex-shrink: 0;
-        }
-
-        .avatarSm {
-          width: 28px;
-          height: 28px;
-          font-size: 11px;
-        }
-
         .commentItem {
           display: flex;
           gap: 10px;
@@ -358,5 +338,27 @@ function CloseIcon() {
       <line x1="6" y1="6" x2="18" y2="18" />
       <line x1="18" y1="6" x2="6" y2="18" />
     </svg>
+  );
+}
+
+// Styled with Tailwind rather than the styled-jsx block above: styled-jsx
+// scopes classes per component, so they wouldn't reach this one.
+function CommentAvatar({ src, initials }: { src: string; initials: string }) {
+  if (src) {
+    return (
+      <Image
+        src={src}
+        alt=""
+        width={28}
+        height={28}
+        className="size-7 shrink-0 rounded-full border border-navy-tint object-cover"
+      />
+    );
+  }
+
+  return (
+    <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-navy font-display text-[11px] font-semibold text-paper">
+      {initials}
+    </span>
   );
 }
