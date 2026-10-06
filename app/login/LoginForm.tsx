@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { startTransition, useActionState, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import ForgotPasswordModal from "./ForgotPasswordModal";
@@ -31,7 +31,8 @@ function validate(fields: Fields): Errors {
     errors.email = "Enter a valid email address.";
   }
 
-  if (!fields.studentId.trim()) errors.studentId = "Student ID is required.";
+  // Student ID field is hidden for now — re-enable this check with it.
+  // if (!fields.studentId.trim()) errors.studentId = "Student ID is required.";
 
   if (!fields.password) {
     errors.password = "Password is required.";
@@ -45,7 +46,9 @@ export default function LoginForm() {
   const [errors, setErrors] = useState<Errors>({});
   const [showPassword, setShowPassword] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [googleError, setGoogleError] = useState("");
   const [forgotOpen, setForgotOpen] = useState(false);
+  const [state, formAction, pending] = useActionState(login, {});
 
   function setField<K extends keyof Fields>(key: K, value: Fields[K]) {
     setFields((prev) => ({ ...prev, [key]: value }));
@@ -55,6 +58,12 @@ export default function LoginForm() {
     event.preventDefault();
     const nextErrors = validate(fields);
     setErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) return;
+
+    // Calling formAction by hand (not via a form/button prop) needs startTransition,
+    // otherwise `pending` never flips to true.
+    const formData = new FormData(event.currentTarget);
+    startTransition(() => formAction(formData));
   }
 
   const handleGoogleLogin = async () => {
@@ -68,9 +77,11 @@ export default function LoginForm() {
       },
     });
 
-    if (error) {
-      setGoogleLoading(false);
-      throw error;
+    if (error) {      
+      setGoogleLoading(false);      
+      setGoogleError("Login with Google failed!");
+
+      console.error("google login failed:", error);      
     };
   }
 
@@ -86,7 +97,7 @@ export default function LoginForm() {
         </span>
       </div>
 
-      <form>
+      <form onSubmit={handleSubmit} noValidate>
         <div className="field">
           <label htmlFor="email">Email Address</label>
           <input
@@ -144,12 +155,15 @@ export default function LoginForm() {
           {errors.password && <p className="error">{errors.password}</p>}
         </div>
 
+        {state.error && <p className="formError" role="alert">{state.error}</p>}
+
         <button
-          formAction={login}
+          type="submit"
+          disabled={pending}
           className="btn submitBtn"
           style={{ width: "100%", marginTop: 8 }}
         >
-          Log in
+          {pending ? "Logging in..." : "Log in"}
         </button>
       </form>
 
@@ -169,6 +183,10 @@ export default function LoginForm() {
         <GoogleIcon />
         {googleLoading ? "Redirecting…" : "Continue with Google"}
       </button>
+
+      {googleError.trim() !== "" && 
+        <p className="error">{googleError}</p>
+      }
 
       <style jsx global>{`
         .split {
@@ -324,6 +342,10 @@ export default function LoginForm() {
           cursor: pointer;
           color: var(--ink-soft);
           display: flex;
+        }
+
+        .formError {
+          border-radius: 5px;
         }
 
         .toggleVis:hover {
