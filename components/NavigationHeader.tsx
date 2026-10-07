@@ -7,9 +7,9 @@ import UserMenu from "./UserMenu";
 
 const NAV_LINKS = [
   { href: "/home", label: "Home" },
-  { href: "#", label: "Calendar" },
-  { href: "#", label: "Attendance" },
-  { href: "#", label: "Suggestion Box" },
+  { href: "/calendar", label: "Calendar" },
+  { href: "/attendance", label: "Attendance" },
+  { href: "/suggestions", label: "Suggestion Box" },
 ] as const;
 
 type SiteNavProps = {

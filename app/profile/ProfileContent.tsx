@@ -34,7 +34,8 @@ export default function ProfileContent({ profile }: ProfileContentProps) {
         </div>
 
         <div className="mb-6 grid grid-cols-[540px_1fr] items-start gap-6 max-[900px]:grid-cols-1">
-          <section className="tick-frame animate-fade-in-up">
+          {/* The attendance page links here ("/profile#qr") for students who lost their offline QR. */}
+          <section id="qr" className="tick-frame animate-fade-in-up">
             <span className="tick-bl" />
             <span className="tick-br" />
 

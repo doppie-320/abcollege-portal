@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useScrollLock } from "@/lib/useScrollLock";
 
-type Tone = "danger" | "warning";
+type Tone = "danger" | "warning" | "confirm";
 
 const TONES: Record<Tone, { accent: string; accentHover: string; tint: string; icon: string }> = {
   danger: {
@@ -17,6 +17,13 @@ const TONES: Record<Tone, { accent: string; accentHover: string; tint: string; i
     accentHover: "#b84418",
     tint: "#fcebdf",
     icon: "M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z",
+  },
+  // Non-destructive "are you sure you want to send this?" prompts.
+  confirm: {
+    accent: "#132a4d",
+    accentHover: "#0d1e38",
+    tint: "#c6d3e5",
+    icon: "M22 2 11 13M22 2l-7 20-4-9-9-4 20-7Z",
   },
 };
 
@@ -40,7 +47,8 @@ export default function ConfirmDialog({
   errorMessage?: string;
   tone?: Tone;
   onCancel: () => void;
-  onConfirm: () => void | Promise<void>;
+  // Throw to show errorMessage, or return a string to show that message instead.
+  onConfirm: () => void | string | Promise<void | string>;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -64,7 +72,11 @@ export default function ConfirmDialog({
     setBusy(true);
     setError("");
     try {
-      await onConfirm();
+      const failure = await onConfirm();
+      if (typeof failure === "string") {
+        setError(failure);
+        setBusy(false);
+      }
     } catch {
       setError(errorMessage);
       setBusy(false);

@@ -92,3 +92,45 @@ export async function getProfile(): Promise<Profile> {
     avatarUrl: avatarUrl
   };
 }
+
+// The signed-in user as the site header and page chrome need them, plus whether
+// they're an admin (a row in "admins" keyed by users.id).
+export type Viewer = {
+  id: string;
+  name: string;
+  initials: string;
+  avatarUrl: string;
+  isAdmin: boolean;
+};
+
+export async function getViewer(): Promise<Viewer> {
+  const supabase = await createClient();
+
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  const authUser = authData?.user;
+
+  if (authError || !authUser) redirect("/login");
+
+  const [{ data: user }, { data: adminRow }] = await Promise.all([
+    supabase
+      .from("users")
+      .select("first_name, last_name, avatar_path")
+      .eq("id", authUser.id)
+      .maybeSingle(),
+    supabase.from("admins").select("id").eq("id", authUser.id).maybeSingle(),
+  ]);
+
+  const metadata = (authUser.user_metadata ?? {}) as AuthMetadata;
+  const firstName = clean(user?.first_name ?? metadata.first_name);
+  const lastName = clean(user?.last_name ?? metadata.last_name);
+
+  return {
+    id: authUser.id,
+    name: toDisplay(`${firstName} ${lastName}`.trim()),
+    initials: `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase(),
+    avatarUrl: user?.avatar_path
+      ? supabase.storage.from("avatars").getPublicUrl(user.avatar_path).data.publicUrl
+      : "",
+    isAdmin: adminRow !== null,
+  };
+}
