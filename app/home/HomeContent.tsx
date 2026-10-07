@@ -58,6 +58,8 @@ export type Comment = {
   authorId: string;
   authorName: string;
   authorInitials: string;
+  // Public URL of the commenter's profile picture, or "" to fall back to initials.
+  authorAvatar: string;
   body: string;
   postedAt: string;
 };
@@ -65,7 +67,7 @@ export type Comment = {
 type CommentRow = {
   id: string;
   announcement_id: string;
-  user_id: string;
+  author_id: string;
   content: string;
   created_at: string;
 };
@@ -74,6 +76,7 @@ type UserRow = {
   id: string;
   first_name: string | null;
   last_name: string | null;
+  avatar_path: string | null;
 };
 
 function toAnnouncement(row: AnnouncementRow): Announcement {
@@ -90,14 +93,15 @@ function toAnnouncement(row: AnnouncementRow): Announcement {
   };
 }
 
-function toComment(row: CommentRow, author?: UserRow): Comment {
+function toComment(row: CommentRow, author?: UserRow, authorAvatar = ""): Comment {
   const firstName = author?.first_name?.trim() ?? "";
   const lastName = author?.last_name?.trim() ?? "";
   return {
     id: row.id,
-    authorId: row.user_id,
+    authorId: row.author_id,
     authorName: `${firstName} ${lastName}`.trim() || "Unknown",
     authorInitials: `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase() || "?",
+    authorAvatar,
     body: row.content,
     postedAt: row.created_at,
   };
@@ -234,17 +238,21 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
         // Comments are optional: if the table is unavailable, posts still render without them.
         const { data: commentData, error: commentsError } = await supabase
           .from("announcement_comments")
-          .select("id, announcement_id, user_id, content, created_at")
+          .select("id, announcement_id, author_id, content, created_at")
           .order("created_at", { ascending: true });
 
         if (commentsError) console.error("Error fetching announcement comments:", commentsError);
 
         const commentRows: CommentRow[] = commentData || [];
-        const commenterIds = [...new Set(commentRows.map((comment) => comment.user_id))];
+        const commenterIds = [...new Set(commentRows.map((comment) => comment.author_id))];
         const { data: commenterData } = commenterIds.length
-          ? await supabase.from("users").select("id, first_name, last_name").in("id", commenterIds)
+          ? await supabase.from("users").select("id, first_name, last_name, avatar_path").in("id", commenterIds)
           : { data: [] as UserRow[] };
         const commenters = new Map((commenterData || []).map((user: UserRow) => [user.id, user]));
+        const commenterAvatar = (userId: string) => {
+          const path = commenters.get(userId)?.avatar_path;
+          return path ? supabase.storage.from("avatars").getPublicUrl(path).data.publicUrl : "";
+        };
 
         const loadedAnnouncements: Announcement[] = (announcementData || []).map((row) => ({
           ...toAnnouncement(row),
@@ -253,7 +261,9 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
             .map((reaction) => reaction.user_id),
           comments: commentRows
             .filter((comment) => comment.announcement_id === row.id)
-            .map((comment) => toComment(comment, commenters.get(comment.user_id))),
+            .map((comment) =>
+              toComment(comment, commenters.get(comment.author_id), commenterAvatar(comment.author_id))
+            ),
         }));
 
         console.log(loadedAnnouncements);
@@ -390,6 +400,7 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
       authorId: currentUser.id,
       authorName: currentUser.name,
       authorInitials: currentUser.initials,
+      authorAvatar: currentUser.avatar_path,
       body,
       postedAt: new Date().toISOString(),
     };
@@ -404,8 +415,8 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
 
     const { data, error } = await supabase
       .from("announcement_comments")
-      .insert({ announcement_id: postId, user_id: currentUser.id, content: body })
-      .select("id, announcement_id, user_id, content, created_at")
+      .insert({ announcement_id: postId, author_id: currentUser.id, content: body })
+      .select("id, announcement_id, author_id, content, created_at")
       .single();
 
     if (error) {
@@ -417,6 +428,43 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
     updateComments((comments) =>
       comments.map((comment) => (comment.id === tempId ? { ...pending, id: data.id, postedAt: data.created_at } : comment))
     );
+  }
+
+  function updateCommentsOf(postId: string, update: (comments: Comment[]) => Comment[]) {
+    setAnnouncements((current) =>
+      current.map((item) => (item.id === postId ? { ...item, comments: update(item.comments) } : item))
+    );
+  }
+
+  async function handleUpdateComment(postId: string, commentId: string, body: string) {
+    // Select the row back: an update blocked by RLS returns no error, just no rows.
+    const { data, error } = await supabase
+      .from("announcement_comments")
+      .update({ content: body })
+      .eq("id", commentId)
+      .select("id, content")
+      .maybeSingle();
+
+    if (error || !data) {
+      console.error("Error updating announcement comment:", error ?? "no rows updated");
+      throw error ?? new Error("Comment was not updated.");
+    }
+
+    updateCommentsOf(postId, (comments) =>
+      comments.map((comment) => (comment.id === commentId ? { ...comment, body: data.content } : comment))
+    );
+  }
+
+  async function handleDeleteComment(postId: string, commentId: string) {
+    // Same as posts: select the deleted row back so an RLS-blocked delete counts as a failure.
+    const { data, error } = await supabase.from("announcement_comments").delete().eq("id", commentId).select("id");
+
+    if (error || !data?.length) {
+      console.error("Error deleting announcement comment:", error ?? "no rows deleted");
+      throw error ?? new Error("Comment was not deleted.");
+    }
+
+    updateCommentsOf(postId, (comments) => comments.filter((comment) => comment.id !== commentId));
   }
 
 
@@ -526,6 +574,8 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
                     canManage={is_admin}
                     onToggleReaction={handleToggleReaction}
                     onAddComment={handleAddComment}
+                    onUpdateComment={handleUpdateComment}
+                    onDeleteComment={handleDeleteComment}
                     onUpdatePost={handleUpdatePost}
                     onDeletePost={handleDeletePost}
                   />

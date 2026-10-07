@@ -1,12 +1,12 @@
 'use server'
 
 import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
+import { ActionResult } from "@/lib/actionResult";
 
-export async function register(formData: FormData) {
+export async function register(_prev: ActionResult, formData: FormData) : Promise<ActionResult> {
     const supabase = await createClient();
 
-    const { data, error } = await supabase.auth.signUp({
+    const { error } = await supabase.auth.signUp({
         email: formData.get("email") as string,
         password: formData.get("password") as string,
         options: {
@@ -21,8 +21,9 @@ export async function register(formData: FormData) {
     });
 
     if(error) {
-        throw new Error(`Error registering user: ${error.message}`);
-    }    
+        console.error("Register failed:", error);
+        return { error: "Could not complete your registration" }
+    }
 
-    redirect("/home");
+    return { success: true };
 }
