@@ -617,46 +617,50 @@ export default function HomeContent({ current_user, is_admin, today, birthdaysTo
               </div>
             </div>
 
-            <div className="tick-frame">
+            <div className="tick-frame feedStack">
               <span className="tick-bl"></span>
               <span className="tick-br"></span>
 
-              <div className="sectionHead">
-                <span className="mono sectionLabel">Announcements</span>
-                <span className="mono sectionMeta">
-                  {visibleAnnouncements.length === announcements.length
-                    ? `${announcements.length} posted`
-                    : `${visibleAnnouncements.length} of ${announcements.length}`}
-                </span>
+              {/* Each child is its own panel; together they read as one section. */}
+              <div className="feedPanels">
+                {/* <header>, not <div>, so AnnouncementCard's :nth-of-type delays count posts only. */}
+                <header className="sectionHead">
+                  <span className="mono sectionLabel">Announcements</span>
+                  <span className="mono sectionMeta">
+                    {visibleAnnouncements.length === announcements.length
+                      ? `${announcements.length} posted`
+                      : `${visibleAnnouncements.length} of ${announcements.length}`}
+                  </span>
+                </header>
+
+                {feedError && (
+                  <p className="feedError" role="alert">
+                    {feedError}
+                  </p>
+                )}
+
+                {!currentUser ? null : visibleAnnouncements.length === 0 ? (
+                  <p className="emptyState">
+                    {announcements.length === 0 ? "Nothing has been posted yet." : "No announcements match your search."}
+                  </p>
+                ) : (
+                  visibleAnnouncements.map((item) => (
+                    <AnnouncementCard
+                      key={item.clientKey ?? item.id}
+                      announcement={item}
+                      currentUser={currentUser}
+                      tags={POST_TAGS}
+                      canManage={is_admin}
+                      onToggleReaction={handleToggleReaction}
+                      onAddComment={handleAddComment}
+                      onUpdateComment={handleUpdateComment}
+                      onDeleteComment={handleDeleteComment}
+                      onUpdatePost={handleUpdatePost}
+                      onDeletePost={handleDeletePost}
+                    />
+                  ))
+                )}
               </div>
-
-              {feedError && (
-                <p className="feedError" role="alert">
-                  {feedError}
-                </p>
-              )}
-
-              {!currentUser ? null : visibleAnnouncements.length === 0 ? (
-                <p className="emptyState">
-                  {announcements.length === 0 ? "Nothing has been posted yet." : "No announcements match your search."}
-                </p>
-              ) : (
-                visibleAnnouncements.map((item) => (
-                  <AnnouncementCard
-                    key={item.clientKey ?? item.id}
-                    announcement={item}
-                    currentUser={currentUser}
-                    tags={POST_TAGS}
-                    canManage={is_admin}
-                    onToggleReaction={handleToggleReaction}
-                    onAddComment={handleAddComment}
-                    onUpdateComment={handleUpdateComment}
-                    onDeleteComment={handleDeleteComment}
-                    onUpdatePost={handleUpdatePost}
-                    onDeletePost={handleDeletePost}
-                  />
-                ))
-              )}
             </div>
           </div>
 
@@ -889,6 +893,73 @@ export default function HomeContent({ current_user, is_admin, today, birthdaysTo
           color: var(--ink-soft);
           padding: 20px 0 4px;
           margin-bottom: 0;
+        }
+
+        /* The frame only draws the corner ticks; the panels inside carry the borders. */
+        .feedStack {
+          border: none;
+          background: none;
+          padding: 0;
+        }
+
+        .feedStack::before,
+        .feedStack::after,
+        .feedStack .tick-bl,
+        .feedStack .tick-br {
+          z-index: 1;
+        }
+
+        .feedStack::before {
+          top: 0;
+          left: 0;
+        }
+
+        .feedStack::after {
+          top: 0;
+          right: 0;
+        }
+
+        .feedStack .tick-bl {
+          bottom: 0;
+          left: 0;
+        }
+
+        .feedStack .tick-br {
+          bottom: 0;
+          right: 0;
+        }
+
+        .feedPanels {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+
+        .feedPanels > * {
+          background: var(--white);
+          border: 1px solid #c9bfa0;
+          padding: 20px;
+          margin: 0;
+        }
+
+        /* Square middle panels; only the outer corners of the stack are rounded. */
+        .feedPanels > :first-child {
+          border-top-left-radius: 6px;
+          border-top-right-radius: 6px;
+        }
+
+        .feedPanels > :last-child {
+          border-bottom-left-radius: 6px;
+          border-bottom-right-radius: 6px;
+        }
+
+        .feedPanels > .sectionHead {
+          padding: 12px 20px;
+        }
+
+        .feedPanels > .feedError,
+        .feedPanels > .emptyState {
+          padding: 14px 20px;
         }
 
         .sideBlock {

@@ -1,6 +1,6 @@
 "use client";
 
-import { ViewTransition, startTransition, useEffect, useOptimistic, useState } from "react";
+import { ViewTransition, startTransition, useEffect, useOptimistic, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import SiteNav from "@/components/NavigationHeader";
@@ -75,6 +75,12 @@ function monthLinkTypes(direction: "next" | "prev") {
 // next mount skips them; the outgoing month's unmount clears it.
 let switchingMonth = false;
 
+// Months differ in height (5 or 6 grid rows, longer or shorter lists). If the
+// next month is shorter, the browser pulls the scroll position up, and the
+// slide makes that look like the page drifting upward. So a month link carries
+// the current page height over as the next month's minimum height.
+let carriedHeight: number | undefined;
+
 // Same order as listEvents.
 function byDateThenName(a: CalendarEntry, b: CalendarEntry) {
   return a.date.localeCompare(b.date) || a.name.localeCompare(b.name);
@@ -92,6 +98,8 @@ export default function CalendarContent({
   const [modal, setModal] = useState<Modal | null>(null);
   const [actionError, setActionError] = useState("");
   const [playEntrance] = useState(() => !switchingMonth);
+  const [minHeight] = useState(() => (switchingMonth ? carriedHeight : undefined));
+  const pageRef = useRef<HTMLDivElement>(null);
   useEffect(() => () => {
     switchingMonth = false;
   }, []);
@@ -180,6 +188,11 @@ export default function CalendarContent({
     });
   }
 
+  function startMonthSwitch() {
+    switchingMonth = true;
+    carriedHeight = pageRef.current?.offsetHeight;
+  }
+
   return (
     <>
       <SiteNav
@@ -189,7 +202,7 @@ export default function CalendarContent({
         avatarUrl={viewer.avatarUrl}
       />
 
-      <div className="page-wrap">
+      <div className="page-wrap" ref={pageRef} style={{ minHeight }}>
         <div className={`mb-6 ${playEntrance ? "animate-fade-in-up" : ""}`}>
           <span className="eyebrow mb-2 tracking-[0.08em]">SOE HUB / CALENDAR</span>
           <h1 className="mb-1 text-[30px] leading-none">School Calendar</h1>
@@ -219,7 +232,7 @@ export default function CalendarContent({
                       href="/calendar"
                       // Slide toward today's month.
                       transitionTypes={monthLinkTypes(today < toISODate(year, monthIndex, 1) ? "prev" : "next")}
-                      onClick={() => (switchingMonth = true)}
+                      onClick={startMonthSwitch}
                       scroll={false}
                       className="btn ghost mr-1 px-3 py-1.5 text-[13px]"
                     >
@@ -229,7 +242,7 @@ export default function CalendarContent({
                   <Link
                     href={`/calendar?month=${monthParam(year, monthIndex - 1)}`}
                     transitionTypes={monthLinkTypes("prev")}
-                    onClick={() => (switchingMonth = true)}
+                    onClick={startMonthSwitch}
                     scroll={false}
                     className="btn ghost size-9 p-0"
                     aria-label="Previous month"
@@ -239,7 +252,7 @@ export default function CalendarContent({
                   <Link
                     href={`/calendar?month=${monthParam(year, monthIndex + 1)}`}
                     transitionTypes={monthLinkTypes("next")}
-                    onClick={() => (switchingMonth = true)}
+                    onClick={startMonthSwitch}
                     scroll={false}
                     className="btn ghost size-9 p-0"
                     aria-label="Next month"

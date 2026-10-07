@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import MediaGrid from "./MediaGrid";
 import ImageLightbox from "./ImageLightbox";
@@ -8,12 +8,10 @@ import RichTextBody from "./RichTextBody";
 import PostMenu from "./PostMenu";
 import { type Announcement, type User, getPerson, getRelativeTime } from "@/app/home/HomeContent";
 
-async function reactorNames(reactedBy: string[], currentUserId: string): Promise<string[]> {
-  const names = await Promise.all(
-    reactedBy.map(async (id) => (id === currentUserId ? "You" : (await getPerson(id)).name))
-  );
-  names.sort((a) => (a === "You" ? -1 : 0));
-  return names;
+// The current user is listed first, as "You".
+async function loadReactors(reactedBy: string[], currentUser: User): Promise<User[]> {
+  const others = await Promise.all(reactedBy.filter((id) => id !== currentUser.id).map((id) => getPerson(id)));
+  return reactedBy.includes(currentUser.id) ? [{ ...currentUser, name: "You" }, ...others] : others;
 }
 
 export default function PostContent({
@@ -39,8 +37,9 @@ export default function PostContent({
   onDelete?: () => void;
 }) {
   const [showReactors, setShowReactors] = useState(false);
+  const reactorsRef = useRef<HTMLDivElement>(null);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
-  const [names, setNames] = useState<string[]>([]);
+  const [reactors, setReactors] = useState<User[]>([]);
 
   const [fetchedAuthor, setAuthor] = useState<User | null>(null);
   const author = authorOverride ?? fetchedAuthor;
@@ -61,16 +60,37 @@ export default function PostContent({
     };
   }, [announcement.authorId, authorOverride]);
 
+  // Close the "who reacted" popover on any click outside it, or Escape.
+  useEffect(() => {
+    if (!showReactors) return;
+
+    function onDocClick(e: MouseEvent) {
+      if (reactorsRef.current && !reactorsRef.current.contains(e.target as Node)) setShowReactors(false);
+    }
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setShowReactors(false);
+    }
+
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [showReactors]);
+
   useEffect(() => {
     let active = true;
-    reactorNames(announcement.reactedBy, currentUser.id).then((resolvedNames) => {
-      if (active) setNames(resolvedNames);
-    });
+    loadReactors(announcement.reactedBy, currentUser)
+      .then((resolved) => {
+        if (active) setReactors(resolved);
+      })
+      .catch((error) => console.error("Error fetching reactors:", error));
 
     return () => {
       active = false;
     };
-  }, [announcement.reactedBy, currentUser.id]);
+  }, [announcement.reactedBy, currentUser]);
 
   return (
     <div className="postContent">
@@ -125,19 +145,21 @@ export default function PostContent({
         />
       )}
 
+      {/* Each action is a pill chip; empty ones show a verb, the rest show their count. */}
       <div className="postActions">
-        <div className="actionGroup">
+        <div className={`chip ${reacted ? "active" : ""}`}>
           <button
             type="button"
-            className={`actionBtn ${reacted ? "active" : ""}`}
+            className="actionBtn"
             onClick={() => onToggleReaction(announcement.id)}
             aria-label={reacted ? "Remove reaction" : "React"}
           >
             <HeartIcon filled={reacted} />
+            {announcement.reactedBy.length === 0 && <span className="chipLabel">Like</span>}
           </button>
           {/* Count from reactedBy, not the looked-up names, so it changes with the heart. */}
           {announcement.reactedBy.length > 0 && (
-            <div className="countWrap">
+            <div className="countWrap" ref={reactorsRef}>
               <button
                 type="button"
                 className="countBtn"
@@ -147,35 +169,58 @@ export default function PostContent({
                 {announcement.reactedBy.length}
               </button>
               {showReactors && (
-                <div className="reactorPopover">
-                  {names.map((name) => (
-                    <div key={name}>{name}</div>
-                  ))}
+                <div className="reactorPopover" role="dialog" aria-label="People who reacted">
+                  <div className="reactorHead">
+                    <HeartIcon filled size={11} />
+                    Reacted · {announcement.reactedBy.length}
+                  </div>
+                  {/* Names load in the background; count from reactedBy so it's right immediately. */}
+                  {reactors.length === 0 ? (
+                    <div className="reactorEmpty">Loading…</div>
+                  ) : (
+                    <ul className="reactorList">
+                      {reactors.map((person) => (
+                        <li key={person.id} className="reactorRow">
+                          {person.avatar_path ? (
+                            <Image
+                              src={person.avatar_path}
+                              alt=""
+                              width={24}
+                              height={24}
+                              className="size-6 shrink-0 rounded-full border border-navy-tint object-cover"
+                            />
+                          ) : (
+                            <span className="reactorAvatar">{person.initials || "?"}</span>
+                          )}
+                          <span className={`reactorName${person.id === currentUser.id ? " isYou" : ""}`}>
+                            {person.name || "Unknown"}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               )}
             </div>
           )}
         </div>
 
-        <div className="actionGroup">
-          <button type="button" className="actionBtn" onClick={onCommentClick} aria-label="Comment">
-            <CommentIcon />
-          </button>
-          {announcement.comments.length > 0 && (
-            <button type="button" className="countBtn" onClick={onCommentClick}>
-              {announcement.comments.length}
-            </button>
-          )}
-        </div>
+        <button
+          type="button"
+          className="chip actionBtn"
+          onClick={onCommentClick}
+          aria-label={`Comment (${announcement.comments.length})`}
+        >
+          <CommentIcon />
+          <span className="chipLabel">{announcement.comments.length || "Comment"}</span>
+        </button>
       </div>
 
       <style jsx>{`
         .postTitle {
           font-size: 24px;
           line-height: 1.25;
-          margin-bottom: 12px;
-          padding-bottom: 10px;
-          border-bottom: 1px dashed #d8cfb4;
+          margin-bottom: 14px;
           overflow-wrap: anywhere;
         }
 
@@ -284,10 +329,9 @@ export default function PostContent({
         .countBtn {
           background: none;
           border: none;
-          padding: 2px 4px;
-          color: var(--ink-soft);
-          font-family: "IBM Plex Mono", monospace;
-          font-size: 12px;
+          padding: 0;
+          color: inherit;
+          font: inherit;
           cursor: pointer;
         }
 
@@ -295,83 +339,171 @@ export default function PostContent({
           text-decoration: underline;
         }
 
+        /* Popover sits above the chip, offset to line up with the chip's left edge. */
         .reactorPopover {
           position: absolute;
           bottom: 100%;
-          left: 0;
-          margin-bottom: 6px;
-          background: var(--navy-deep);
-          color: var(--white);
-          font-size: 12px;
-          padding: 8px 10px;
-          border-radius: 5px;
-          white-space: nowrap;
+          left: -32px;
+          margin-bottom: 12px;
+          min-width: 190px;
+          max-width: 260px;
+          background: var(--white);
+          border: 1px solid var(--navy);
+          border-radius: 6px;
+          box-shadow: 3px 3px 0 var(--orange), 6px 6px 0 var(--yellow);
+          cursor: default;
           z-index: 5;
           transform-origin: bottom left;
           animation: popIn 0.15s ease backwards;
         }
 
-        .postActions {
+        .reactorHead {
           display: flex;
           align-items: center;
-          justify-content: flex-start;
-          gap: 12px;
-          margin-top: 14px;
-          padding-top: 10px;
-          border-top: 1px dashed #d8cfb4;
+          gap: 6px;
+          padding: 8px 12px;
+          background: var(--vellum);
+          border-radius: 5px 5px 0 0;
+          color: var(--orange);
+          font-family: "IBM Plex Mono", monospace;
+          font-size: 10.5px;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
         }
 
-        .actionGroup {
+        .reactorList {
+          list-style: none;
+          margin: 0;
+          padding: 6px 0;
+          max-height: 220px;
+          overflow-y: auto;
+        }
+
+        .reactorRow {
           display: flex;
           align-items: center;
-          gap: 2px;
+          gap: 9px;
+          padding: 5px 12px;
         }
 
-        .actionBtn {
+        .reactorAvatar {
+          width: 24px;
+          height: 24px;
+          border-radius: 50%;
+          background: var(--navy);
+          color: var(--white);
           display: flex;
           align-items: center;
           justify-content: center;
+          font-family: "Space Grotesk", sans-serif;
+          font-weight: 600;
+          font-size: 10px;
+          flex-shrink: 0;
+        }
+
+        .reactorName {
+          font-family: "Inter", sans-serif;
+          font-size: 13px;
+          color: var(--ink);
+          letter-spacing: 0;
+          text-transform: none;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .reactorName.isYou {
+          font-weight: 600;
+        }
+
+        .reactorEmpty {
+          padding: 10px 12px;
+          font-size: 12px;
+          color: var(--ink-soft);
+        }
+
+        .postActions {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          margin-top: 18px;
+        }
+
+        /* Bare button reset; .chip (below) adds the pill around it. */
+        .actionBtn {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
           background: none;
           border: none;
-          padding: 6px;
-          color: var(--ink-soft);
+          padding: 0;
+          color: inherit;
+          font: inherit;
           cursor: pointer;
-          border-radius: 4px;
-          transition: background 0.15s ease, color 0.15s ease;
         }
 
-        .actionBtn:hover {
-          background: var(--vellum-2);
+        .chip {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 5px 12px;
+          border: 1px solid #c9bfa0;
+          border-radius: 999px;
+          background: var(--white);
+          color: var(--ink-soft);
+          font-family: "IBM Plex Mono", monospace;
+          font-size: 11.5px;
+          line-height: 1;
+          transition: border-color 0.15s ease, color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+        }
+
+        .chip:hover {
+          border-color: var(--navy);
           color: var(--navy);
+          transform: translate(-1px, -1px);
+          box-shadow: 2px 2px 0 var(--orange);
         }
 
-        .actionBtn.active:hover {
+        .chip:active {
+          transform: none;
+          box-shadow: none;
+        }
+
+        .chip.active {
+          border-color: var(--orange);
           color: var(--orange);
+          background: color-mix(in srgb, var(--orange) 8%, var(--white));
+        }
+
+        .chip.active:hover {
+          box-shadow: 2px 2px 0 var(--navy);
+        }
+
+        .chip.active svg {
+          animation: heartPop 0.4s ease;
+        }
+
+        .chipLabel {
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
         }
 
         .actionBtn:focus-visible,
         .countBtn:focus-visible {
           outline: 2px solid var(--blue);
-          outline-offset: 1px;
-        }
-
-        .actionBtn.active {
-          color: var(--orange);
-        }
-
-        .actionBtn.active svg {
-          animation: heartPop 0.4s ease;
+          outline-offset: 3px;
+          border-radius: 999px;
         }
       `}</style>
     </div>
   );
 }
 
-function HeartIcon({ filled }: { filled?: boolean }) {
+function HeartIcon({ filled, size = 15 }: { filled?: boolean; size?: number }) {
   return (
     <svg
-      width={15}
-      height={15}
+      width={size}
+      height={size}
       viewBox="0 0 24 24"
       fill={filled ? "currentColor" : "none"}
       stroke="currentColor"

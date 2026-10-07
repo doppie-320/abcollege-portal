@@ -106,14 +106,10 @@ export default function AnnouncementCard({
       )}
 
       <style jsx>{`
+        /* Panel border, padding and corners come from .feedPanels in HomeContent. */
         .announceItem {
-          padding: 24px 0;
           animation: fadeInUp 0.4s ease backwards;
           animation-delay: 0.25s;
-        }
-
-        .announceItem:first-of-type {
-          padding-top: 0;
         }
 
         .announceItem:nth-of-type(1) {
@@ -130,10 +126,6 @@ export default function AnnouncementCard({
 
         .announceItem:nth-of-type(4) {
           animation-delay: 0.2s;
-        }
-
-        .announceItem + .announceItem {
-          border-top: 1px solid #c9bfa0;
         }
 
         .announceItem.pending {
