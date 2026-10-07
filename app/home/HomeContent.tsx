@@ -415,8 +415,8 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
 
     const { data, error } = await supabase
       .from("announcement_comments")
-      .insert({ announcement_id: postId, user_id: currentUser.id, content: body })
-      .select("id, announcement_id, user_id, content, created_at")
+      .insert({ announcement_id: postId, author_id: currentUser.id, content: body })
+      .select("id, announcement_id, author_id, content, created_at")
       .single();
 
     if (error) {
