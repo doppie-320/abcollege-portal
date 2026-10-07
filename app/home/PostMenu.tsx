@@ -2,7 +2,17 @@
 
 import { useEffect, useRef, useState } from "react";
 
-export default function PostMenu({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => void }) {
+export default function PostMenu({
+  onEdit,
+  onDelete,
+  noun = "post",
+}: {
+  // Each item is only shown when its handler is passed.
+  onEdit?: () => void;
+  onDelete?: () => void;
+  // What the menu acts on, used in the labels ("Edit post", "Delete comment").
+  noun?: string;
+}) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
 
@@ -37,7 +47,7 @@ export default function PostMenu({ onEdit, onDelete }: { onEdit: () => void; onD
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label="Post options"
+        aria-label={`${noun.charAt(0).toUpperCase()}${noun.slice(1)} options`}
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
           <circle cx="5" cy="12" r="2" />
@@ -48,18 +58,22 @@ export default function PostMenu({ onEdit, onDelete }: { onEdit: () => void; onD
 
       {open && (
         <div className="menuDropdown" role="menu">
-          <button type="button" role="menuitem" className="menuItem" onClick={() => choose(onEdit)}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
-            </svg>
-            Edit post
-          </button>
-          <button type="button" role="menuitem" className="menuItem danger" onClick={() => choose(onDelete)}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v5M14 11v5" />
-            </svg>
-            Delete post
-          </button>
+          {onEdit && (
+            <button type="button" role="menuitem" className="menuItem" onClick={() => choose(onEdit)}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+              </svg>
+              Edit {noun}
+            </button>
+          )}
+          {onDelete && (
+            <button type="button" role="menuitem" className="menuItem danger" onClick={() => choose(onDelete)}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v5M14 11v5" />
+              </svg>
+              Delete {noun}
+            </button>
+          )}
         </div>
       )}
 

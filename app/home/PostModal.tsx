@@ -1,8 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import Image from "next/image";
 import PostContent from "./PostContent";
-import { getRelativeTime, type Announcement, type User } from "@/app/home/HomeContent";
+import PostMenu from "./PostMenu";
+import ConfirmDialog from "./ConfirmDialog";
+import { getRelativeTime, type Announcement, type Comment, type User } from "@/app/home/HomeContent";
 
 export default function PostModal({
   announcement,
@@ -10,16 +13,29 @@ export default function PostModal({
   onToggleReaction,
   onClose,
   onAddComment,
+  onUpdateComment,
+  onDeleteComment,
+  canModerate = false,
 }: {
   announcement: Announcement;
   currentUser: User;
   onToggleReaction: (postId: string) => void;
   onClose: () => void;
   onAddComment: (postId: string, body: string) => Promise<void>;
+  onUpdateComment: (postId: string, commentId: string, body: string) => Promise<void>;
+  onDeleteComment: (postId: string, commentId: string) => Promise<void>;
+  // Admins can delete anyone's comment (but only edit their own).
+  canModerate?: boolean;
 }) {
   const [draft, setDraft] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [commentError, setCommentError] = useState("");
+
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editError, setEditError] = useState("");
+  const [deletingComment, setDeletingComment] = useState<Comment | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const commentCount = announcement.comments.length;
@@ -33,17 +49,59 @@ export default function PostModal({
   }, [commentCount]);
 
   useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-    }
-    document.addEventListener("keydown", onKeyDown);
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
-      document.removeEventListener("keydown", onKeyDown);
       document.body.style.overflow = previousOverflow;
     };
-  }, [onClose]);
+  }, []);
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key !== "Escape") return;
+      // Escape closes the innermost thing first: the delete dialog handles itself,
+      // then an open edit box, then the modal.
+      if (deletingComment) return;
+      if (editingId) {
+        if (!savingEdit) cancelEdit();
+        return;
+      }
+      onClose();
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onClose, deletingComment, editingId, savingEdit]);
+
+  function startEdit(comment: Comment) {
+    setEditingId(comment.id);
+    setEditDraft(comment.body);
+    setEditError("");
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setEditDraft("");
+    setEditError("");
+  }
+
+  async function saveEdit(comment: Comment) {
+    const trimmed = editDraft.trim();
+    if (!trimmed || savingEdit) return;
+    if (trimmed === comment.body) {
+      cancelEdit();
+      return;
+    }
+    setSavingEdit(true);
+    setEditError("");
+    try {
+      await onUpdateComment(announcement.id, comment.id, trimmed);
+      cancelEdit();
+    } catch {
+      setEditError("Couldn't save your changes. Please try again.");
+    } finally {
+      setSavingEdit(false);
+    }
+  }
 
   async function submitComment(event: FormEvent) {
     event.preventDefault();
@@ -90,24 +148,74 @@ export default function PostModal({
             {commentCount === 0 ? (
               <p className="commentsEmpty">No comments yet. Be the first to reply.</p>
             ) : (
-              announcement.comments.map((comment) => (
-                <div className="commentItem" key={comment.id}>
-                  <span className="avatar avatarSm">{comment.authorInitials}</span>
-                  <div className="commentBubble">
-                    <div className="commentMeta">
-                      <span className="commentAuthor">{comment.authorName}</span>
-                      <span className="commentTime mono">{getRelativeTime(comment.postedAt)}</span>
+              announcement.comments.map((comment) => {
+                // A comment still being posted has a temp id the database doesn't know yet.
+                const isSaved = !comment.id.startsWith("temp-");
+                const isOwn = comment.authorId === currentUser.id;
+                const canEdit = isSaved && isOwn;
+                const canDelete = isSaved && (isOwn || canModerate);
+                const isEditing = editingId === comment.id;
+
+                return (
+                  <div className="commentItem" key={comment.id}>
+                    <CommentAvatar src={comment.authorAvatar} initials={comment.authorInitials} />
+                    <div className="commentBubble">
+                      <div className="commentMeta">
+                        <span className="commentAuthor">{comment.authorName}</span>
+                        <span className="commentTime mono">{getRelativeTime(comment.postedAt)}</span>
+                      </div>
+
+                      {isEditing ? (
+                        <form
+                          className="commentEdit"
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            void saveEdit(comment);
+                          }}
+                        >
+                          <textarea
+                            className="commentEditInput"
+                            value={editDraft}
+                            rows={2}
+                            autoFocus
+                            disabled={savingEdit}
+                            aria-label="Edit comment"
+                            onChange={(e) => {
+                              setEditDraft(e.target.value);
+                              if (editError) setEditError("");
+                            }}
+                          />
+                          {editError && <p className="commentEditError" role="alert">{editError}</p>}
+                          <div className="commentEditActions">
+                            <button type="button" className="commentCancelBtn" onClick={cancelEdit} disabled={savingEdit}>
+                              Cancel
+                            </button>
+                            <button type="submit" className="commentPostBtn" disabled={!editDraft.trim() || savingEdit}>
+                              {savingEdit ? "Saving..." : "Save"}
+                            </button>
+                          </div>
+                        </form>
+                      ) : (
+                        <div className="commentBody">{comment.body}</div>
+                      )}
                     </div>
-                    <div className="commentBody">{comment.body}</div>
+
+                    {!isEditing && (canEdit || canDelete) && (
+                      <PostMenu
+                        noun="comment"
+                        onEdit={canEdit ? () => startEdit(comment) : undefined}
+                        onDelete={canDelete ? () => setDeletingComment(comment) : undefined}
+                      />
+                    )}
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
 
         <form className="commentForm" onSubmit={submitComment}>
-          <span className="avatar avatarSm">{currentUser.initials}</span>
+          <CommentAvatar src={currentUser.avatar_path} initials={currentUser.initials} />
           <input
             ref={inputRef}
             type="text"
@@ -125,6 +233,25 @@ export default function PostModal({
         </form>
         {commentError && <p className="commentError" role="alert">{commentError}</p>}
       </div>
+
+      {deletingComment && (
+        <ConfirmDialog
+          title="Delete this comment?"
+          message={
+            deletingComment.authorId === currentUser.id
+              ? "Your comment will be removed from this post. This can't be undone."
+              : `${deletingComment.authorName}'s comment will be removed from this post. This can't be undone.`
+          }
+          confirmLabel="Delete"
+          busyLabel="Deleting..."
+          errorMessage="Couldn't delete this comment. Please try again."
+          onCancel={() => setDeletingComment(null)}
+          onConfirm={async () => {
+            await onDeleteComment(announcement.id, deletingComment.id);
+            setDeletingComment(null);
+          }}
+        />
+      )}
 
       <style jsx>{`
         .modalBackdrop {
@@ -230,27 +357,6 @@ export default function PostModal({
           margin: 8px 0 4px;
         }
 
-        .avatar {
-          width: 36px;
-          height: 36px;
-          border-radius: 50%;
-          background: var(--navy);
-          color: var(--white);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-family: "Space Grotesk", sans-serif;
-          font-weight: 600;
-          font-size: 13px;
-          flex-shrink: 0;
-        }
-
-        .avatarSm {
-          width: 28px;
-          height: 28px;
-          font-size: 11px;
-        }
-
         .commentItem {
           display: flex;
           gap: 10px;
@@ -290,6 +396,49 @@ export default function PostModal({
           color: var(--ink);
           margin-top: 2px;
           overflow-wrap: anywhere;
+        }
+
+        .commentEdit {
+          margin-top: 6px;
+        }
+
+        .commentEditInput {
+          display: block;
+          resize: vertical;
+          min-height: 56px;
+          margin-bottom: 6px !important;
+          padding: 8px 10px !important;
+          font-size: 13px !important;
+          line-height: 1.5;
+          box-shadow: none !important;
+        }
+
+        .commentEditError {
+          font-size: 12px;
+          color: var(--orange);
+          margin: 0 0 6px;
+        }
+
+        .commentEditActions {
+          display: flex;
+          justify-content: flex-end;
+          gap: 6px;
+        }
+
+        .commentCancelBtn {
+          background: none;
+          border: 1px solid #c9bfa0;
+          color: var(--ink);
+          font-weight: 500;
+          font-size: 12.5px;
+          cursor: pointer;
+          padding: 7px 14px;
+          border-radius: 5px;
+          transition: background 0.15s ease;
+        }
+
+        .commentCancelBtn:hover:not(:disabled) {
+          background: var(--vellum-2);
         }
 
         .commentForm {
@@ -358,5 +507,27 @@ function CloseIcon() {
       <line x1="6" y1="6" x2="18" y2="18" />
       <line x1="18" y1="6" x2="6" y2="18" />
     </svg>
+  );
+}
+
+// Styled with Tailwind rather than the styled-jsx block above: styled-jsx
+// scopes classes per component, so they wouldn't reach this one.
+function CommentAvatar({ src, initials }: { src: string; initials: string }) {
+  if (src) {
+    return (
+      <Image
+        src={src}
+        alt=""
+        width={28}
+        height={28}
+        className="size-7 shrink-0 rounded-full border border-navy-tint object-cover"
+      />
+    );
+  }
+
+  return (
+    <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-navy font-display text-[11px] font-semibold text-paper">
+      {initials}
+    </span>
   );
 }

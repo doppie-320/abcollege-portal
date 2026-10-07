@@ -14,6 +14,8 @@ export default function AnnouncementCard({
   canManage,
   onToggleReaction,
   onAddComment,
+  onUpdateComment,
+  onDeleteComment,
   onUpdatePost,
   onDeletePost,
 }: {
@@ -24,6 +26,8 @@ export default function AnnouncementCard({
   canManage: boolean;
   onToggleReaction: (postId: string) => void;
   onAddComment: (postId: string, body: string) => Promise<void>;
+  onUpdateComment: (postId: string, commentId: string, body: string) => Promise<void>;
+  onDeleteComment: (postId: string, commentId: string) => Promise<void>;
   onUpdatePost: (postId: string, post: NewPost) => Promise<void>;
   onDeletePost: (postId: string) => Promise<void>;
 }) {
@@ -49,6 +53,9 @@ export default function AnnouncementCard({
           currentUser={currentUser}
           onToggleReaction={onToggleReaction}
           onAddComment={onAddComment}
+          onUpdateComment={onUpdateComment}
+          onDeleteComment={onDeleteComment}
+          canModerate={canManage}
           onClose={() => setShowPostModal(false)}
         />
       )}
