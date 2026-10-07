@@ -430,6 +430,43 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
     );
   }
 
+  function updateCommentsOf(postId: string, update: (comments: Comment[]) => Comment[]) {
+    setAnnouncements((current) =>
+      current.map((item) => (item.id === postId ? { ...item, comments: update(item.comments) } : item))
+    );
+  }
+
+  async function handleUpdateComment(postId: string, commentId: string, body: string) {
+    // Select the row back: an update blocked by RLS returns no error, just no rows.
+    const { data, error } = await supabase
+      .from("announcement_comments")
+      .update({ content: body })
+      .eq("id", commentId)
+      .select("id, content")
+      .maybeSingle();
+
+    if (error || !data) {
+      console.error("Error updating announcement comment:", error ?? "no rows updated");
+      throw error ?? new Error("Comment was not updated.");
+    }
+
+    updateCommentsOf(postId, (comments) =>
+      comments.map((comment) => (comment.id === commentId ? { ...comment, body: data.content } : comment))
+    );
+  }
+
+  async function handleDeleteComment(postId: string, commentId: string) {
+    // Same as posts: select the deleted row back so an RLS-blocked delete counts as a failure.
+    const { data, error } = await supabase.from("announcement_comments").delete().eq("id", commentId).select("id");
+
+    if (error || !data?.length) {
+      console.error("Error deleting announcement comment:", error ?? "no rows deleted");
+      throw error ?? new Error("Comment was not deleted.");
+    }
+
+    updateCommentsOf(postId, (comments) => comments.filter((comment) => comment.id !== commentId));
+  }
+
 
   return (
     <>
@@ -537,6 +574,8 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
                     canManage={is_admin}
                     onToggleReaction={handleToggleReaction}
                     onAddComment={handleAddComment}
+                    onUpdateComment={handleUpdateComment}
+                    onDeleteComment={handleDeleteComment}
                     onUpdatePost={handleUpdatePost}
                     onDeletePost={handleDeletePost}
                   />
