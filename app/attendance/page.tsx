@@ -3,9 +3,17 @@ export const instant = false;
 import type { Metadata } from "next";
 import Link from "next/link";
 import SiteNav from "@/components/NavigationHeader";
+import PageTransition from "@/components/PageTransition";
 import { getViewer } from "@/lib/auth";
-import { formatISODate, formatPeso } from "@/lib/dates";
-import { listAttendance, type AttendanceStatus as Status } from "@/lib/mock/portal-db";
+import { formatISODate, formatPeso, schoolToday } from "@/lib/dates";
+import {
+  getAttendanceSheet,
+  listAttendance,
+  listAttendanceEvents,
+  type AttendanceStatus as Status,
+} from "@/lib/mock/portal-db";
+import { createClient } from "@/lib/supabase/server";
+import AttendanceSheet, { type RosterStudent } from "./AttendanceSheet";
 
 export const metadata: Metadata = {
   title: "Attendance — SOE Hub",
@@ -20,10 +28,49 @@ const STATUS_STYLES: Record<Status, { label: string; className: string }> = {
 
 const SUMMARY_ORDER: Status[] = ["present", "late", "absent", "excused"];
 
-export default async function AttendancePage() {
-  const viewer = await getViewer();
-  // Newest first.
-  const records = await listAttendance(viewer.id);
+// Everyone with an account, for the admin sheet. "users" is readable by any
+// signed-in user (names and avatars only).
+async function listRoster(): Promise<RosterStudent[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("users")
+    .select("id, first_name, last_name, avatar_path")
+    .order("last_name")
+    .order("first_name");
+  if (error) throw error;
+
+  return data.map((user) => {
+    const firstName = user.first_name?.trim() ?? "";
+    const lastName = user.last_name?.trim() ?? "";
+    return {
+      id: user.id,
+      name: `${firstName} ${lastName}`.trim() || "Unnamed student",
+      initials: `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase() || "?",
+      avatarUrl: user.avatar_path
+        ? supabase.storage.from("avatars").getPublicUrl(user.avatar_path).data.publicUrl
+        : "",
+    };
+  });
+}
+
+// The admin sheet's data for `?event=<id>`, defaulting to the latest event that has started.
+async function loadSheet(eventParam: string | string[] | undefined) {
+  const [events, roster] = await Promise.all([listAttendanceEvents(), listRoster()]);
+  const today = schoolToday();
+  const requested = events.find((e) => String(e.id) === eventParam);
+  const event = requested ?? events.find((e) => e.date <= today) ?? events.at(-1);
+  const sheet = event ? await getAttendanceSheet(event.id) : { rates: { late: 0, absent: 0 }, entries: [] };
+  return { events, roster, eventId: event?.id ?? null, ...sheet };
+}
+
+export default async function AttendancePage({ searchParams }: PageProps<"/attendance">) {
+  const [viewer, { event: eventParam }] = await Promise.all([getViewer(), searchParams]);
+  const [records, sheet] = await Promise.all([
+    // Newest first.
+    listAttendance(viewer.id),
+    // Only admins get the attendance sheet.
+    viewer.isAdmin ? loadSheet(eventParam) : Promise.resolve(null),
+  ]);
 
   const counts = Object.fromEntries(SUMMARY_ORDER.map((s) => [s, 0])) as Record<Status, number>;
   for (const r of records) counts[r.status]++;
@@ -32,7 +79,7 @@ export default async function AttendancePage() {
   const unpaidFines = records.reduce((sum, r) => sum + (r.finePaid ? 0 : r.fine), 0);
 
   return (
-    <>
+    <PageTransition>
       <SiteNav
         initials={viewer.initials}
         name={viewer.name}
@@ -114,6 +161,11 @@ export default async function AttendancePage() {
                           <span className={`tag ${STATUS_STYLES[r.status].className}`}>
                             {STATUS_STYLES[r.status].label.toUpperCase()}
                           </span>
+                          {r.excusedFrom && (
+                            <span className="mt-0.5 block font-mono text-[10.5px] text-ink-soft">
+                              was {r.excusedFrom}
+                            </span>
+                          )}
                         </td>
                         <td className="py-2.5 text-right align-top whitespace-nowrap max-[560px]:p-0 max-[560px]:text-left">
                           {r.fine > 0 ? (
@@ -167,15 +219,27 @@ export default async function AttendancePage() {
               <p className="mb-3 text-[13px] text-ink-soft">
                 Lost your printed or saved QR code? Pull it up again from your profile.
               </p>
-              <Link href="/profile#qr" className="btn w-full gap-1.5 py-2 text-[13px]">
+              <Link href="/profile#qr" transitionTypes={["nav-forward"]} className="btn w-full gap-1.5 py-2 text-[13px]">
                 <QrIcon />
                 Open my QR code
               </Link>
             </section>
           </div>
         </div>
+
+        {sheet && (
+          <AttendanceSheet
+            // Fresh state (rate inputs, search, filter) for each event.
+            key={sheet.eventId ?? "none"}
+            events={sheet.events}
+            eventId={sheet.eventId}
+            rates={sheet.rates}
+            entries={sheet.entries}
+            roster={sheet.roster}
+          />
+        )}
       </div>
-    </>
+    </PageTransition>
   );
 }
 

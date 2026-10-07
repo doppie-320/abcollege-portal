@@ -135,7 +135,8 @@ export default function PostContent({
           >
             <HeartIcon filled={reacted} />
           </button>
-          {names.length > 0 && (
+          {/* Count from reactedBy, not the looked-up names, so it changes with the heart. */}
+          {announcement.reactedBy.length > 0 && (
             <div className="countWrap">
               <button
                 type="button"
@@ -143,7 +144,7 @@ export default function PostContent({
                 onClick={() => setShowReactors((v) => !v)}
                 aria-label="See who reacted"
               >
-                {names.length}
+                {announcement.reactedBy.length}
               </button>
               {showReactors && (
                 <div className="reactorPopover">

@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import AnnouncementCard from "./AnnouncementCard";
+import HomeSidebar, { type UpcomingEntry } from "./HomeSidebar";
+import type { Celebrant } from "@/app/calendar/CalendarContent";
 import CreatePostModal, { type NewPost } from "./CreatePostModal";
 import Select from "@/components/Select";
 import SiteNav from "@/components/NavigationHeader";
@@ -42,7 +44,10 @@ type Images = {
 
 
 export type Announcement = {
+  // "temp-…" while a new post is still being saved.
   id: string;
+  // Stable React key for a post created on this page, so swapping in the saved row doesn't remount its card.
+  clientKey?: string;
   tag: string;
   postedAt: string;
   authorId: string;
@@ -139,6 +144,10 @@ function formatDateLine(date: Date) {
 type HomeContentProps = {
   current_user: User;
   is_admin: boolean;
+  // YYYY-MM-DD in school time.
+  today: string;
+  birthdaysToday: Celebrant[];
+  upcoming: UpcomingEntry[];
 }
 
 export function getRelativeTime(dateString: string): string {
@@ -200,7 +209,7 @@ export async function getPerson(user_id: string): Promise<User> {
   };
 }
 
-export default function HomeContent({ current_user, is_admin }: HomeContentProps) {
+export default function HomeContent({ current_user, is_admin, today, birthdaysToday, upcoming }: HomeContentProps) {
   const [dateLine, setDateLine] = useState("");
   var [announcements, setAnnouncements] = useState<Announcement[]>(ANNOUNCEMENTS);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -210,7 +219,9 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
   const [tags, setTags] = useState<Tag[]>(Tags);
   const [activeTag, setActiveTag] = useState<TagKey | "all">("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [showCreatePost, setShowCreatePost] = useState(false);
+  // Open composer; `draft`/`error` are set when it reopens after a failed publish.
+  const [composer, setComposer] = useState<{ draft?: NewPost; error?: string } | null>(null);
+  const [feedError, setFeedError] = useState("");
 
 
   useEffect(() => {
@@ -294,8 +305,32 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
     return matchesTag && matchesQuery;
   });
 
+  // Puts `item` back at `index` after a failed delete, unless it's already there.
+  function restoreAt<T extends { id: string }>(list: T[], item: T, index: number): T[] {
+    if (list.some((existing) => existing.id === item.id)) return list;
+    return [...list.slice(0, index), item, ...list.slice(index)];
+  }
+
   async function handleCreatePost(post: NewPost) {
     if (!currentUser) return;
+
+    // Show the post right away (faded, see AnnouncementCard), then swap in the saved row.
+    const tempId = `temp-${crypto.randomUUID()}`;
+    setFeedError("");
+    setAnnouncements((current) => [
+      {
+        id: tempId,
+        clientKey: tempId,
+        tag: post.tag,
+        title: post.title,
+        body: post.content,
+        authorId: currentUser.id,
+        postedAt: new Date().toISOString(),
+        reactedBy: [],
+        comments: [],
+      },
+      ...current,
+    ]);
 
     const { data, error } = await supabase
       .from("announcements")
@@ -305,14 +340,30 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
 
     if (error) {
       console.error("Error creating announcement:", error);
-      throw error;
+      setAnnouncements((current) => current.filter((item) => item.id !== tempId));
+      // Reopen the composer with their draft, so nothing is lost.
+      setComposer({ draft: post, error: "Couldn't publish your post. Please try again." });
+      return;
     }
 
-    setAnnouncements((current) => [toAnnouncement(data), ...current]);
+    setAnnouncements((current) =>
+      current.map((item) => (item.id === tempId ? { ...toAnnouncement(data), clientKey: tempId } : item))
+    );
     addTagOption(post.tag);
   }
 
+  // Applies the edit right away; on failure restores the old version and throws,
+  // so AnnouncementCard can reopen the editor with the draft.
   async function handleUpdatePost(postId: string, post: NewPost) {
+    const previous = announcements.find((item) => item.id === postId);
+    if (!previous) return;
+
+    const setFields = (fields: Pick<Announcement, "tag" | "title" | "body">) =>
+      setAnnouncements((current) => current.map((item) => (item.id === postId ? { ...item, ...fields } : item)));
+
+    setFeedError("");
+    setFields({ tag: post.tag, title: post.title, body: post.content });
+
     const { data, error } = await supabase
       .from("announcements")
       .update({ tag: post.tag, title: post.title, content: post.content })
@@ -322,28 +373,31 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
 
     if (error) {
       console.error("Error updating announcement:", error);
+      setFields({ tag: previous.tag, title: previous.title, body: previous.body });
       throw error;
     }
 
     const updated = toAnnouncement(data);
-    setAnnouncements((current) =>
-      current.map((item) =>
-        item.id === postId ? { ...updated, reactedBy: item.reactedBy, comments: item.comments } : item
-      )
-    );
+    setFields({ tag: updated.tag, title: updated.title, body: updated.body });
     addTagOption(post.tag);
   }
 
   async function handleDeletePost(postId: string) {
+    const index = announcements.findIndex((item) => item.id === postId);
+    if (index === -1) return;
+    const removed = announcements[index];
+
+    setFeedError("");
+    setAnnouncements((current) => current.filter((item) => item.id !== postId));
+
     // Select the deleted row back: a delete blocked by RLS returns no error, just no rows.
     const { data, error } = await supabase.from("announcements").delete().eq("id", postId).select("id");
 
     if (error || !data?.length) {
       console.error("Error deleting announcement:", error ?? "no rows deleted");
-      throw error ?? new Error("Announcement was not deleted.");
+      setAnnouncements((current) => restoreAt(current, removed, index));
+      setFeedError(`Couldn't delete "${removed.title}". Please try again.`);
     }
-
-    setAnnouncements((current) => current.filter((item) => item.id !== postId));
   }
 
   function addTagOption(tag: string) {
@@ -359,6 +413,18 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
     pendingReactionIds.current.add(postId);
     const hasReacted = announcement.reactedBy.includes(currentUser.id);
 
+    const setReacted = (reacted: boolean) =>
+      setAnnouncements((current) =>
+        current.map((item) => {
+          if (item.id !== postId) return item;
+          const others = item.reactedBy.filter((userId) => userId !== currentUser.id);
+          return { ...item, reactedBy: reacted ? [...others, currentUser.id] : others };
+        })
+      );
+
+    // Flip the heart now; flip it back if the write fails.
+    setReacted(!hasReacted);
+
     try {
       const result = hasReacted
         ? await supabase
@@ -371,21 +437,9 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
           .insert({ announcement_id: postId, user_id: currentUser.id });
 
       if (result.error) throw result.error;
-
-      setAnnouncements((current) =>
-        current.map((item) => {
-          if (item.id !== postId) return item;
-
-          return {
-            ...item,
-            reactedBy: hasReacted
-              ? item.reactedBy.filter((userId) => userId !== currentUser.id)
-              : [...item.reactedBy, currentUser.id],
-          };
-        })
-      );
     } catch (error) {
       console.error("Error toggling announcement reaction:", error);
+      setReacted(hasReacted);
     } finally {
       pendingReactionIds.current.delete(postId);
     }
@@ -394,7 +448,7 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
   async function handleAddComment(postId: string, body: string) {
     if (!currentUser) return;
 
-    const tempId = `temp-${Date.now()}`;
+    const tempId = `temp-${crypto.randomUUID()}`;
     const pending: Comment = {
       id: tempId,
       authorId: currentUser.id,
@@ -436,7 +490,18 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
     );
   }
 
+  // Edits and deletes apply right away; on failure they're undone and the error is
+  // rethrown so PostModal can tell the user.
   async function handleUpdateComment(postId: string, commentId: string, body: string) {
+    const previous = announcements.find((item) => item.id === postId)?.comments.find((c) => c.id === commentId);
+    if (!previous) return;
+
+    const setBody = (text: string) =>
+      updateCommentsOf(postId, (comments) =>
+        comments.map((comment) => (comment.id === commentId ? { ...comment, body: text } : comment))
+      );
+    setBody(body);
+
     // Select the row back: an update blocked by RLS returns no error, just no rows.
     const { data, error } = await supabase
       .from("announcement_comments")
@@ -447,24 +512,29 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
 
     if (error || !data) {
       console.error("Error updating announcement comment:", error ?? "no rows updated");
+      setBody(previous.body);
       throw error ?? new Error("Comment was not updated.");
     }
 
-    updateCommentsOf(postId, (comments) =>
-      comments.map((comment) => (comment.id === commentId ? { ...comment, body: data.content } : comment))
-    );
+    setBody(data.content);
   }
 
   async function handleDeleteComment(postId: string, commentId: string) {
+    const comments = announcements.find((item) => item.id === postId)?.comments ?? [];
+    const index = comments.findIndex((comment) => comment.id === commentId);
+    if (index === -1) return;
+    const removed = comments[index];
+
+    updateCommentsOf(postId, (current) => current.filter((comment) => comment.id !== commentId));
+
     // Same as posts: select the deleted row back so an RLS-blocked delete counts as a failure.
     const { data, error } = await supabase.from("announcement_comments").delete().eq("id", commentId).select("id");
 
     if (error || !data?.length) {
       console.error("Error deleting announcement comment:", error ?? "no rows deleted");
+      updateCommentsOf(postId, (current) => restoreAt(current, removed, index));
       throw error ?? new Error("Comment was not deleted.");
     }
-
-    updateCommentsOf(postId, (comments) => comments.filter((comment) => comment.id !== commentId));
   }
 
 
@@ -537,7 +607,7 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
                   {is_admin && <button
                     type="button"
                     className="btn createPostBtn"
-                    onClick={() => setShowCreatePost(true)}
+                    onClick={() => setComposer({})}
                   >
                     <PlusIcon />
                     Create post
@@ -560,6 +630,12 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
                 </span>
               </div>
 
+              {feedError && (
+                <p className="feedError" role="alert">
+                  {feedError}
+                </p>
+              )}
+
               {!currentUser ? null : visibleAnnouncements.length === 0 ? (
                 <p className="emptyState">
                   {announcements.length === 0 ? "Nothing has been posted yet." : "No announcements match your search."}
@@ -567,7 +643,7 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
               ) : (
                 visibleAnnouncements.map((item) => (
                   <AnnouncementCard
-                    key={item.id}
+                    key={item.clientKey ?? item.id}
                     announcement={item}
                     currentUser={currentUser}
                     tags={POST_TAGS}
@@ -585,39 +661,19 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
           </div>
 
           <div>
-            <div className="sideBlock tick-frame">
-              <span className="tick-bl"></span>
-              <span className="tick-br"></span>
-              <div className="sectionHead">
-                <span className="mono sectionLabel">01 — Birthdays today</span>
-              </div>
-              <div className="comingSoon">
-                <span className="badge">COMING SOON</span>
-                <p>Today&apos;s celebrants, pulled from the SOE calendar.</p>
-              </div>
-            </div>
-
-            <div className="sideBlock tick-frame">
-              <span className="tick-bl"></span>
-              <span className="tick-br"></span>
-              <div className="sectionHead">
-                <span className="mono sectionLabel">02 — Countdown</span>
-              </div>
-              <div className="comingSoon">
-                <span className="badge">COMING SOON</span>
-                <p>Events within 7 days will count down here.</p>
-              </div>
-            </div>
+            <HomeSidebar today={today} birthdaysToday={birthdaysToday} upcoming={upcoming} />
           </div>
         </div>
       </div>
 
-      {showCreatePost && currentUser && (
+      {composer && currentUser && (
         <CreatePostModal
           currentUser={currentUser}
           tags={POST_TAGS}
-          onClose={() => setShowCreatePost(false)}
-          onSubmit={handleCreatePost}
+          draft={composer.draft}
+          initialError={composer.error}
+          onClose={() => setComposer(null)}
+          onSubmit={(post) => void handleCreatePost(post)}
         />
       )}
 
@@ -821,6 +877,13 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
           color: var(--ink-soft);
         }
 
+        .feedError {
+          font-size: 12.5px;
+          color: #b3261e;
+          padding-top: 12px;
+          margin-bottom: 0;
+        }
+
         .emptyState {
           font-size: 13px;
           color: var(--ink-soft);
@@ -839,29 +902,6 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
 
         .sideBlock:last-child {
           margin-bottom: 0;
-        }
-
-        .comingSoon {
-          display: flex;
-          flex-direction: column;
-          align-items: flex-start;
-          gap: 4px;
-          padding: 16px 0 2px;
-          color: var(--ink-soft);
-        }
-
-        .comingSoon .badge {
-          font-family: "IBM Plex Mono", monospace;
-          font-size: 10.5px;
-          letter-spacing: 0.04em;
-          padding: 3px 7px;
-          border: 1px dashed #c9bfa0;
-          color: var(--ink-soft);
-        }
-
-        .comingSoon p {
-          font-size: 12.5px;
-          margin: 6px 0 0;
         }
 
         @media (max-width: 900px) {

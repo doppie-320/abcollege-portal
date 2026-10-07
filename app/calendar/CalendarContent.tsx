@@ -1,15 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { ViewTransition, startTransition, useEffect, useOptimistic, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import SiteNav from "@/components/NavigationHeader";
 import ConfirmDialog from "@/app/home/ConfirmDialog";
 import PostMenu from "@/app/home/PostMenu";
+import { settle } from "@/lib/actionResult";
 import type { Viewer } from "@/lib/auth";
 import { MONTH_NAMES, formatISODate, toISODate } from "@/lib/dates";
-import { deleteEvent } from "./actions";
+import { deleteEvent, saveEvent } from "./actions";
 import EventFormModal from "./EventFormModal";
+import type { EventInput } from "./validation";
 
 export type CalendarEntry = {
   id: number;
@@ -49,9 +51,34 @@ function monthParam(year: number, monthIndex: number) {
 }
 
 type Modal =
-  | { type: "create"; date: string }
-  | { type: "edit"; entry: CalendarEntry }
+  // `entry` is set when editing; `error` when reopening after a failed save.
+  | { type: "form"; entry?: CalendarEntry; draft: EventInput; error?: string }
   | { type: "delete"; entry: CalendarEntry };
+
+// Not saved yet: shown faded, with no edit/delete menu.
+type OptimisticEntry = CalendarEntry & { pending?: boolean };
+
+type EntryChange = { type: "save"; entry: OptimisticEntry } | { type: "delete"; id: number };
+
+// Month arrows tag their navigation "in-page", so the page itself doesn't
+// animate (see PageTransition). Instead the month label and day grid slide and
+// the lists crossfade, via these named transitions.
+const MONTH_SLIDE = { "month-next": "month-next", "month-prev": "month-prev", default: "none" };
+const MONTH_FADE = { "month-next": "month-fade", "month-prev": "month-fade", default: "none" };
+
+function monthLinkTypes(direction: "next" | "prev") {
+  return ["in-page", `month-${direction}`];
+}
+
+// The page remounts for each month (?month= is part of its identity), which
+// would replay every section's entrance animation. Month links set this so the
+// next mount skips them; the outgoing month's unmount clears it.
+let switchingMonth = false;
+
+// Same order as listEvents.
+function byDateThenName(a: CalendarEntry, b: CalendarEntry) {
+  return a.date.localeCompare(b.date) || a.name.localeCompare(b.name);
+}
 
 export default function CalendarContent({
   viewer,
@@ -63,6 +90,24 @@ export default function CalendarContent({
 }: CalendarContentProps) {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [modal, setModal] = useState<Modal | null>(null);
+  const [actionError, setActionError] = useState("");
+  const [playEntrance] = useState(() => !switchingMonth);
+  useEffect(() => () => {
+    switchingMonth = false;
+  }, []);
+
+  // Shows saves and deletes right away; resets to the server's list once it refreshes.
+  const [optimisticEntries, applyChange] = useOptimistic<OptimisticEntry[], EntryChange>(
+    entries,
+    (current: OptimisticEntry[], change: EntryChange) => {
+      const id = change.type === "save" ? change.entry.id : change.id;
+      const rest = current.filter((e) => e.id !== id);
+      if (change.type === "delete") return rest;
+      // An entry dated in another month leaves this one.
+      if (!change.entry.date.startsWith(monthParam(year, monthIndex))) return rest;
+      return [...rest, change.entry].sort(byDateThenName);
+    },
+  );
 
   const monthLabel = `${MONTH_NAMES[monthIndex]} ${year}`;
   const isCurrentMonth = today.startsWith(monthParam(year, monthIndex));
@@ -74,19 +119,65 @@ export default function CalendarContent({
   for (let d = 1; d <= daysInMonth; d++) cells.push(d);
   while (cells.length % 7 !== 0) cells.push(null);
 
-  const entriesByDate = new Map<string, CalendarEntry[]>();
-  for (const entry of entries) {
+  const entriesByDate = new Map<string, OptimisticEntry[]>();
+  for (const entry of optimisticEntries) {
     entriesByDate.set(entry.date, [...(entriesByDate.get(entry.date) ?? []), entry]);
   }
 
   const birthdayDays = new Set(celebrants.map((c) => c.day));
-  const eventCount = entries.filter((e) => e.kind === "event").length;
-  const holidayCount = entries.length - eventCount;
+  const eventCount = optimisticEntries.filter((e) => e.kind === "event").length;
+  const holidayCount = optimisticEntries.length - eventCount;
 
-  const visibleEntries = selectedDate ? entriesByDate.get(selectedDate) ?? [] : entries;
+  const visibleEntries = selectedDate ? entriesByDate.get(selectedDate) ?? [] : optimisticEntries;
 
   function toggleDay(date: string) {
     setSelectedDate((current) => (current === date ? null : date));
+  }
+
+  function openForm(entry?: CalendarEntry, date = entry?.date ?? "") {
+    const draft: EventInput = entry
+      ? { name: entry.name, date: entry.date, kind: entry.kind, description: entry.description }
+      : { name: "", date, kind: "event", description: "" };
+    setModal({ type: "form", entry, draft });
+  }
+
+  function save(fields: EventInput, entry?: CalendarEntry) {
+    setModal(null);
+    setActionError("");
+    startTransition(async () => {
+      applyChange({
+        type: "save",
+        entry: {
+          // New entries get a temporary id until the refreshed list arrives.
+          id: entry?.id ?? -Date.now(),
+          name: fields.name.trim(),
+          date: fields.date,
+          kind: fields.kind,
+          description: fields.description.trim(),
+          pending: true,
+        },
+      });
+      const result = await settle(saveEvent(fields, entry?.id), "Couldn't save this entry. Please try again.");
+      if (!result.success) {
+        // Reopen the form with what they typed, so nothing is lost.
+        setModal({
+          type: "form",
+          entry,
+          draft: fields,
+          error: result.error ?? "Couldn't save this entry. Check the fields and try again.",
+        });
+      }
+    });
+  }
+
+  function remove(entry: CalendarEntry) {
+    setModal(null);
+    setActionError("");
+    startTransition(async () => {
+      applyChange({ type: "delete", id: entry.id });
+      const result = await settle(deleteEvent(entry.id), "Couldn't delete this entry. Please try again.");
+      if (result.error) setActionError(result.error);
+    });
   }
 
   return (
@@ -99,7 +190,7 @@ export default function CalendarContent({
       />
 
       <div className="page-wrap">
-        <div className="mb-6 animate-fade-in-up">
+        <div className={`mb-6 ${playEntrance ? "animate-fade-in-up" : ""}`}>
           <span className="eyebrow mb-2 tracking-[0.08em]">SOE HUB / CALENDAR</span>
           <h1 className="mb-1 text-[30px] leading-none">School Calendar</h1>
           <p className="mb-0 text-xs text-ink-soft">
@@ -110,22 +201,36 @@ export default function CalendarContent({
         <div className="grid grid-cols-[1fr_340px] items-start gap-7 max-[900px]:grid-cols-1">
           <div className="min-w-0">
             {/* ---------- Month grid ---------- */}
-            <section className="tick-frame mb-5 animate-fade-in-up [animation-delay:0.04s] max-[560px]:px-3">
+            <section
+              className={`tick-frame mb-5 max-[560px]:px-3 ${playEntrance ? "animate-fade-in-up [animation-delay:0.04s]" : ""}`}
+            >
               <span className="tick-bl" />
               <span className="tick-br" />
 
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                <h2 className="mb-0 text-[22px]" aria-live="polite">
-                  {monthLabel}
-                </h2>
+                <ViewTransition name="calendar-month-label" share={MONTH_SLIDE} default="none">
+                  <h2 className="mb-0 text-[22px]" aria-live="polite">
+                    {monthLabel}
+                  </h2>
+                </ViewTransition>
                 <div className="flex items-center gap-1.5">
                   {!isCurrentMonth && (
-                    <Link href="/calendar" className="btn ghost mr-1 px-3 py-1.5 text-[13px]">
+                    <Link
+                      href="/calendar"
+                      // Slide toward today's month.
+                      transitionTypes={monthLinkTypes(today < toISODate(year, monthIndex, 1) ? "prev" : "next")}
+                      onClick={() => (switchingMonth = true)}
+                      scroll={false}
+                      className="btn ghost mr-1 px-3 py-1.5 text-[13px]"
+                    >
                       Today
                     </Link>
                   )}
                   <Link
                     href={`/calendar?month=${monthParam(year, monthIndex - 1)}`}
+                    transitionTypes={monthLinkTypes("prev")}
+                    onClick={() => (switchingMonth = true)}
+                    scroll={false}
                     className="btn ghost size-9 p-0"
                     aria-label="Previous month"
                   >
@@ -133,6 +238,9 @@ export default function CalendarContent({
                   </Link>
                   <Link
                     href={`/calendar?month=${monthParam(year, monthIndex + 1)}`}
+                    transitionTypes={monthLinkTypes("next")}
+                    onClick={() => (switchingMonth = true)}
+                    scroll={false}
                     className="btn ghost size-9 p-0"
                     aria-label="Next month"
                   >
@@ -141,100 +249,102 @@ export default function CalendarContent({
                 </div>
               </div>
 
-              <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
-                {WEEKDAYS.map((w) => (
-                  <span
-                    key={w}
-                    className="pb-1 text-center font-mono text-[10.5px] uppercase tracking-[0.06em] text-ink-soft"
-                  >
-                    {w}
-                  </span>
-                ))}
-
-                {cells.map((day, i) => {
-                  if (day === null) {
-                    return <span key={`blank-${i}`} aria-hidden className="min-h-12 sm:min-h-[84px]" />;
-                  }
-
-                  const date = toISODate(year, monthIndex, day);
-                  const dayEntries = entriesByDate.get(date) ?? [];
-                  const hasHoliday = dayEntries.some((e) => e.kind === "holiday");
-                  const hasEvent = dayEntries.some((e) => e.kind === "event");
-                  const hasBirthday = birthdayDays.has(day);
-                  const isToday = date === today;
-                  const isSelected = date === selectedDate;
-
-                  const summary = [
-                    ...dayEntries.map((e) => (e.kind === "holiday" ? `Holiday: ${e.name}` : e.name)),
-                    ...(hasBirthday ? ["Birthday celebrant"] : []),
-                  ].join(", ");
-
-                  return (
-                    <button
-                      key={date}
-                      type="button"
-                      onClick={() => toggleDay(date)}
-                      aria-pressed={isSelected}
-                      aria-label={`${formatISODate(date, { weekday: "long", month: "long", day: "numeric" })}${summary ? ` — ${summary}` : ""}`}
-                      title={summary || undefined}
-                      className={[
-                        "relative flex min-h-12 flex-col items-stretch rounded-[5px] border p-1 text-left transition-[border-color,background,box-shadow] duration-150 sm:min-h-[84px] sm:p-1.5",
-                        "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue",
-                        hasHoliday
-                          ? "border-orange/40 bg-[#fcebdf]"
-                          : hasEvent
-                            ? "border-navy-tint bg-[#e8eef6]"
-                            : "border-rule-soft bg-paper",
-                        isSelected
-                          ? "border-navy! shadow-[2px_2px_0_var(--orange),4px_4px_0_var(--yellow)]"
-                          : "hover:border-navy/60",
-                      ].join(" ")}
+              <ViewTransition name="calendar-days" share={MONTH_SLIDE} default="none">
+                <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
+                  {WEEKDAYS.map((w) => (
+                    <span
+                      key={w}
+                      className="pb-1 text-center font-mono text-[10.5px] uppercase tracking-[0.06em] text-ink-soft"
                     >
-                      <span className="flex items-center justify-between gap-1">
-                        <span
-                          className={[
-                            "flex size-6 items-center justify-center rounded-full font-mono text-[12px] leading-none",
-                            isToday ? "bg-navy font-semibold text-paper" : hasHoliday ? "text-orange" : "text-ink",
-                          ].join(" ")}
-                        >
-                          {day}
-                        </span>
-                        {hasBirthday && (
-                          <span className="text-[#b8860b]" aria-hidden>
-                            <CakeIcon />
-                          </span>
-                        )}
-                      </span>
+                      {w}
+                    </span>
+                  ))}
 
-                      {/* Full labels on wider screens; colored dots on phones. */}
-                      <span className="mt-1 hidden min-w-0 flex-col gap-0.5 sm:flex">
-                        {dayEntries.slice(0, MAX_CELL_LABELS).map((e) => (
+                  {cells.map((day, i) => {
+                    if (day === null) {
+                      return <span key={`blank-${i}`} aria-hidden className="min-h-12 sm:min-h-[84px]" />;
+                    }
+
+                    const date = toISODate(year, monthIndex, day);
+                    const dayEntries = entriesByDate.get(date) ?? [];
+                    const hasHoliday = dayEntries.some((e) => e.kind === "holiday");
+                    const hasEvent = dayEntries.some((e) => e.kind === "event");
+                    const hasBirthday = birthdayDays.has(day);
+                    const isToday = date === today;
+                    const isSelected = date === selectedDate;
+
+                    const summary = [
+                      ...dayEntries.map((e) => (e.kind === "holiday" ? `Holiday: ${e.name}` : e.name)),
+                      ...(hasBirthday ? ["Birthday celebrant"] : []),
+                    ].join(", ");
+
+                    return (
+                      <button
+                        key={date}
+                        type="button"
+                        onClick={() => toggleDay(date)}
+                        aria-pressed={isSelected}
+                        aria-label={`${formatISODate(date, { weekday: "long", month: "long", day: "numeric" })}${summary ? ` — ${summary}` : ""}`}
+                        title={summary || undefined}
+                        className={[
+                          "relative flex min-h-12 flex-col items-stretch rounded-[5px] border p-1 text-left transition-[border-color,background,box-shadow] duration-150 sm:min-h-[84px] sm:p-1.5",
+                          "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue",
+                          hasHoliday
+                            ? "border-orange/40 bg-[#fcebdf]"
+                            : hasEvent
+                              ? "border-navy-tint bg-[#e8eef6]"
+                              : "border-rule-soft bg-paper",
+                          isSelected
+                            ? "border-navy! shadow-[2px_2px_0_var(--orange),4px_4px_0_var(--yellow)]"
+                            : "hover:border-navy/60",
+                        ].join(" ")}
+                      >
+                        <span className="flex items-center justify-between gap-1">
                           <span
-                            key={e.id}
                             className={[
-                              "truncate rounded-[3px] px-1 py-px text-[10.5px] font-medium leading-tight",
-                              e.kind === "holiday" ? "bg-orange text-paper" : "bg-navy text-paper",
+                              "flex size-6 items-center justify-center rounded-full font-mono text-[12px] leading-none",
+                              isToday ? "bg-navy font-semibold text-paper" : hasHoliday ? "text-orange" : "text-ink",
                             ].join(" ")}
                           >
-                            {e.name}
+                            {day}
                           </span>
-                        ))}
-                        {dayEntries.length > MAX_CELL_LABELS && (
-                          <span className="px-1 font-mono text-[10px] text-ink-soft">
-                            +{dayEntries.length - MAX_CELL_LABELS} more
+                          {hasBirthday && (
+                            <span className="text-[#b8860b]" aria-hidden>
+                              <CakeIcon />
+                            </span>
+                          )}
+                        </span>
+
+                        {/* Full labels on wider screens; colored dots on phones. */}
+                        <span className="mt-1 hidden min-w-0 flex-col gap-0.5 sm:flex">
+                          {dayEntries.slice(0, MAX_CELL_LABELS).map((e) => (
+                            <span
+                              key={e.id}
+                              className={[
+                                "truncate rounded-[3px] px-1 py-px text-[10.5px] font-medium leading-tight",
+                                e.kind === "holiday" ? "bg-orange text-paper" : "bg-navy text-paper",
+                              ].join(" ")}
+                            >
+                              {e.name}
+                            </span>
+                          ))}
+                          {dayEntries.length > MAX_CELL_LABELS && (
+                            <span className="px-1 font-mono text-[10px] text-ink-soft">
+                              +{dayEntries.length - MAX_CELL_LABELS} more
+                            </span>
+                          )}
+                        </span>
+                        {dayEntries.length > 0 && (
+                          <span className="mt-auto flex gap-0.5 sm:hidden" aria-hidden>
+                            {hasEvent && <span className="size-1.5 rounded-full bg-navy" />}
+                            {hasHoliday && <span className="size-1.5 rounded-full bg-orange" />}
                           </span>
                         )}
-                      </span>
-                      {dayEntries.length > 0 && (
-                        <span className="mt-auto flex gap-0.5 sm:hidden" aria-hidden>
-                          {hasEvent && <span className="size-1.5 rounded-full bg-navy" />}
-                          {hasHoliday && <span className="size-1.5 rounded-full bg-orange" />}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </ViewTransition>
 
               <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-rule-soft pt-3 font-mono text-[11px] text-ink-soft">
                 <span className="flex items-center gap-1.5">
@@ -256,157 +366,171 @@ export default function CalendarContent({
             </section>
 
             {/* ---------- This month's events ---------- */}
-            <section className="tick-frame animate-fade-in-up [animation-delay:0.08s]">
-              <span className="tick-bl" />
-              <span className="tick-br" />
+            <ViewTransition name="calendar-events" share={MONTH_FADE} default="none">
+              <section className={`tick-frame ${playEntrance ? "animate-fade-in-up [animation-delay:0.08s]" : ""}`}>
+                <span className="tick-bl" />
+                <span className="tick-br" />
 
-              <div className="flex items-baseline justify-between gap-3 border-b border-rule pb-2.5">
-                <span className="mono text-[11px] uppercase tracking-[0.08em] text-navy">
-                  {selectedDate
-                    ? formatISODate(selectedDate, { weekday: "long", month: "long", day: "numeric" })
-                    : "This month's events"}
-                </span>
-                <span className="flex items-center gap-3">
-                  {selectedDate ? (
-                    <button
-                      type="button"
-                      onClick={() => setSelectedDate(null)}
-                      className="cursor-pointer font-mono text-[11px] text-blue hover:text-navy hover:underline"
-                    >
-                      Show whole month
-                    </button>
-                  ) : (
-                    <span className="mono text-[11px] text-ink-soft">
-                      {eventCount} event{eventCount === 1 ? "" : "s"} · {holidayCount} holiday
-                      {holidayCount === 1 ? "" : "s"}
-                    </span>
-                  )}
-                </span>
-              </div>
+                <div className="flex items-baseline justify-between gap-3 border-b border-rule pb-2.5">
+                  <span className="mono text-[11px] uppercase tracking-[0.08em] text-navy">
+                    {selectedDate
+                      ? formatISODate(selectedDate, { weekday: "long", month: "long", day: "numeric" })
+                      : "This month's events"}
+                  </span>
+                  <span className="flex items-center gap-3">
+                    {selectedDate ? (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedDate(null)}
+                        className="cursor-pointer font-mono text-[11px] text-blue hover:text-navy hover:underline"
+                      >
+                        Show whole month
+                      </button>
+                    ) : (
+                      <span className="mono text-[11px] text-ink-soft">
+                        {eventCount} event{eventCount === 1 ? "" : "s"} · {holidayCount} holiday
+                        {holidayCount === 1 ? "" : "s"}
+                      </span>
+                    )}
+                  </span>
+                </div>
 
-              {visibleEntries.length === 0 ? (
-                <p className="mb-0 pt-5 pb-1 text-[13px] text-ink-soft">
-                  {selectedDate ? "Nothing scheduled on this day." : `Nothing on the calendar for ${monthLabel} yet.`}
-                </p>
-              ) : (
-                <ul className="list-none">
-                  {visibleEntries.map((entry) => (
-                    <li key={entry.id} className="flex items-start gap-3 border-b border-rule-soft py-3 last:border-b-0 last:pb-0">
-                      <span
+                {actionError && (
+                  <p role="alert" className="mt-3 mb-0 text-[12.5px] text-[#b3261e]">
+                    {actionError}
+                  </p>
+                )}
+
+                {visibleEntries.length === 0 ? (
+                  <p className="mb-0 pt-5 pb-1 text-[13px] text-ink-soft">
+                    {selectedDate ? "Nothing scheduled on this day." : `Nothing on the calendar for ${monthLabel} yet.`}
+                  </p>
+                ) : (
+                  <ul className="list-none">
+                    {visibleEntries.map((entry) => (
+                      <li
+                        key={entry.id}
                         className={[
-                          "mt-[7px] size-2 shrink-0 rounded-full",
-                          entry.kind === "holiday" ? "bg-orange" : "bg-navy",
+                          "flex items-start gap-3 border-b border-rule-soft py-3 transition-opacity last:border-b-0 last:pb-0",
+                          entry.pending ? "opacity-60" : "",
                         ].join(" ")}
-                        aria-hidden
-                      />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                          <span className="font-mono text-[12px] text-ink-soft">
-                            {formatISODate(entry.date, { month: "short", day: "numeric", weekday: "short" })}
-                          </span>
-                          <strong className="text-[14.5px] font-semibold text-ink [overflow-wrap:anywhere]">
-                            {entry.name}
-                          </strong>
-                          {entry.kind === "holiday" && <span className="tag orange">HOLIDAY</span>}
-                        </div>
-                        {entry.description && (
-                          <p className="mt-0.5 mb-0 whitespace-pre-line text-[13px] text-ink-soft [overflow-wrap:anywhere]">
-                            {entry.description}
-                          </p>
-                        )}
-                      </div>
-                      {viewer.isAdmin && (
-                        <PostMenu
-                          noun="entry"
-                          onEdit={() => setModal({ type: "edit", entry })}
-                          onDelete={() => setModal({ type: "delete", entry })}
+                      >
+                        <span
+                          className={[
+                            "mt-[7px] size-2 shrink-0 rounded-full",
+                            entry.kind === "holiday" ? "bg-orange" : "bg-navy",
+                          ].join(" ")}
+                          aria-hidden
                         />
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              )}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <span className="font-mono text-[12px] text-ink-soft">
+                              {formatISODate(entry.date, { month: "short", day: "numeric", weekday: "short" })}
+                            </span>
+                            <strong className="text-[14.5px] font-semibold text-ink [overflow-wrap:anywhere]">
+                              {entry.name}
+                            </strong>
+                            {entry.kind === "holiday" && <span className="tag orange">HOLIDAY</span>}
+                          </div>
+                          {entry.description && (
+                            <p className="mt-0.5 mb-0 whitespace-pre-line text-[13px] text-ink-soft [overflow-wrap:anywhere]">
+                              {entry.description}
+                            </p>
+                          )}
+                        </div>
+                        {viewer.isAdmin && !entry.pending && (
+                          <PostMenu
+                            noun="entry"
+                            onEdit={() => openForm(entry)}
+                            onDelete={() => setModal({ type: "delete", entry })}
+                          />
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
 
-              {viewer.isAdmin && (
-                <button
-                  type="button"
-                  className="btn mt-4 w-full gap-1.5 py-2 text-[13px]"
-                  onClick={() =>
-                    setModal({
-                      type: "create",
-                      date: selectedDate ?? (isCurrentMonth ? today : toISODate(year, monthIndex, 1)),
-                    })
-                  }
-                >
-                  <PlusIcon />
-                  {selectedDate
-                    ? `Add an entry on ${formatISODate(selectedDate, { month: "short", day: "numeric" })}`
-                    : "Add an event or holiday"}
-                </button>
-              )}
-            </section>
+                {viewer.isAdmin && (
+                  <button
+                    type="button"
+                    className="btn mt-4 w-full gap-1.5 py-2 text-[13px]"
+                    onClick={() =>
+                      openForm(undefined, selectedDate ?? (isCurrentMonth ? today : toISODate(year, monthIndex, 1)))
+                    }
+                  >
+                    <PlusIcon />
+                    {selectedDate
+                      ? `Add an entry on ${formatISODate(selectedDate, { month: "short", day: "numeric" })}`
+                      : "Add an event or holiday"}
+                  </button>
+                )}
+              </section>
+            </ViewTransition>
           </div>
 
           {/* ---------- Birthday celebrants ---------- */}
-          <aside className="tick-frame animate-fade-in-up [animation-delay:0.12s]">
-            <span className="tick-bl" />
-            <span className="tick-br" />
-            <div className="flex items-baseline justify-between gap-3 border-b border-rule pb-2.5">
-              <span className="mono text-[11px] uppercase tracking-[0.08em] text-navy">
-                Birthday celebrants
-              </span>
-              <span className="mono text-[11px] text-ink-soft">{MONTH_NAMES[monthIndex]}</span>
-            </div>
+          <ViewTransition name="calendar-birthdays" share={MONTH_FADE} default="none">
+            <aside className={`tick-frame ${playEntrance ? "animate-fade-in-up [animation-delay:0.12s]" : ""}`}>
+              <span className="tick-bl" />
+              <span className="tick-br" />
+              <div className="flex items-baseline justify-between gap-3 border-b border-rule pb-2.5">
+                <span className="mono text-[11px] uppercase tracking-[0.08em] text-navy">
+                  Birthday celebrants
+                </span>
+                <span className="mono text-[11px] text-ink-soft">{MONTH_NAMES[monthIndex]}</span>
+              </div>
 
-            {celebrants.length === 0 ? (
-              <p className="mb-0 pt-5 pb-1 text-[13px] text-ink-soft">
-                No shared birthdays in {MONTH_NAMES[monthIndex]}.
+              {celebrants.length === 0 ? (
+                <p className="mb-0 pt-5 pb-1 text-[13px] text-ink-soft">
+                  No shared birthdays in {MONTH_NAMES[monthIndex]}.
+                </p>
+              ) : (
+                <ul className="list-none">
+                  {celebrants.map((c) => {
+                    const isToday = isCurrentMonth && Number(today.slice(8)) === c.day;
+                    return (
+                      <li key={c.id} className="flex items-center gap-3 border-b border-rule-soft py-2.5 last:border-b-0 last:pb-0">
+                        {c.avatarUrl ? (
+                          <Image
+                            src={c.avatarUrl}
+                            alt=""
+                            width={34}
+                            height={34}
+                            className="size-[34px] shrink-0 rounded-full border border-navy-tint object-cover"
+                          />
+                        ) : (
+                          <span className="flex size-[34px] shrink-0 items-center justify-center rounded-full border border-navy-tint bg-blue font-display text-[12px] font-semibold text-paper">
+                            {c.initials}
+                          </span>
+                        )}
+                        <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium">{c.name}</span>
+                        {isToday ? (
+                          <span className="tag orange shrink-0">TODAY</span>
+                        ) : (
+                          <span className="shrink-0 font-mono text-[12px] text-ink-soft">
+                            {MONTH_NAMES[monthIndex].slice(0, 3)} {c.day}
+                          </span>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+
+              <p className="mt-4 mb-0 border-t border-dashed border-rule pt-3 text-[11.5px] leading-snug text-ink-soft">
+                Only students who chose to share their birthday at sign-up are listed.
               </p>
-            ) : (
-              <ul className="list-none">
-                {celebrants.map((c) => {
-                  const isToday = isCurrentMonth && Number(today.slice(8)) === c.day;
-                  return (
-                    <li key={c.id} className="flex items-center gap-3 border-b border-rule-soft py-2.5 last:border-b-0 last:pb-0">
-                      {c.avatarUrl ? (
-                        <Image
-                          src={c.avatarUrl}
-                          alt=""
-                          width={34}
-                          height={34}
-                          className="size-[34px] shrink-0 rounded-full border border-navy-tint object-cover"
-                        />
-                      ) : (
-                        <span className="flex size-[34px] shrink-0 items-center justify-center rounded-full border border-navy-tint bg-blue font-display text-[12px] font-semibold text-paper">
-                          {c.initials}
-                        </span>
-                      )}
-                      <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium">{c.name}</span>
-                      {isToday ? (
-                        <span className="tag orange shrink-0">TODAY</span>
-                      ) : (
-                        <span className="shrink-0 font-mono text-[12px] text-ink-soft">
-                          {MONTH_NAMES[monthIndex].slice(0, 3)} {c.day}
-                        </span>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-
-            <p className="mt-4 mb-0 border-t border-dashed border-rule pt-3 text-[11.5px] leading-snug text-ink-soft">
-              Only students who chose to share their birthday at sign-up are listed.
-            </p>
-          </aside>
+            </aside>
+          </ViewTransition>
         </div>
       </div>
 
-      {(modal?.type === "create" || modal?.type === "edit") && (
+      {modal?.type === "form" && (
         <EventFormModal
-          key={modal.type === "edit" ? modal.entry.id : modal.date}
-          entry={modal.type === "edit" ? modal.entry : undefined}
-          defaultDate={modal.type === "create" ? modal.date : modal.entry.date}
+          isEdit={!!modal.entry}
+          initialFields={modal.draft}
+          initialError={modal.error}
+          onSave={(fields) => save(fields, modal.entry)}
           onClose={() => setModal(null)}
         />
       )}
@@ -422,11 +546,7 @@ export default function CalendarContent({
           confirmLabel="Delete"
           busyLabel="Deleting…"
           onCancel={() => setModal(null)}
-          onConfirm={async () => {
-            const result = await deleteEvent(modal.entry.id);
-            if (result.error) return result.error;
-            setModal(null);
-          }}
+          onConfirm={() => remove(modal.entry)}
         />
       )}
     </>

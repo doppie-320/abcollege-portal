@@ -2,6 +2,7 @@ export const instant = false;
 
 import type { Metadata } from "next";
 import SuggestionsContent from "./SuggestionsContent";
+import PageTransition from "@/components/PageTransition";
 import { getViewer } from "@/lib/auth";
 import { listMySuggestions, listSuggestionInbox } from "@/lib/mock/portal-db";
 
@@ -18,5 +19,9 @@ export default async function SuggestionsPage() {
     viewer.isAdmin ? listSuggestionInbox() : Promise.resolve(null),
   ]);
 
-  return <SuggestionsContent viewer={viewer} suggestions={suggestions} inbox={inbox} />;
+  return (
+    <PageTransition>
+      <SuggestionsContent viewer={viewer} suggestions={suggestions} inbox={inbox} />
+    </PageTransition>
+  );
 }

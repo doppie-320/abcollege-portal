@@ -2,6 +2,7 @@ export const instant = false;
 
 import type { Metadata } from "next";
 import CalendarContent from "./CalendarContent";
+import PageTransition from "@/components/PageTransition";
 import { getViewer } from "@/lib/auth";
 import { schoolToday, toISODate } from "@/lib/dates";
 import { listBirthdayCelebrants, listEvents } from "@/lib/mock/portal-db";
@@ -28,15 +29,16 @@ export default async function CalendarPage({ searchParams }: PageProps<"/calenda
   ]);
 
   return (
-    <CalendarContent
-      // Fresh state (e.g. the selected day) for each month.
-      key={`${year}-${monthIndex}`}
-      viewer={viewer}
-      year={year}
-      monthIndex={monthIndex}
-      today={today}
-      entries={entries}
-      celebrants={celebrants}
-    />
+    // Keyed by month: each month slides in as its own page, with fresh state (e.g. the selected day).
+    <PageTransition key={`${year}-${monthIndex}`}>
+      <CalendarContent
+        viewer={viewer}
+        year={year}
+        monthIndex={monthIndex}
+        today={today}
+        entries={entries}
+        celebrants={celebrants}
+      />
+    </PageTransition>
   );
 }

@@ -29,22 +29,32 @@ export default function AnnouncementCard({
   onUpdateComment: (postId: string, commentId: string, body: string) => Promise<void>;
   onDeleteComment: (postId: string, commentId: string) => Promise<void>;
   onUpdatePost: (postId: string, post: NewPost) => Promise<void>;
-  onDeletePost: (postId: string) => Promise<void>;
+  onDeletePost: (postId: string) => void;
 }) {
   const [showPostModal, setShowPostModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
+  // Open editor; `draft`/`error` are set when it reopens after a failed save.
+  const [editor, setEditor] = useState<{ draft?: NewPost; error?: string } | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  // A new post shown before the database has it: no reacting, commenting or managing yet.
+  const isPending = announcement.id.startsWith("temp-");
+  const canManagePost = canManage && !isPending;
+
+  function savePost(post: NewPost) {
+    onUpdatePost(announcement.id, post).catch(() =>
+      setEditor({ draft: post, error: "Couldn't save your changes. Please try again." })
+    );
+  }
 
   return (
-    <div className="announceItem">
+    <div className={`announceItem${isPending ? " pending" : ""}`} aria-busy={isPending || undefined}>
       <PostContent
         announcement={announcement}
         currentUser={currentUser}
-        onToggleReaction={onToggleReaction}
-        onCommentClick={() => setShowPostModal(true)}
+        onToggleReaction={isPending ? () => {} : onToggleReaction}
+        onCommentClick={isPending ? () => {} : () => setShowPostModal(true)}
         collapsible
-        onEdit={canManage ? () => setShowEditModal(true) : undefined}
-        onDelete={canManage ? () => setShowDeleteDialog(true) : undefined}
+        onEdit={canManagePost ? () => setEditor({}) : undefined}
+        onDelete={canManagePost ? () => setShowDeleteDialog(true) : undefined}
       />
 
       {showPostModal && (
@@ -60,7 +70,7 @@ export default function AnnouncementCard({
         />
       )}
 
-      {showEditModal && (
+      {editor && (
         <CreatePostModal
           currentUser={currentUser}
           tags={tags}
@@ -70,8 +80,10 @@ export default function AnnouncementCard({
             content: announcement.body,
             postedAt: announcement.postedAt,
           }}
-          onClose={() => setShowEditModal(false)}
-          onSubmit={(post) => onUpdatePost(announcement.id, post)}
+          draft={editor.draft}
+          initialError={editor.error}
+          onClose={() => setEditor(null)}
+          onSubmit={savePost}
         />
       )}
 
@@ -85,10 +97,11 @@ export default function AnnouncementCard({
             </>
           }
           confirmLabel="Delete"
-          busyLabel="Deleting..."
-          errorMessage="Couldn't delete this post. Please try again."
           onCancel={() => setShowDeleteDialog(false)}
-          onConfirm={() => onDeletePost(announcement.id)}
+          onConfirm={() => {
+            setShowDeleteDialog(false);
+            onDeletePost(announcement.id);
+          }}
         />
       )}
 
@@ -121,6 +134,11 @@ export default function AnnouncementCard({
 
         .announceItem + .announceItem {
           border-top: 1px solid #c9bfa0;
+        }
+
+        .announceItem.pending {
+          opacity: 0.6;
+          transition: opacity 0.2s ease;
         }
       `}</style>
     </div>

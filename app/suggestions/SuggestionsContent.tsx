@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { startTransition, useOptimistic, useState, type FormEvent } from "react";
 import Image from "next/image";
 import SiteNav from "@/components/NavigationHeader";
 import Select from "@/components/Select";
 import ConfirmDialog from "@/app/home/ConfirmDialog";
 import PostMenu from "@/app/home/PostMenu";
+import { settle } from "@/lib/actionResult";
 import { formatTimestamp } from "@/lib/dates";
 import type { Viewer } from "@/lib/auth";
 import {
@@ -49,6 +50,30 @@ const STATUS_OPTIONS = [
   { value: "resolved", label: "Resolved" },
 ];
 
+// Not saved yet: shown faded, with no edit/delete menu.
+type OptimisticSuggestion = Suggestion & { pending?: boolean };
+
+type SuggestionChange =
+  | { type: "add"; suggestion: OptimisticSuggestion }
+  | { type: "edit"; id: string; input: SuggestionInput }
+  | { type: "delete"; id: string };
+
+function applySuggestionChange(current: OptimisticSuggestion[], change: SuggestionChange): OptimisticSuggestion[] {
+  switch (change.type) {
+    case "add":
+      // Newest first, same as listMySuggestions.
+      return [change.suggestion, ...current];
+    case "edit":
+      return current.map((s) =>
+        s.id === change.id
+          ? { ...s, content: change.input.content.trim(), isAnonymous: change.input.isAnonymous, edited: true }
+          : s,
+      );
+    case "delete":
+      return current.filter((s) => s.id !== change.id);
+  }
+}
+
 type SuggestionsContentProps = {
   viewer: Viewer;
   suggestions: Suggestion[];
@@ -62,8 +87,16 @@ export default function SuggestionsContent({ viewer, suggestions, inbox }: Sugge
   const [justSent, setJustSent] = useState(false);
   const [draftError, setDraftError] = useState("");
 
-  const [editingId, setEditingId] = useState<string | null>(null);
+  // `value`/`error` are set when the editor reopens after a failed save.
+  const [editing, setEditing] = useState<{ id: string; value?: SuggestionInput; error?: string } | null>(null);
   const [deleting, setDeleting] = useState<Suggestion | null>(null);
+  const [listError, setListError] = useState("");
+
+  // Shows sends, edits and deletes right away; resets to the server's list once it refreshes.
+  const [mine, applyChange] = useOptimistic<OptimisticSuggestion[], SuggestionChange>(
+    suggestions,
+    applySuggestionChange,
+  );
 
   function handleCompose(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -73,6 +106,58 @@ export default function SuggestionsContent({ viewer, suggestions, inbox }: Sugge
     }
     setDraftError("");
     setConfirmingSend(true);
+  }
+
+  function send() {
+    const input = draft;
+    setConfirmingSend(false);
+    setDraft({ content: "", isAnonymous: false });
+    setJustSent(true);
+    startTransition(async () => {
+      applyChange({
+        type: "add",
+        suggestion: {
+          id: `temp-${crypto.randomUUID()}`,
+          content: input.content.trim(),
+          isAnonymous: input.isAnonymous,
+          status: "pending",
+          createdAt: new Date().toISOString(),
+          edited: false,
+          pending: true,
+        },
+      });
+      const result = await settle(submitSuggestion(input), "Couldn't send your suggestion. Please try again.");
+      if (result.error) {
+        // Put their text back, unless they've already started a new one.
+        setDraft((current) => (current.content ? current : input));
+        setJustSent(false);
+        setDraftError(result.error);
+      }
+    });
+  }
+
+  function saveEdit(suggestion: Suggestion, value: SuggestionInput) {
+    setEditing(null);
+    setListError("");
+    startTransition(async () => {
+      applyChange({ type: "edit", id: suggestion.id, input: value });
+      const result = await settle(
+        updateSuggestion(suggestion.id, value),
+        "Couldn't save your changes. Please try again.",
+      );
+      // Reopen the editor with what they typed, so nothing is lost.
+      if (result.error) setEditing({ id: suggestion.id, value, error: result.error });
+    });
+  }
+
+  function remove(suggestion: Suggestion) {
+    setDeleting(null);
+    setListError("");
+    startTransition(async () => {
+      applyChange({ type: "delete", id: suggestion.id });
+      const result = await settle(deleteSuggestion(suggestion.id), "Couldn't delete this suggestion. Please try again.");
+      if (result.error) setListError(result.error);
+    });
   }
 
   return (
@@ -135,33 +220,53 @@ export default function SuggestionsContent({ viewer, suggestions, inbox }: Sugge
               <span className="tick-br" />
               <div className="flex items-baseline justify-between gap-3 border-b border-rule pb-2.5">
                 <span className="mono text-[11px] uppercase tracking-[0.08em] text-navy">My suggestions</span>
-                <span className="mono text-[11px] text-ink-soft">{suggestions.length} sent</span>
+                <span className="mono text-[11px] text-ink-soft">{mine.length} sent</span>
               </div>
 
-              {suggestions.length === 0 ? (
+              {listError && (
+                <p role="alert" className="mt-3 mb-0 text-[12.5px] text-[#b3261e]">
+                  {listError}
+                </p>
+              )}
+
+              {mine.length === 0 ? (
                 <p className="mb-0 pt-5 pb-1 text-[13px] text-ink-soft">You haven&apos;t sent any suggestions yet.</p>
               ) : (
                 <ul className="list-none">
-                  {suggestions.map((s) =>
-                    editingId === s.id ? (
+                  {mine.map((s) =>
+                    editing?.id === s.id ? (
                       <li key={s.id} className="border-b border-rule-soft py-3.5 last:border-b-0 last:pb-0">
-                        <SuggestionEditor suggestion={s} onDone={() => setEditingId(null)} />
+                        <SuggestionEditor
+                          suggestion={s}
+                          initialValue={editing.value}
+                          initialError={editing.error}
+                          onSave={(value) => saveEdit(s, value)}
+                          onCancel={() => setEditing(null)}
+                        />
                       </li>
                     ) : (
-                      <li key={s.id} className="border-b border-rule-soft py-3.5 last:border-b-0 last:pb-0">
+                      <li
+                        key={s.id}
+                        className={[
+                          "border-b border-rule-soft py-3.5 transition-opacity last:border-b-0 last:pb-0",
+                          s.pending ? "opacity-60" : "",
+                        ].join(" ")}
+                      >
                         <div className="mb-1.5 flex items-center gap-2">
                           <span className={`tag ${STATUS_STYLES[s.status].className}`}>{STATUS_STYLES[s.status].label}</span>
                           {s.isAnonymous && <span className="tag border-ink-soft text-ink-soft">ANONYMOUS</span>}
                           <span className="ml-auto font-mono text-[11px] text-ink-soft">
-                            {formatTimestamp(s.createdAt)}
+                            {s.pending ? "Sending…" : formatTimestamp(s.createdAt)}
                             {s.edited && " · edited"}
                           </span>
-                          <PostMenu
-                            noun="suggestion"
-                            // Locked once the council has looked at it.
-                            onEdit={s.status === "pending" ? () => setEditingId(s.id) : undefined}
-                            onDelete={() => setDeleting(s)}
-                          />
+                          {!s.pending && (
+                            <PostMenu
+                              noun="suggestion"
+                              // Locked once the council has looked at it.
+                              onEdit={s.status === "pending" ? () => setEditing({ id: s.id }) : undefined}
+                              onDelete={() => setDeleting(s)}
+                            />
+                          )}
                         </div>
                         <p className="mb-0 whitespace-pre-line text-[14px] [overflow-wrap:anywhere]">{s.content}</p>
                       </li>
@@ -221,15 +326,8 @@ export default function SuggestionsContent({ viewer, suggestions, inbox }: Sugge
           }
           confirmLabel="Send"
           busyLabel="Sending…"
-          errorMessage="Couldn't send your suggestion. Please try again."
           onCancel={() => setConfirmingSend(false)}
-          onConfirm={async () => {
-            const result = await submitSuggestion(draft);
-            if (result.error) return result.error;
-            setDraft({ content: "", isAnonymous: false });
-            setJustSent(true);
-            setConfirmingSend(false);
-          }}
+          onConfirm={send}
         />
       )}
 
@@ -240,11 +338,7 @@ export default function SuggestionsContent({ viewer, suggestions, inbox }: Sugge
           confirmLabel="Delete"
           busyLabel="Deleting…"
           onCancel={() => setDeleting(null)}
-          onConfirm={async () => {
-            const result = await deleteSuggestion(deleting.id);
-            if (result.error) return result.error;
-            setDeleting(null);
-          }}
+          onConfirm={() => remove(deleting)}
         />
       )}
     </>
@@ -291,45 +385,46 @@ function SuggestionFields({
   );
 }
 
-function SuggestionEditor({ suggestion, onDone }: { suggestion: Suggestion; onDone: () => void }) {
-  const [value, setValue] = useState<SuggestionInput>({
-    content: suggestion.content,
-    isAnonymous: suggestion.isAnonymous,
-  });
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+function SuggestionEditor({
+  suggestion,
+  initialValue,
+  initialError = "",
+  onSave,
+  onCancel,
+}: {
+  suggestion: Suggestion;
+  // Set when reopening after a failed save.
+  initialValue?: SuggestionInput;
+  initialError?: string;
+  // The caller closes the editor and saves optimistically.
+  onSave: (value: SuggestionInput) => void;
+  onCancel: () => void;
+}) {
+  const [value, setValue] = useState<SuggestionInput>(
+    initialValue ?? { content: suggestion.content, isAnonymous: suggestion.isAnonymous },
+  );
 
-  async function handleSave(e: FormEvent<HTMLFormElement>) {
+  function handleSave(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setSaving(true);
-    setError("");
-    try {
-      const result = await updateSuggestion(suggestion.id, value);
-      if (result.success) {
-        onDone();
-        return;
-      }
-      setError(result.error ?? "Couldn't save your changes. Please try again.");
-    } catch {
-      setError("Couldn't save your changes. Please try again.");
-    }
-    setSaving(false);
+    const unchanged = value.content.trim() === suggestion.content && value.isAnonymous === suggestion.isAnonymous;
+    if (unchanged) onCancel();
+    else onSave(value);
   }
 
   return (
     <form onSubmit={handleSave} noValidate>
       <SuggestionFields id={`edit-${suggestion.id}`} value={value} onChange={setValue} />
-      {error && (
+      {initialError && (
         <p role="alert" className="mt-2 mb-0 text-[12.5px] text-[#b3261e]">
-          {error}
+          {initialError}
         </p>
       )}
       <div className="mt-3 flex justify-end gap-2">
-        <button type="button" className="btn ghost px-4 py-1.5 text-[13px]" onClick={onDone} disabled={saving}>
+        <button type="button" className="btn ghost px-4 py-1.5 text-[13px]" onClick={onCancel}>
           Cancel
         </button>
-        <button type="submit" className="btn px-4 py-1.5 text-[13px]" disabled={saving || !value.content.trim()}>
-          {saving ? "Saving…" : "Save changes"}
+        <button type="submit" className="btn px-4 py-1.5 text-[13px]" disabled={!value.content.trim()}>
+          Save changes
         </button>
       </div>
     </form>
@@ -338,23 +433,26 @@ function SuggestionEditor({ suggestion, onDone }: { suggestion: Suggestion; onDo
 
 function CouncilInbox({ items }: { items: InboxItem[] }) {
   const [filter, setFilter] = useState<Status | "all">("pending");
-  const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [error, setError] = useState("");
 
-  const counts = { pending: 0, reviewed: 0, resolved: 0 };
-  for (const item of items) counts[item.status]++;
-  const visible = filter === "all" ? items : items.filter((item) => item.status === filter);
+  // Shows the new status right away; resets to the server's list once it refreshes.
+  const [optimisticItems, applyStatus] = useOptimistic(
+    items,
+    (current: InboxItem[], change: { id: string; status: Status }) =>
+      current.map((item) => (item.id === change.id ? { ...item, status: change.status } : item)),
+  );
 
-  async function changeStatus(id: string, status: string) {
-    setUpdatingId(id);
+  const counts = { pending: 0, reviewed: 0, resolved: 0 };
+  for (const item of optimisticItems) counts[item.status]++;
+  const visible = filter === "all" ? optimisticItems : optimisticItems.filter((item) => item.status === filter);
+
+  function changeStatus(id: string, status: Status) {
     setError("");
-    try {
-      const result = await setSuggestionStatus(id, status);
+    startTransition(async () => {
+      applyStatus({ id, status });
+      const result = await settle(setSuggestionStatus(id, status), "Couldn't update the status. Please try again.");
       if (result.error) setError(result.error);
-    } catch {
-      setError("Couldn't update the status. Please try again.");
-    }
-    setUpdatingId(null);
+    });
   }
 
   return (
@@ -373,7 +471,7 @@ function CouncilInbox({ items }: { items: InboxItem[] }) {
               { value: "pending", label: `Pending (${counts.pending})` },
               { value: "reviewed", label: `Reviewed (${counts.reviewed})` },
               { value: "resolved", label: `Resolved (${counts.resolved})` },
-              { value: "all", label: `All (${items.length})` },
+              { value: "all", label: `All (${optimisticItems.length})` },
             ]}
             aria-label="Filter suggestions by status"
             compact
@@ -389,7 +487,7 @@ function CouncilInbox({ items }: { items: InboxItem[] }) {
 
       {visible.length === 0 ? (
         <p className="mb-0 pt-5 pb-1 text-[13px] text-ink-soft">
-          {items.length === 0 ? "No suggestions yet." : "Nothing here. You're all caught up."}
+          {optimisticItems.length === 0 ? "No suggestions yet." : "Nothing here. You're all caught up."}
         </p>
       ) : (
         <ul className="list-none">
@@ -428,14 +526,11 @@ function CouncilInbox({ items }: { items: InboxItem[] }) {
               <div className="w-[128px] shrink-0 max-[560px]:w-[112px]">
                 <Select
                   value={item.status}
-                  onChange={(v) => v !== item.status && changeStatus(item.id, v)}
+                  onChange={(v) => v !== item.status && changeStatus(item.id, v as Status)}
                   options={STATUS_OPTIONS}
                   aria-label="Suggestion status"
                   compact
                 />
-                {updatingId === item.id && (
-                  <span className="mt-1 block text-right font-mono text-[10.5px] text-ink-soft">Saving…</span>
-                )}
               </div>
             </li>
           ))}

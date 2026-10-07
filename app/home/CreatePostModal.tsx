@@ -40,6 +40,8 @@ export default function CreatePostModal({
   currentUser,
   tags,
   initialPost,
+  draft,
+  initialError = "",
   onClose,
   onSubmit,
 }: {
@@ -47,16 +49,22 @@ export default function CreatePostModal({
   tags: string[];
   // When set, the modal edits this post instead of creating a new one.
   initialPost?: NewPost & { postedAt: string };
+  // Unsaved fields to start from, e.g. when reopening after a failed save.
+  draft?: NewPost;
+  initialError?: string;
+  // The modal closes right after calling this; the caller shows the post
+  // optimistically and reopens the modal with `draft` if saving fails.
+  onSubmit: (post: NewPost) => void;
   onClose: () => void;
-  onSubmit: (post: NewPost) => Promise<void>;
 }) {
   const isEdit = !!initialPost;
-  const [title, setTitle] = useState(initialPost?.title ?? "");
-  const [tag, setTag] = useState(initialPost?.tag ?? tags[0] ?? "");
-  const [bodyChanged, setBodyChanged] = useState(false);
+  const start = draft ?? initialPost;
+  const [title, setTitle] = useState(start?.title ?? "");
+  const [tag, setTag] = useState(start?.tag ?? tags[0] ?? "");
+  // A restored draft counts as changed, so closing it asks before discarding.
+  const [bodyChanged, setBodyChanged] = useState(!!draft);
   const [showDiscard, setShowDiscard] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(initialError);
   const [uploading, setUploading] = useState(0);
   // Snapshot of the editor body while previewing; null while editing.
   const [preview, setPreview] = useState<{ html: string; at: string } | null>(null);
@@ -83,7 +91,7 @@ export default function CreatePostModal({
 
   const editor = useEditor({
     immediatelyRender: false,
-    content: initialPost ? toEditorHtml(initialPost.content) : "",
+    content: start ? toEditorHtml(start.content) : "",
     onUpdate: () => setBodyChanged(true),
     extensions: [
       StarterKit.configure({
@@ -130,11 +138,10 @@ export default function CreatePostModal({
 
   const isDirty = title !== (initialPost?.title ?? "") || tag !== (initialPost?.tag ?? tags[0] ?? "") || bodyChanged;
   const canPublish =
-    title.trim() !== "" && tag !== "" && !(counts?.isEmpty ?? true) && !submitting && uploading === 0;
+    title.trim() !== "" && tag !== "" && !(counts?.isEmpty ?? true) && uploading === 0;
 
   // Asks via the discard panel first when there's something to lose.
   function requestClose() {
-    if (submitting) return;
     if (isDirty) setShowDiscard(true);
     else onClose();
   }
@@ -147,13 +154,13 @@ export default function CreatePostModal({
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       // While the discard panel is open, Esc belongs to it (it cancels the discard).
-      if (e.key !== "Escape" || e.defaultPrevented || submitting || showDiscard) return;
+      if (e.key !== "Escape" || e.defaultPrevented || showDiscard) return;
       if (isDirty) setShowDiscard(true);
       else onClose();
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [isDirty, showDiscard, submitting, onClose]);
+  }, [isDirty, showDiscard, onClose]);
 
   function togglePreview() {
     if (preview) {
@@ -175,18 +182,11 @@ export default function CreatePostModal({
     comments: [],
   };
 
-  async function publish(event: FormEvent) {
+  function publish(event: FormEvent) {
     event.preventDefault();
     if (!editor || !canPublish) return;
-    setSubmitting(true);
-    setError("");
-    try {
-      await onSubmit({ title: title.trim(), tag, content: editor.getHTML() });
-      onClose();
-    } catch {
-      setError(isEdit ? "Couldn't save your changes. Please try again." : "Couldn't publish your post. Please try again.");
-      setSubmitting(false);
-    }
+    onSubmit({ title: title.trim(), tag, content: editor.getHTML() });
+    onClose();
   }
 
   return (
@@ -318,7 +318,7 @@ export default function CreatePostModal({
             <span className="footerHint mono">ESC TO CLOSE</span>
           )}
           <div className="footerActions">
-            <button type="button" className="btn ghost" onClick={requestClose} disabled={submitting}>
+            <button type="button" className="btn ghost" onClick={requestClose}>
               Cancel
             </button>
             <button
@@ -332,7 +332,7 @@ export default function CreatePostModal({
               {previewPost ? "Keep editing" : "Preview"}
             </button>
             <button type="submit" className="btn primary publishBtn" disabled={!canPublish}>
-              {isEdit ? (submitting ? "Saving..." : "Save changes") : submitting ? "Publishing..." : "Publish"}
+              {isEdit ? "Save changes" : "Publish"}
             </button>
           </div>
         </div>

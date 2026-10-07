@@ -261,6 +261,7 @@
   }
 
   .main-nav {
+    position: relative;
     display: flex;
     gap: 4px;
     height: 100%;
@@ -288,6 +289,33 @@
   .main-nav a.current {
     color: var(--white);
     border-bottom-color: var(--orange);
+  }
+
+  /* One underline that slides between tabs (NavigationHeader.tsx). Until it's
+     placed (before hydration), the current tab draws its own. */
+  .main-nav[data-bar-ready] a.current {
+    border-bottom-color: transparent;
+  }
+
+  .nav-bar {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: 0;
+    height: 3px;
+    background: var(--orange);
+    opacity: 0;
+    pointer-events: none;
+    transition:
+      transform 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+      width 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+      opacity 0.2s ease;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .nav-bar {
+      transition: none;
+    }
   }
 
   .user-chip {
@@ -641,5 +669,124 @@
 
   .richText.plain {
     white-space: pre-line;
+  }
+}
+
+/* ---------- Page transitions (see components/PageTransition.tsx) ---------- */
+
+/* Let clicks during a transition reach the live page. */
+::view-transition {
+  pointer-events: none;
+}
+
+/* Linked pages slide in the direction of travel (lib/navigation.ts). */
+::view-transition-old(.nav-forward) {
+  --vt-slide-offset: -60px;
+  animation:
+    150ms ease-in both vt-fade reverse,
+    400ms ease-in-out both vt-slide reverse;
+}
+::view-transition-new(.nav-forward) {
+  --vt-slide-offset: 60px;
+  animation:
+    210ms ease-out 150ms both vt-fade,
+    400ms ease-in-out both vt-slide;
+}
+::view-transition-old(.nav-back) {
+  --vt-slide-offset: 60px;
+  animation:
+    150ms ease-in both vt-fade reverse,
+    400ms ease-in-out both vt-slide reverse;
+}
+::view-transition-new(.nav-back) {
+  --vt-slide-offset: -60px;
+  animation:
+    210ms ease-out 150ms both vt-fade,
+    400ms ease-in-out both vt-slide;
+}
+
+/* Everything else (browser back, login redirect) crossfades. */
+::view-transition-old(.page-fade) {
+  animation: 150ms ease-in both vt-fade reverse;
+}
+::view-transition-new(.page-fade) {
+  animation: 210ms ease-out 150ms both vt-fade;
+}
+
+/* Calendar months (CalendarContent.tsx): the label and day grid slide in the
+   direction of travel, kept inside their own box; the lists crossfade. */
+::view-transition-group(.month-next),
+::view-transition-group(.month-prev) {
+  overflow: clip;
+}
+::view-transition-old(.month-next) {
+  --vt-slide-offset: -40px;
+  animation:
+    150ms ease-in both vt-fade reverse,
+    300ms ease-in-out both vt-slide reverse;
+}
+::view-transition-new(.month-next) {
+  --vt-slide-offset: 40px;
+  animation:
+    210ms ease-out 100ms both vt-fade,
+    300ms ease-in-out both vt-slide;
+}
+::view-transition-old(.month-prev) {
+  --vt-slide-offset: 40px;
+  animation:
+    150ms ease-in both vt-fade reverse,
+    300ms ease-in-out both vt-slide reverse;
+}
+::view-transition-new(.month-prev) {
+  --vt-slide-offset: -40px;
+  animation:
+    210ms ease-out 100ms both vt-fade,
+    300ms ease-in-out both vt-slide;
+}
+::view-transition-old(.month-fade) {
+  animation: 120ms ease-in both vt-fade reverse;
+}
+::view-transition-new(.month-fade) {
+  animation: 200ms ease-out 80ms both vt-fade;
+}
+
+/* The header stays put above the moving content. */
+::view-transition-group(.anchored) {
+  animation: none;
+  z-index: 100;
+}
+::view-transition-old(.anchored) {
+  display: none;
+}
+::view-transition-new(.anchored) {
+  animation: none;
+}
+
+@keyframes vt-fade {
+  from {
+    filter: blur(3px);
+    opacity: 0;
+  }
+  to {
+    filter: blur(0);
+    opacity: 1;
+  }
+}
+
+@keyframes vt-slide {
+  from {
+    translate: var(--vt-slide-offset);
+  }
+  to {
+    translate: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(*),
+  ::view-transition-new(*),
+  ::view-transition-group(*) {
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
   }
 }

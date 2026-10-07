@@ -4,12 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import DatePicker from "@/components/DatePicker";
 import Select from "@/components/Select";
 import { useScrollLock } from "@/lib/useScrollLock";
-import { saveEvent, type EventInput } from "./actions";
-import type { CalendarEntry } from "./CalendarContent";
-
-// Keep in sync with the limits in actions.ts.
-const MAX_NAME_LENGTH = 120;
-const MAX_DESCRIPTION_LENGTH = 1000;
+import { MAX_DESCRIPTION_LENGTH, MAX_NAME_LENGTH, validateEvent, type EventInput } from "./validation";
 
 const KIND_OPTIONS = [
   { value: "event", label: "Event" },
@@ -17,24 +12,22 @@ const KIND_OPTIONS = [
 ];
 
 export default function EventFormModal({
-  entry,
-  defaultDate,
+  isEdit,
+  initialFields,
+  initialError = "",
+  onSave,
   onClose,
 }: {
-  // Edit this entry, or create a new one when omitted.
-  entry?: CalendarEntry;
-  defaultDate: string;
+  isEdit: boolean;
+  initialFields: EventInput;
+  // Set when the form reopens after a save failed on the server.
+  initialError?: string;
+  // Called with valid fields; the caller closes the form and saves optimistically.
+  onSave: (fields: EventInput) => void;
   onClose: () => void;
 }) {
-  const [fields, setFields] = useState<EventInput>({
-    name: entry?.name ?? "",
-    date: entry?.date ?? defaultDate,
-    kind: entry?.kind ?? "event",
-    description: entry?.description ?? "",
-  });
+  const [fields, setFields] = useState<EventInput>(initialFields);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [error, setError] = useState("");
-  const [saving, setSaving] = useState(false);
   useScrollLock();
 
   // DatePicker only lists years up to `max`, so leave room to plan ahead.
@@ -42,39 +35,27 @@ export default function EventFormModal({
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape" && !saving) onClose();
+      if (e.key === "Escape") onClose();
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [saving, onClose]);
+  }, [onClose]);
 
   function setField<K extends keyof EventInput>(key: K, value: EventInput[K]) {
     setFields((prev) => ({ ...prev, [key]: value }));
   }
 
-  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
+  function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setSaving(true);
-    setError("");
-
-    try {
-      const result = await saveEvent(fields, entry?.id);
-      setFieldErrors(result.fieldErrors ?? {});
-      if (result.success) {
-        onClose();
-        return;
-      }
-      if (result.error) setError(result.error);
-    } catch {
-      setError("Couldn't save this entry. Please try again.");
-    }
-    setSaving(false);
+    const errors = validateEvent(fields);
+    setFieldErrors(errors);
+    if (Object.keys(errors).length === 0) onSave(fields);
   }
 
   return (
     <div
       className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-navy-deep/55 px-4 py-[8vh] animate-fade-in"
-      onClick={() => !saving && onClose()}
+      onClick={onClose}
     >
       <form
         onSubmit={handleSubmit}
@@ -87,7 +68,7 @@ export default function EventFormModal({
       >
         <span className="eyebrow mb-1">SOE CALENDAR</span>
         <h2 id="eventFormHeading" className="mb-4 text-xl">
-          {entry ? "Edit entry" : "Add to calendar"}
+          {isEdit ? "Edit entry" : "Add to calendar"}
         </h2>
 
         <label htmlFor="eventName">Name</label>
@@ -142,18 +123,18 @@ export default function EventFormModal({
           <p className="-mt-3 mb-3 text-xs text-[#b3261e]">{fieldErrors.description}</p>
         )}
 
-        {error && (
+        {initialError && (
           <p role="alert" className="mb-3 text-[12.5px] text-[#b3261e]">
-            {error}
+            {initialError}
           </p>
         )}
 
         <div className="flex justify-end gap-2">
-          <button type="button" className="btn ghost px-[18px] py-2 text-[13.5px]" onClick={onClose} disabled={saving}>
+          <button type="button" className="btn ghost px-[18px] py-2 text-[13.5px]" onClick={onClose}>
             Cancel
           </button>
-          <button type="submit" className="btn px-[18px] py-2 text-[13.5px]" disabled={saving}>
-            {saving ? "Saving…" : entry ? "Save changes" : "Add entry"}
+          <button type="submit" className="btn px-[18px] py-2 text-[13.5px]">
+            {isEdit ? "Save changes" : "Add entry"}
           </button>
         </div>
       </form>

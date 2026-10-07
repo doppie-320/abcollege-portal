@@ -1,6 +1,6 @@
 import { deleteAvatar, uploadAvatar } from "@/app/profile/actions";
-import type { ActionResult } from "@/lib/actionResult";
-import { useCallback, useState } from "react";
+import { settle, type ActionResult } from "@/lib/actionResult";
+import { useCallback, useEffect, useOptimistic, useRef, useState, useTransition } from "react";
 
 const OUTPUT_SIZE = 320;
 const OUTPUT_QUALITY = 0.85;
@@ -25,51 +25,53 @@ export const avatarStore = { write, clear };
 // opposed to the friendly errors the actions return.
 const NETWORK_ERROR = "Couldn't reach the server. Check your connection and try again.";
 
-export function useAvatarEditor(avatarUrl: string, userId: string) {
-  const [isSaving, setIsSaving] = useState(false);
+export function useAvatarEditor(avatarUrl: string) {
+  // The picked photo (or no photo) shows right away; it resets to the server's
+  // URL once the refreshed profile arrives, or back to the old one on failure.
+  const [optimisticUrl, setOptimisticUrl] = useOptimistic(avatarUrl);
+  const [isSaving, startTransition] = useTransition();
   const [error, setError] = useState("");
+  const previewUrl = useRef<string | null>(null);
+
+  useEffect(() => () => {
+    if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
+  }, []);
 
   const save = useCallback(
     async (file: File) => {
       setError("");
-      setIsSaving(true);
+      let dataBlob: Blob;
       try {
-        let dataBlob: Blob;
-        try {
-          dataBlob = await compressToSquare(file);
-        } catch (cause) {
-          // compressToSquare only throws messages written for the user.
-          setError(cause instanceof Error ? cause.message : "That photo could not be read.");
-          return;
-        }
-
-        const result = await avatarStore.write(dataBlob);
-        if (result.error) setError(result.error);
+        dataBlob = await compressToSquare(file);
       } catch (cause) {
-        console.error("[avatar] upload request failed:", cause);
-        setError(NETWORK_ERROR);
-      } finally {
-        setIsSaving(false);
+        // compressToSquare only throws messages written for the user.
+        setError(cause instanceof Error ? cause.message : "That photo could not be read.");
+        return;
       }
+
+      if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
+      const preview = URL.createObjectURL(dataBlob);
+      previewUrl.current = preview;
+
+      startTransition(async () => {
+        setOptimisticUrl(preview);
+        const result = await settle(avatarStore.write(dataBlob), NETWORK_ERROR);
+        if (result.error) setError(result.error);
+      });
     },
-    [userId]
+    [setOptimisticUrl]
   );
 
-  const reset = useCallback(async () => {
+  const reset = useCallback(() => {
     setError("");
-    setIsSaving(true);
-    try {
-      const result = await avatarStore.clear();
+    startTransition(async () => {
+      setOptimisticUrl("");
+      const result = await settle(avatarStore.clear(), NETWORK_ERROR);
       if (result.error) setError(result.error);
-    } catch (cause) {
-      console.error("[avatar] remove request failed:", cause);
-      setError(NETWORK_ERROR);
-    } finally {
-      setIsSaving(false);
-    }
-  }, [userId]);
+    });
+  }, [setOptimisticUrl]);
 
-  return { avatarUrl, isSaving, error, save, reset };
+  return { avatarUrl: optimisticUrl, isSaving, error, save, reset };
 }
 
 async function compressToSquare(file: File): Promise<Blob> {

@@ -29,12 +29,10 @@ export default function PostModal({
   canModerate?: boolean;
 }) {
   const [draft, setDraft] = useState("");
-  const [submitting, setSubmitting] = useState(false);
   const [commentError, setCommentError] = useState("");
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
-  const [savingEdit, setSavingEdit] = useState(false);
   const [editError, setEditError] = useState("");
   const [deletingComment, setDeletingComment] = useState<Comment | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -58,14 +56,14 @@ export default function PostModal({
       // then an open edit box, then the modal.
       if (deletingComment) return;
       if (editingId) {
-        if (!savingEdit) cancelEdit();
+        cancelEdit();
         return;
       }
       onClose();
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [onClose, deletingComment, editingId, savingEdit]);
+  }, [onClose, deletingComment, editingId]);
 
   function startEdit(comment: Comment) {
     setEditingId(comment.id);
@@ -79,40 +77,39 @@ export default function PostModal({
     setEditError("");
   }
 
-  async function saveEdit(comment: Comment) {
+  // The edit shows right away; if it fails, the editor reopens with their text.
+  function saveEdit(comment: Comment) {
     const trimmed = editDraft.trim();
-    if (!trimmed || savingEdit) return;
-    if (trimmed === comment.body) {
-      cancelEdit();
-      return;
-    }
-    setSavingEdit(true);
-    setEditError("");
-    try {
-      await onUpdateComment(announcement.id, comment.id, trimmed);
-      cancelEdit();
-    } catch {
+    if (!trimmed) return;
+    cancelEdit();
+    if (trimmed === comment.body) return;
+    onUpdateComment(announcement.id, comment.id, trimmed).catch(() => {
+      setEditingId(comment.id);
+      setEditDraft(trimmed);
       setEditError("Couldn't save your changes. Please try again.");
-    } finally {
-      setSavingEdit(false);
-    }
+    });
   }
 
-  async function submitComment(event: FormEvent) {
+  // The comment shows right away (see handleAddComment), so the box is free for the next one.
+  function submitComment(event: FormEvent) {
     event.preventDefault();
     const trimmed = draft.trim();
-    if (!trimmed || submitting) return;
-    setSubmitting(true);
+    if (!trimmed) return;
     setCommentError("");
     setDraft("");
-    try {
-      await onAddComment(announcement.id, trimmed);
-    } catch {
-      setDraft(trimmed);
+    onAddComment(announcement.id, trimmed).catch(() => {
+      // Put their text back, unless they've already started typing another.
+      setDraft((current) => current || trimmed);
       setCommentError("Couldn't post your comment. Please try again.");
-    } finally {
-      setSubmitting(false);
-    }
+    });
+  }
+
+  function deleteComment(comment: Comment) {
+    setDeletingComment(null);
+    setCommentError("");
+    onDeleteComment(announcement.id, comment.id).catch(() =>
+      setCommentError("Couldn't delete that comment. Please try again.")
+    );
   }
 
   return (
@@ -152,7 +149,7 @@ export default function PostModal({
                 const isEditing = editingId === comment.id;
 
                 return (
-                  <div className="commentItem" key={comment.id}>
+                  <div className={`commentItem${isSaved ? "" : " pending"}`} key={comment.id}>
                     <CommentAvatar src={comment.authorAvatar} initials={comment.authorInitials} />
                     <div className="commentBubble">
                       <div className="commentMeta">
@@ -173,7 +170,6 @@ export default function PostModal({
                             value={editDraft}
                             rows={2}
                             autoFocus
-                            disabled={savingEdit}
                             aria-label="Edit comment"
                             onChange={(e) => {
                               setEditDraft(e.target.value);
@@ -182,11 +178,11 @@ export default function PostModal({
                           />
                           {editError && <p className="commentEditError" role="alert">{editError}</p>}
                           <div className="commentEditActions">
-                            <button type="button" className="commentCancelBtn" onClick={cancelEdit} disabled={savingEdit}>
+                            <button type="button" className="commentCancelBtn" onClick={cancelEdit}>
                               Cancel
                             </button>
-                            <button type="submit" className="commentPostBtn" disabled={!editDraft.trim() || savingEdit}>
-                              {savingEdit ? "Saving..." : "Save"}
+                            <button type="submit" className="commentPostBtn" disabled={!editDraft.trim()}>
+                              Save
                             </button>
                           </div>
                         </form>
@@ -222,7 +218,7 @@ export default function PostModal({
               if (commentError) setCommentError("");
             }}
           />
-          <button type="submit" className="commentPostBtn" disabled={!draft.trim() || submitting}>
+          <button type="submit" className="commentPostBtn" disabled={!draft.trim()}>
             Post
           </button>
         </form>
@@ -238,13 +234,8 @@ export default function PostModal({
               : `${deletingComment.authorName}'s comment will be removed from this post. This can't be undone.`
           }
           confirmLabel="Delete"
-          busyLabel="Deleting..."
-          errorMessage="Couldn't delete this comment. Please try again."
           onCancel={() => setDeletingComment(null)}
-          onConfirm={async () => {
-            await onDeleteComment(announcement.id, deletingComment.id);
-            setDeletingComment(null);
-          }}
+          onConfirm={() => deleteComment(deletingComment)}
         />
       )}
 
@@ -360,6 +351,11 @@ export default function PostModal({
 
         .commentItem + .commentItem {
           border-top: 1px dashed #d8cfb4;
+        }
+
+        /* Still being posted. */
+        .commentItem.pending {
+          opacity: 0.6;
         }
 
         .commentBubble {

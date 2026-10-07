@@ -66,6 +66,8 @@ export default function UserMenu({ initials, name, userId, avatarUrl, isProfileP
         <div className="userMenuPanel" id={panelId}>
           <Link
             href="/profile"
+            // Profile is the last page in the nav order.
+            transitionTypes={isProfilePage ? undefined : ["nav-forward"]}
             className="userMenuItem"
             aria-current={isProfilePage ? "page" : undefined}
             onClick={() => setOpen(false)}

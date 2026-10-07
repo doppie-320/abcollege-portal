@@ -80,13 +80,12 @@ type AvatarEditorProps = {
 };
 
 export default function AvatarEditor({
-  userId,
   initials,
   name,
   children,
-  avatarUrl
+  avatarUrl: savedAvatarUrl
 }: AvatarEditorProps) {
-  const { isSaving, error, save, reset } = useAvatarEditor(avatarUrl, userId);
+  const { avatarUrl, isSaving, error, save, reset } = useAvatarEditor(savedAvatarUrl);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const actions = useMemo<AvatarActions>(

@@ -3,12 +3,22 @@
 // exported functions/types, so swapping in Supabase queries later stays inside
 // this file. Server-only: state lives in the server process and resets on restart.
 
+import {
+  DEFAULT_FINE_RATES,
+  computeFine,
+  normalizeEntry,
+  type AttendanceEntry,
+  type AttendanceMark,
+  type AttendanceStatus,
+  type FineRates,
+} from "@/app/attendance/fines";
 import type { CalendarEntry, Celebrant } from "@/app/calendar/CalendarContent";
 import type { Suggestion, InboxItem } from "@/app/suggestions/SuggestionsContent";
 import { schoolToday, toISODate } from "@/lib/dates";
 
-export type AttendanceStatus = "present" | "late" | "absent" | "excused";
+export type { AttendanceStatus };
 
+// One row of a student's attendance history.
 export type AttendanceRecord = {
   id: string;
   eventId: number;
@@ -16,9 +26,13 @@ export type AttendanceRecord = {
   // YYYY-MM-DD
   eventDate: string;
   status: AttendanceStatus;
+  // The original mark when an admin excused it.
+  excusedFrom?: Exclude<AttendanceMark, "present">;
   fine: number;
   finePaid: boolean;
 };
+
+type StoredAttendance = AttendanceEntry & { eventId: number; userId: string };
 
 export type EventInput = Pick<CalendarEntry, "name" | "date" | "kind" | "description">;
 export type SuggestionInput = { content: string; isAnonymous: boolean };
@@ -32,8 +46,10 @@ type StoredSuggestion = Suggestion & {
 type Store = {
   nextEventId: number;
   events: CalendarEntry[];
-  // The same sample history is shown to every student.
-  attendance: { eventId: number; status: AttendanceStatus; fine: number; finePaid: boolean }[];
+  // Keyed by real account ids (users.id), so there's no seed: admins record it.
+  attendance: StoredAttendance[];
+  // Per event, so changing one event's rates never rewrites another's fines.
+  fineRates: Record<number, FineRates>;
   celebrants: { name: string; initials: string; month: number; day: number }[];
   suggestions: StoredSuggestion[];
 };
@@ -71,11 +87,8 @@ function db(): Store {
   store = {
     nextEventId: events.length + 1,
     events,
-    attendance: [
-      { eventId: 1, status: "absent", fine: 50, finePaid: true },
-      { eventId: 2, status: "late", fine: 20, finePaid: false },
-      { eventId: 3, status: "present", fine: 0, finePaid: false },
-    ],
+    attendance: [],
+    fineRates: {},
     celebrants: [
       { name: "Ana Reyes", initials: "AR", month, day: 14 },
       { name: "Carlo Ramos", initials: "CR", month, day: Number(today.slice(8)) },
@@ -149,23 +162,79 @@ export async function deleteEvent(id: number): Promise<"deleted" | "not-found" |
 
 // ---------- Attendance ----------
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- the real query will filter by user.
+function ratesFor(eventId: number): FineRates {
+  return db().fineRates[eventId] ?? DEFAULT_FINE_RATES;
+}
+
+// A student's own history, newest first.
 export async function listAttendance(userId: string): Promise<AttendanceRecord[]> {
   const s = db();
   return s.attendance
-    .map((a, i) => {
+    .filter((a) => a.userId === userId)
+    .map((a) => {
       const event = s.events.find((e) => e.id === a.eventId);
       return {
-        id: `att-${i}`,
+        id: `att-${a.eventId}-${a.userId}`,
         eventId: a.eventId,
         eventName: event?.name ?? "Removed event",
         eventDate: event?.date ?? "",
-        status: a.status,
-        fine: a.fine,
+        status: a.excused ? "excused" : a.mark,
+        excusedFrom: a.excused && a.mark !== "present" ? a.mark : undefined,
+        fine: computeFine(a, ratesFor(a.eventId)),
         finePaid: a.finePaid,
-      };
+      } satisfies AttendanceRecord;
     })
     .sort((a, b) => b.eventDate.localeCompare(a.eventDate));
+}
+
+// Events (not holidays) admins can take attendance for, newest first.
+export async function listAttendanceEvents(): Promise<CalendarEntry[]> {
+  return db()
+    .events.filter((e) => e.kind === "event")
+    .sort((a, b) => b.date.localeCompare(a.date) || a.name.localeCompare(b.name))
+    .map((e) => ({ ...e }));
+}
+
+export type SheetEntry = AttendanceEntry & { userId: string };
+
+// Everything recorded for one event, for the admin sheet.
+export async function getAttendanceSheet(eventId: number): Promise<{ rates: FineRates; entries: SheetEntry[] }> {
+  return {
+    rates: { ...ratesFor(eventId) },
+    entries: db()
+      .attendance.filter((a) => a.eventId === eventId)
+      .map(({ userId, mark, excused, finePaid }) => ({ userId, mark, excused, finePaid })),
+  };
+}
+
+function eventExists(eventId: number) {
+  return db().events.some((e) => e.id === eventId && e.kind === "event");
+}
+
+export async function setFineRates(eventId: number, rates: FineRates): Promise<boolean> {
+  if (!eventExists(eventId)) return false;
+  db().fineRates[eventId] = { late: rates.late, absent: rates.absent };
+  return true;
+}
+
+// Creates, updates, or (with null) clears one student's record for an event.
+export async function saveAttendance(eventId: number, userId: string, entry: AttendanceEntry | null): Promise<boolean> {
+  if (!eventExists(eventId)) return false;
+  const s = db();
+  s.attendance = s.attendance.filter((a) => !(a.eventId === eventId && a.userId === userId));
+  if (entry) s.attendance.push({ eventId, userId, ...normalizeEntry(entry) });
+  return true;
+}
+
+// Gives every listed student without a record for the event the same mark.
+export async function markUnrecorded(eventId: number, userIds: string[], mark: AttendanceMark): Promise<boolean> {
+  if (!eventExists(eventId)) return false;
+  const s = db();
+  const recorded = new Set(s.attendance.filter((a) => a.eventId === eventId).map((a) => a.userId));
+  for (const userId of new Set(userIds)) {
+    if (!recorded.has(userId)) s.attendance.push({ eventId, userId, mark, excused: false, finePaid: false });
+  }
+  return true;
 }
 
 // ---------- Suggestion box ----------
