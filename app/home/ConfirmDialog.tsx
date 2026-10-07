@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useScrollLock } from "@/lib/useScrollLock";
 
 type Tone = "danger" | "warning";
 
@@ -48,12 +49,8 @@ export default function ConfirmDialog({
 
   useEffect(() => {
     cancelRef.current?.focus();
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
   }, []);
+  useScrollLock();
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {

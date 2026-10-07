@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
+import { useScrollLock } from "@/lib/useScrollLock";
 import { createPortal } from "react-dom";
 import { EditorContent, useEditor, useEditorState, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -140,12 +141,8 @@ export default function CreatePostModal({
 
   useEffect(() => {
     titleRef.current?.focus();
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
   }, []);
+  useScrollLock();
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {

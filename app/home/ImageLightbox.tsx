@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { useScrollLock } from "@/lib/useScrollLock";
 import Image from "next/image";
 import type { MediaImage } from "@/lib/mock/social-db";
 
@@ -25,13 +26,9 @@ export default function ImageLightbox({
       if (e.key === "ArrowLeft" && hasMultiple) onIndexChange((index - 1 + items.length) % items.length);
     }
     document.addEventListener("keydown", onKeyDown);
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-      document.body.style.overflow = previousOverflow;
-    };
+    return () => document.removeEventListener("keydown", onKeyDown);
   }, [index, hasMultiple, items.length, onClose, onIndexChange]);
+  useScrollLock();
 
   return (
     <div className="lightboxBackdrop" onClick={onClose}>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useScrollLock } from "@/lib/useScrollLock";
 import Image from "next/image";
 import PostContent from "./PostContent";
 import PostMenu from "./PostMenu";
@@ -48,13 +49,7 @@ export default function PostModal({
     previousCommentCount.current = commentCount;
   }, [commentCount]);
 
-  useEffect(() => {
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
-  }, []);
+  useScrollLock();
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {

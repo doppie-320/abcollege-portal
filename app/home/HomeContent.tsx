@@ -268,9 +268,9 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
 
         console.log(loadedAnnouncements);
 
-        const loadedTags = (announcementData || []).map((row) => ({
-          key: row.tag,
-          label: row.tag
+        const loadedTags = [...new Set((announcementData || []).map((row) => row.tag))].map((tag) => ({
+          key: tag,
+          label: tag
         }));
 
         setTags(loadedTags)
