@@ -1,3 +1,5 @@
+import { createClient } from "@/lib/supabase/client";
+
 export type ApplicantStatus = "pending" | "approved" | "declined";
 
 export type Applicant = {
@@ -10,6 +12,7 @@ export type Applicant = {
   studentId: string;
   program: string;
   status: ApplicantStatus;
+  rejectDate: string;
   submittedAt: string;
 };
 
@@ -36,171 +39,41 @@ const MONTHS = [
   "Dec",
 ] as const;
 
-const APPLICANTS: Applicant[] = [
-  {
-    id: "a-001",
-    firstName: "Maria",
-    lastName: "Santos",
-    email: "maria.santos@abcollege.edu.ph",
-    yearLevel: "3rd Year",
-    birthday: "2004-02-14",
-    studentId: "2026-00142",
-    program: "BS Information Technology",
-    status: "pending",
-    submittedAt: "2026-09-28T02:15:00.000Z",
-  },
-  {
-    id: "a-002",
-    firstName: "Carlo",
-    lastName: "Ramos",
-    email: "carlo.ramos@abcollege.edu.ph",
-    yearLevel: "4th Year",
-    birthday: "2003-08-02",
-    studentId: "2026-00143",
-    program: "BS Computer Engineering",
-    status: "pending",
-    submittedAt: "2026-09-27T09:40:00.000Z",
-  },
-  {
-    id: "a-003",
-    firstName: "Anna",
-    lastName: "Dizon",
-    email: "anna.dizon@abcollege.edu.ph",
-    yearLevel: "2nd Year",
-    birthday: "2005-11-30",
-    studentId: "2026-00144",
-    program: "BS Business Administration",
-    status: "pending",
-    submittedAt: "2026-09-26T14:05:00.000Z",
-  },
-  {
-    id: "a-004",
-    firstName: "Leo",
-    lastName: "Fernandez",
-    email: "leo.fernandez@abcollege.edu.ph",
-    yearLevel: "1st Year",
-    studentId: "2026-00145",
-    program: "BS Civil Engineering",
-    status: "pending",
-    submittedAt: "2026-09-25T06:20:00.000Z",
-  },
-  {
-    id: "a-005",
-    firstName: "Bea",
-    lastName: "Aquino",
-    email: "bea.aquino@abcollege.edu.ph",
-    yearLevel: "3rd Year",
-    birthday: "2004-05-19",
-    studentId: "2026-00146",
-    program: "BS Accountancy",
-    status: "approved",
-    submittedAt: "2026-09-22T11:00:00.000Z",
-  },
-  {
-    id: "a-006",
-    firstName: "Rafael",
-    lastName: "Mendoza",
-    email: "rafael.mendoza@abcollege.edu.ph",
-    yearLevel: "2nd Year",
-    birthday: "2005-01-07",
-    studentId: "2026-00147",
-    program: "BS Information Technology",
-    status: "pending",
-    submittedAt: "2026-09-21T03:55:00.000Z",
-  },
-  {
-    id: "a-007",
-    firstName: "Nicole",
-    lastName: "Vera",
-    email: "nicole.vera@abcollege.edu.ph",
-    yearLevel: "4th Year",
-    birthday: "2003-09-25",
-    studentId: "2026-00148",
-    program: "BS Education",
-    status: "declined",
-    submittedAt: "2026-09-18T08:30:00.000Z",
-  },
-  {
-    id: "a-008",
-    firstName: "Joshua",
-    lastName: "Lim",
-    email: "joshua.lim@abcollege.edu.ph",
-    yearLevel: "1st Year",
-    studentId: "2026-00149",
-    program: "BS Computer Engineering",
-    status: "pending",
-    submittedAt: "2026-09-16T13:10:00.000Z",
-  },
-  {
-    id: "a-009",
-    firstName: "Anthony",
-    lastName: "Lim",
-    email: "joshua.lim@abcollege.edu.ph",
-    yearLevel: "1st Year",
-    studentId: "2026-00149",
-    program: "BS Computer Engineering",
-    status: "pending",
-    submittedAt: "2026-09-16T13:10:00.000Z",
-  },
-  {
-    id: "a-010",
-    firstName: "Solonski",
-    lastName: "Lim",
-    email: "joshua.lim@abcollege.edu.ph",
-    yearLevel: "1st Year",
-    studentId: "2026-00149",
-    program: "BS Computer Engineering",
-    status: "pending",
-    submittedAt: "2026-09-16T13:10:00.000Z",
-  },
-  {
-    id: "a-011",
-    firstName: "Rex",
-    lastName: "Lim",
-    email: "joshua.lim@abcollege.edu.ph",
-    yearLevel: "1st Year",
-    studentId: "2026-00149",
-    program: "BS Computer Engineering",
-    status: "pending",
-    submittedAt: "2026-09-16T13:10:00.000Z",
-  },
-  {
-    id: "a-012",
-    firstName: "Iya",
-    lastName: "Lim",
-    email: "joshua.lim@abcollege.edu.ph",
-    yearLevel: "1st Year",
-    studentId: "2026-00149",
-    program: "BS Computer Engineering",
-    status: "pending",
-    submittedAt: "2026-09-16T13:10:00.000Z",
-  },
-  {
-    id: "a-013",
-    firstName: "Huh",
-    lastName: "Lim",
-    email: "joshua.lim@abcollege.edu.ph",
-    yearLevel: "1st Year",
-    studentId: "2026-00149",
-    program: "BS Computer Engineering",
-    status: "pending",
-    submittedAt: "2026-09-16T13:10:00.000Z",
-  },
-  {
-    id: "a-014",
-    firstName: "huhu",
-    lastName: "Lim",
-    email: "joshua.lim@abcollege.edu.ph",
-    yearLevel: "1st Year",
-    studentId: "2026-00149",
-    program: "BS Computer Engineering",
-    status: "pending",
-    submittedAt: "2026-09-16T13:10:00.000Z",
-  },
-];
+export async function fetchApplicants(): Promise<Applicant[]> {
+  const supabase = createClient();
 
-export function fetchApplicants(): Applicant[] {
-  return APPLICANTS.map((applicant) => ({ ...applicant }));
+  const { data: requestData, error: requestError } = await supabase
+    .from("users")
+    .select("id, first_name, last_name, email_address, students(student_id, year_level, birthdate, courses(name)), user_requests!inner(request_status, reject_date, submitted_at)")
+
+  if (requestError) {
+    console.error("Supabase error:", requestError.message);
+    return [];
+  }
+
+  console.log("Fetched users:", requestData);
+
+  const applicants: Applicant[] = requestData.map((user) => {
+    const student = Array.isArray(user.students) ? user.students[0] : user.students;
+    const course = Array.isArray(student?.courses) ? student?.courses[0] : student?.courses;
+    const request = Array.isArray(user.user_requests) ? user.user_requests[0] : user.user_requests;
+
+    return {
+      id: user.id,
+      firstName: user.first_name ?? "",
+      lastName: user.last_name ?? "",
+      email: user.email_address ?? "",
+      studentId: student?.student_id ?? "N/A",
+      yearLevel: String(student?.year_level ?? "N/A"),
+      birthday: student?.birthdate || undefined,
+      program: course?.name ?? "N/A",
+      status: (request?.request_status ?? "pending") as ApplicantStatus,
+      rejectDate: request?.reject_date ?? new Date().toISOString(),
+      submittedAt: request?.submitted_at ?? new Date().toISOString(),
+    };
+  });
+
+  return applicants;
 }
 
 export function applicantName(applicant: Applicant): string {

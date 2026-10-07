@@ -15,7 +15,7 @@ export default async function UserAccountReviewPage() {
 
   if (!admin) redirect("/home");
 
-  const applicants = fetchApplicants();
+  const applicants = await fetchApplicants();
 
   return <UserAccountReview profile={profile} applicants={applicants} />;
 }
