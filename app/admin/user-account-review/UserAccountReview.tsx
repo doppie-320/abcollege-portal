@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import SiteNav from "@/components/NavigationHeader";
 import {
@@ -11,7 +12,7 @@ import {
   formatSubmittedDate,
   type Applicant,
   type ApplicantStatus,
-} from "@/lib/mock/applicants-db";
+} from "@/lib/applicants-db";
 import type { Profile } from "@/lib/auth";
 
 type UserAccountReviewProps = {
@@ -31,7 +32,9 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
   const [query, setQuery] = useState("");
   const [pageIndex, setPageIndex] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(applicants[0]?.id ?? null);
-  const [decisions, setDecisions] = useState<Record<string, ApplicantStatus>>({});
+  const [decisions, setDecisions] = useState<
+    Record<string, Partial<Pick<Applicant, "status" | "rejectDate">>>
+  >({});
   const [rejectOpen, setRejectOpen] = useState(false);
   const rejectRef = useRef<HTMLDivElement>(null);
 
@@ -54,7 +57,7 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
   }, [rejectOpen]);
 
   function statusOf(applicant: Applicant): ApplicantStatus {
-    return decisions[applicant.id] ?? applicant.status;
+    return decisions[applicant.id]?.status ?? applicant.status;
   }
 
   const visible = useMemo(() => {
@@ -95,14 +98,39 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
     setPageIndex(0);
   }
 
-  function decide(status: ApplicantStatus) {
+  async function decide(status: ApplicantStatus, rejectDate?: string) {
+    const supabase = createClient();
     if (!selected) return;
-    setDecisions((prev) => ({ ...prev, [selected.id]: status }));
-  }
+
+    const { error: decisionError } = await supabase
+      .from("user_requests")
+      .update({
+        request_status: status,
+        reject_date: rejectDate || null,
+      })
+      .eq("user_id", selected.id);
+    
+    selected.status = status;
+    if(rejectDate) {
+      console.log("present: ", rejectDate)
+    } else {
+      console.log("not her")
+    }
+    
+    if(decisionError) throw decisionError;
+
+    console.log(selected);
+    console.log(rejectDate)
+  } 
 
   function reject() {
     setRejectOpen(false);
-    decide("declined");
+    decide("reject");
+  }
+
+  function rejectDelay() {
+    setRejectOpen(false);
+    decide("reject", new Date().toISOString());
   }
 
   return (
@@ -297,7 +325,7 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
                   <button
                     type="button"
                     className="ml-auto btn rounded-lg primary px-2 py-1 text-sm font-normal"
-                    onClick={() => decide("approved")}
+                    onClick={() => decide("accept")}
                   >
                     Accept application
                   </button>
@@ -338,7 +366,7 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
                         <button
                           type="button"
                           role="menuitem"
-                          onClick={reject}
+                          onClick={rejectDelay}
                           className="block w-full cursor-pointer rounded-md border-none bg-transparent px-2.5 py-2 text-left text-[13px] leading-snug text-[#b3261e] transition-colors duration-150 ease-in-out hover:bg-[rgba(205,79,60,0.08)]"
                         >
                           Reject (auto delete in 7 days)

@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/client";
 
-export type ApplicantStatus = "pending" | "approved" | "declined";
+export type ApplicantStatus = "pending" | "accept" | "reject";
 
 export type Applicant = {
   id: string;
@@ -18,8 +18,8 @@ export type Applicant = {
 
 export const STATUS_LABELS: Record<ApplicantStatus, string> = {
   pending: "Pending",
-  approved: "Approved",
-  declined: "Declined",
+  accept: "Accept",
+  reject: "Reject",
 };
 
 const UNKNOWN = "—";
@@ -45,6 +45,7 @@ export async function fetchApplicants(): Promise<Applicant[]> {
   const { data: requestData, error: requestError } = await supabase
     .from("users")
     .select("id, first_name, last_name, email_address, students(student_id, year_level, birthdate, courses(name)), user_requests!inner(request_status, reject_date, submitted_at)")
+    .eq("user_requests.request_status", "pending")
 
   if (requestError) {
     console.error("Supabase error:", requestError.message);
