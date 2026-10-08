@@ -1,6 +1,6 @@
 "use client";
 
-import AvatarEditor, { AvatarRemoveButton } from "./AvatarEditor";
+import AvatarEditor from "./AvatarEditor";
 import GwaCalculator from "./GwaCalculator";
 import SiteNav from "@/components/NavigationHeader";
 import type { Profile } from "@/lib/auth";
@@ -34,7 +34,7 @@ export default function ProfileContent({ profile }: ProfileContentProps) {
           <section className="tick-frame animate-fade-in-up">
             <span className="tick-bl" />
             <span className="tick-br" />
-
+    
             <AvatarEditor
               userId={profile.id}
               initials={profile.initials}
@@ -42,14 +42,11 @@ export default function ProfileContent({ profile }: ProfileContentProps) {
               avatarUrl={profile.avatarUrl}
             >
               <div className="min-w-0">
-                <h2 className="mb-2 text-2xl [overflow-wrap:anywhere]">
+                <h2 className="mt-4 mb-2 text-2xl [overflow-wrap:anywhere]">
                   {profile.name}
                 </h2>
                 <div className="mb-4 flex flex-wrap gap-1.5">
                   <span className="tag orange">{profile.program}</span>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <AvatarRemoveButton />
                 </div>
               </div>
             </AvatarEditor>
