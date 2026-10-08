@@ -1,9 +1,6 @@
 "use client";
 
-import AvatarEditor, {
-  AvatarEditButton,
-  AvatarRemoveButton,
-} from "./AvatarEditor";
+import AvatarEditor, { AvatarRemoveButton } from "./AvatarEditor";
 import GwaCalculator from "./GwaCalculator";
 import SiteNav from "@/components/NavigationHeader";
 import type { Profile } from "@/lib/auth";
@@ -52,7 +49,6 @@ export default function ProfileContent({ profile }: ProfileContentProps) {
                   <span className="tag orange">{profile.program}</span>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <AvatarEditButton />
                   <AvatarRemoveButton />
                 </div>
               </div>

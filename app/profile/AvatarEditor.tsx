@@ -23,13 +23,13 @@ type AvatarActions = {
 
 const AvatarActionsContext = createContext<AvatarActions | null>(null);
 
-const EDIT_BUTTON_CLASS = "btn ghost px-2 py-1 text-[10px]"
+
 
 /**
- * Drop this inside <AvatarEditor> to place the edit trigger wherever the
- * layout needs it (e.g. beside the photo, under the name and program).
+ * Icon-only edit trigger. Kept for backwards compatibility —
+ * the default UI now renders this as an overlay on the avatar border.
  */
-export function AvatarEditButton() {
+export function AvatarEditButton({ className = "" }: { className?: string }) {
   const actions = useContext(AvatarActionsContext);
   if (!actions) {
     throw new Error("AvatarEditButton must be rendered inside <AvatarEditor>.");
@@ -41,10 +41,11 @@ export function AvatarEditButton() {
       type="button"
       onClick={onEdit}
       disabled={isSaving}
-      className={EDIT_BUTTON_CLASS}
+      title="Edit profile picture"
+      aria-label="Edit profile picture"
+      className={`flex size-9 items-center justify-center rounded-full border-2 border-paper bg-navy text-paper shadow-md transition hover:bg-blue focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy disabled:cursor-wait disabled:opacity-60 ${className}`}
     >
-      <CameraIcon size={13} />
-      Edit profile picture
+      <CameraIcon size={16} />
     </button>
   );
 }
@@ -105,31 +106,50 @@ export default function AvatarEditor({
     if (file) void save(file);
   }
 
+  function openPicker() {
+    inputRef.current?.click();
+  }
+
   return (
+    <AvatarActionsContext.Provider value={actions}>
     <div className="flex w-full flex-col gap-2.5">
       <span className="eyebrow">STUDENT CARD</span>
 
       <div className="flex w-full items-start gap-6">
         <div className="flex w-32 shrink-0 flex-col items-center gap-2.5">
-          <div className="size-32 shrink-0 rounded-full border-2 border-navy shadow-md">
-            <div className="relative size-full overflow-hidden rounded-full border border-navy-tint bg-blue">
-              {avatarUrl ? (
-                <Image
-                  src={avatarUrl}
-                  alt={`${name}'s profile picture`}
-                  fill
-                  sizes="128px"
-                  className="object-cover"
-                />
-              ) : (
-                <span
-                  aria-hidden="true"
-                  className="flex size-full items-center justify-center font-display text-[40px] font-semibold text-paper"
-                >
-                  {initials}
-                </span>
-              )}
+          <div className="relative size-32 shrink-0">
+            <div className="size-full rounded-full border-2 border-navy shadow-md">
+              <div className="relative size-full overflow-hidden rounded-full border border-navy-tint bg-blue">
+                {avatarUrl ? (
+                  <Image
+                    src={avatarUrl}
+                    alt={`${name}'s profile picture`}
+                    fill
+                    sizes="128px"
+                    className="object-cover"
+                  />
+                ) : (
+                  <span
+                    aria-hidden="true"
+                    className="flex size-full items-center justify-center font-display text-[40px] font-semibold text-paper"
+                  >
+                    {initials}
+                  </span>
+                )}
+              </div>
             </div>
+
+            {/* Camera icon overlaid on the avatar border */}
+            <button
+              type="button"
+              onClick={openPicker}
+              disabled={isSaving}
+              title="Edit profile picture"
+              aria-label="Edit profile picture"
+              className="absolute right-1 bottom-0 flex size-8 items-center justify-center rounded-full border-2 border-paper bg-navy text-paper shadow-md transition hover:bg-blue focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy disabled:cursor-wait disabled:opacity-60"
+            >
+              <CameraIcon size={16} />
+            </button>
           </div>
 
           {/* Saving Message */}
@@ -163,11 +183,10 @@ export default function AvatarEditor({
           />
         </div>
 
-        <AvatarActionsContext.Provider value={actions}>
-          {children}
-        </AvatarActionsContext.Provider>
+        {children}
       </div>
     </div>
+    </AvatarActionsContext.Provider>
   );
 }
 
