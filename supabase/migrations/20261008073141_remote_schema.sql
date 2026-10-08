@@ -8,6 +8,18 @@ CREATE TABLE "public"."admins" (
 ALTER TABLE "public"."admins"
   ENABLE ROW LEVEL SECURITY;
 
+CREATE TABLE "public"."announcement_comments" (
+  "id"              uuid                     NOT NULL DEFAULT gen_random_uuid(),
+  "announcement_id" uuid                     NOT NULL,
+  "author_id"       uuid                     NOT NULL DEFAULT gen_random_uuid(),
+  "content"         text                     NOT NULL DEFAULT ''::text,
+  "created_at"      timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT "announcement_comments_pkey" PRIMARY KEY (id)
+);
+
+ALTER TABLE "public"."announcement_comments"
+  ENABLE ROW LEVEL SECURITY;
+
 CREATE TABLE "public"."announcement_reactions" (
   "announcement_id" uuid NOT NULL,
   "user_id"         uuid NOT NULL,
@@ -28,18 +40,6 @@ CREATE TABLE "public"."announcements" (
 );
 
 ALTER TABLE "public"."announcements"
-  ENABLE ROW LEVEL SECURITY;
-
-CREATE TABLE "public"."comments" (
-  "id"         uuid                     NOT NULL,
-  "author_id"  uuid                     NOT NULL,
-  "parent"     uuid,
-  "content"    text                     NOT NULL,
-  "created_at" timestamp with time zone NOT NULL,
-  CONSTRAINT "comments_pkey" PRIMARY KEY (id)
-);
-
-ALTER TABLE "public"."comments"
   ENABLE ROW LEVEL SECURITY;
 
 CREATE TABLE "public"."courses" (
@@ -75,19 +75,32 @@ CREATE TABLE "public"."students" (
   "student_id" text   NOT NULL,
   "year_level" bigint NOT NULL,
   "course"     bigint NOT NULL,
+  "birthdate"  date,
   CONSTRAINT "students_id_key" UNIQUE (id),
-  CONSTRAINT "students_student_id_key" UNIQUE (student_id)
+  CONSTRAINT "students_pkey" PRIMARY KEY (student_id)
 );
 
 ALTER TABLE "public"."students"
   ENABLE ROW LEVEL SECURITY;
 
+CREATE TABLE "public"."user_requests" (
+  "user_id"      uuid                     NOT NULL,
+  "reject_date"  timestamp with time zone,
+  "submitted_at" timestamp with time zone DEFAULT (now() AT TIME ZONE 'utc'::text),
+  CONSTRAINT "user_requests_pkey" PRIMARY KEY (user_id)
+);
+
+ALTER TABLE "public"."user_requests"
+  ENABLE ROW LEVEL SECURITY;
+
 CREATE TABLE "public"."users" (
-  "id"          uuid                     NOT NULL,
-  "last_name"   text,
-  "first_name"  text,
-  "created_at"  timestamp with time zone NOT NULL DEFAULT now(),
-  "avatar_path" text,
+  "id"            uuid                     NOT NULL,
+  "last_name"     text,
+  "first_name"    text,
+  "created_at"    timestamp with time zone NOT NULL DEFAULT now(),
+  "avatar_path"   text,
+  "email_address" text                     NOT NULL,
+  CONSTRAINT "users_email_address_key" UNIQUE (email_address),
   CONSTRAINT "users_pkey" PRIMARY KEY (id)
 );
 
@@ -120,8 +133,8 @@ CREATE TYPE "public"."user_status" AS ENUM (
   'reject'
 );
 
-ALTER TABLE "public"."users"
-  ADD COLUMN "request_status" public.user_status NOT NULL DEFAULT 'pending'::public.user_status;
+ALTER TABLE "public"."user_requests"
+  ADD COLUMN "request_status" public.user_status NOT NULL;
 
 CREATE OR REPLACE FUNCTION public.is_admin()
   RETURNS boolean
@@ -144,6 +157,7 @@ CREATE OR REPLACE FUNCTION public.on_user_register()
   user_role text;
   f_name text;
   l_name text;
+  email text;
 BEGIN
 
   IF (NEW.raw_app_meta_data ->> 'provider') = 'google' THEN
@@ -162,6 +176,11 @@ BEGIN
     NEW.raw_user_meta_data ->> 'family_name',
     substr(NEW.raw_user_meta_data ->> 'full_name', length(split_part(NEW.raw_user_meta_data ->> 'full_name', ' ', 1)) + 2),
     ''
+  );
+
+  email := COALESCE(
+    NEW.raw_user_meta_data ->> 'email_address',
+    NEW.raw_user_meta_data ->> 'email'
   );
 
   -- 1. Create base record in public.users
@@ -190,11 +209,11 @@ BEGIN
   RETURN NEW;
 END;$function$;
 
+ALTER TABLE "public"."announcement_comments"
+  ADD CONSTRAINT "announcement_comments_announcement_id_fkey" FOREIGN KEY (announcement_id) REFERENCES public.announcements(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
 ALTER TABLE "public"."announcement_reactions"
   ADD CONSTRAINT "announcement_reactions_announcement_id_fkey" FOREIGN KEY (announcement_id) REFERENCES public.announcements(id);
-
-ALTER TABLE "public"."comments"
-  ADD CONSTRAINT "comments_parent_fkey" FOREIGN KEY (parent) REFERENCES public.announcements(id) ON DELETE CASCADE;
 
 ALTER TABLE "public"."students"
   ADD CONSTRAINT "students_course_fkey" FOREIGN KEY (course) REFERENCES public.courses(id);
@@ -205,20 +224,23 @@ ALTER TABLE "public"."users"
 ALTER TABLE "public"."admins"
   ADD CONSTRAINT "admins_id_fkey" FOREIGN KEY (id) REFERENCES public.users(id) ON DELETE CASCADE;
 
+ALTER TABLE "public"."announcement_comments"
+  ADD CONSTRAINT "announcement_comments_author_id_fkey" FOREIGN KEY (author_id) REFERENCES public.users(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
 ALTER TABLE "public"."announcement_reactions"
   ADD CONSTRAINT "announcement_reactions_user_id_fkey" FOREIGN KEY (user_id) REFERENCES public.users(id);
 
 ALTER TABLE "public"."announcements"
   ADD CONSTRAINT "announcements_author_id_fkey" FOREIGN KEY (author_id) REFERENCES public.users(id);
 
-ALTER TABLE "public"."comments"
-  ADD CONSTRAINT "comments_author_id_fkey" FOREIGN KEY (author_id) REFERENCES public.users(id) ON DELETE CASCADE;
-
 ALTER TABLE "public"."faculty"
   ADD CONSTRAINT "faculty_id_fkey" FOREIGN KEY (id) REFERENCES public.users(id) ON DELETE CASCADE;
 
 ALTER TABLE "public"."students"
   ADD CONSTRAINT "students_id_fkey" FOREIGN KEY (id) REFERENCES public.users(id) ON DELETE CASCADE;
+
+ALTER TABLE "public"."user_requests"
+  ADD CONSTRAINT "user_requests_user_id_fkey" FOREIGN KEY (user_id) REFERENCES public.users(id);
 
 ALTER TABLE "public"."students"
   ADD CONSTRAINT "students_year_level_fkey" FOREIGN KEY (year_level) REFERENCES public.yearlevels(id);
@@ -232,6 +254,27 @@ CREATE POLICY "Admins can see their own status" ON "public"."admins"
   FOR SELECT
   TO "authenticated"
   USING ((auth.uid() = id));
+
+CREATE POLICY "Authenticated can edit their own comments" ON "public"."announcement_comments"
+  FOR UPDATE
+  TO "authenticated"
+  USING ((author_id = ( SELECT auth.uid() AS uid)))
+  WITH CHECK ((author_id = ( SELECT auth.uid() AS uid)));
+
+CREATE POLICY "Authenticated can read all comments" ON "public"."announcement_comments"
+  FOR SELECT
+  TO "authenticated"
+  USING (true);
+
+CREATE POLICY "Authenticated can write their own comments" ON "public"."announcement_comments"
+  FOR INSERT
+  TO "authenticated"
+  WITH CHECK ((author_id = ( SELECT auth.uid() AS uid)));
+
+CREATE POLICY "Authors and admins can delete comments" ON "public"."announcement_comments"
+  FOR DELETE
+  TO "authenticated"
+  USING (((author_id = ( SELECT auth.uid() AS uid)) OR ( SELECT public.is_admin() AS is_admin)));
 
 CREATE POLICY "Enable delete for users based on user_id" ON "public"."announcement_reactions"
   FOR DELETE
@@ -274,10 +317,20 @@ CREATE POLICY "Anyone can read course data" ON "public"."courses"
   TO "anon", "authenticated"
   USING (true);
 
-CREATE POLICY "Users can read their own profile" ON "public"."users"
+CREATE POLICY "allow read for all user" ON "public"."students"
   FOR SELECT
-  TO "authenticated"
-  USING ((auth.uid() = id));
+  TO PUBLIC
+  USING (true);
+
+CREATE POLICY "Enable read access for all users" ON "public"."user_requests"
+  FOR SELECT
+  TO PUBLIC
+  USING (true);
+
+CREATE POLICY "Authenticated users can read profiles" ON "public"."users"
+  FOR SELECT
+  TO PUBLIC
+  USING (true);
 
 CREATE POLICY "insert users" ON "public"."users"
   FOR INSERT
@@ -387,6 +440,24 @@ GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON
 
 GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."admins" TO "service_role";
 
+REVOKE ALL ON TABLE "public"."announcement_comments" FROM "anon";
+
+GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE ON TABLE "public"."announcement_comments" TO "anon";
+
+REVOKE ALL ON TABLE "public"."announcement_comments" FROM "authenticated";
+
+REVOKE ALL ("content") ON TABLE "public"."announcement_comments" FROM "authenticated";
+
+GRANT UPDATE ("content") ON TABLE "public"."announcement_comments" TO "authenticated";
+
+GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE ON TABLE "public"."announcement_comments" TO "authenticated";
+
+REVOKE ALL ON TABLE "public"."announcement_comments" FROM "postgres";
+
+GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."announcement_comments" TO "postgres";
+
+GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."announcement_comments" TO "service_role";
+
 GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."announcement_reactions" TO "anon", "authenticated";
 
 REVOKE ALL ON TABLE "public"."announcement_reactions" FROM "postgres";
@@ -402,14 +473,6 @@ REVOKE ALL ON TABLE "public"."announcements" FROM "postgres";
 GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."announcements" TO "postgres";
 
 GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."announcements" TO "service_role";
-
-GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."comments" TO "anon", "authenticated";
-
-REVOKE ALL ON TABLE "public"."comments" FROM "postgres";
-
-GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."comments" TO "postgres";
-
-GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."comments" TO "service_role";
 
 GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."courses" TO "anon", "authenticated";
 
@@ -442,6 +505,14 @@ REVOKE ALL ON TABLE "public"."students" FROM "postgres";
 GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."students" TO "postgres";
 
 GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."students" TO "service_role";
+
+GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."user_requests" TO "anon", "authenticated";
+
+REVOKE ALL ON TABLE "public"."user_requests" FROM "postgres";
+
+GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."user_requests" TO "postgres";
+
+GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."user_requests" TO "service_role";
 
 GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."users" TO "anon", "authenticated";
 

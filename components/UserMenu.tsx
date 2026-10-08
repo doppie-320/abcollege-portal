@@ -8,15 +8,30 @@ import { logout } from "@/app/profile/actions";
 type Props = {
   initials: string;
   name: string;
+  /** Replaces the visible chip text, e.g. admins get "ADMIN" instead of their name. */
+  nameOverride?: string;
   userId?: string;
   isProfilePage?: boolean;
+  /** Overrides the profile entry so admins are not sent to the student page. */
+  profileHref?: string;
+  profileLabel?: string;
   avatarUrl: string;
 };
 
-export default function UserMenu({ initials, name, userId, avatarUrl, isProfilePage = false }: Props) {
+export default function UserMenu({
+  initials,
+  name,
+  nameOverride,
+  userId,
+  avatarUrl,
+  isProfilePage = false,
+  profileHref = "/profile",
+  profileLabel = "Student profile"
+}: Props) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const panelId = useId();
+  const chipLabel = nameOverride ?? name;
 
   useEffect(() => {
     if (!open) return;
@@ -58,19 +73,19 @@ export default function UserMenu({ initials, name, userId, avatarUrl, isProfileP
         ) : (
           <span className="dot">{initials}</span>
         )}
-        <span className="userMenuName">{name}</span>
+        <span className="userMenuName">{chipLabel}</span>
         <ChevronIcon open={open} />
       </button>
 
       {open && (
         <div className="userMenuPanel" id={panelId}>
           <Link
-            href="/profile"
+            href={profileHref}
             className="userMenuItem"
             aria-current={isProfilePage ? "page" : undefined}
             onClick={() => setOpen(false)}
           >
-            <span className="userMenuItemFace">Student profile</span>
+            <span className="userMenuItemFace">{profileLabel}</span>
           </Link>
 
           <form action={logout} className="userMenuForm">
