@@ -111,24 +111,25 @@ export default function AvatarEditor({
 
       <div className="flex w-full items-start gap-6">
         <div className="flex w-32 shrink-0 flex-col items-center gap-2.5">
-          {/* Profile Picture */}
-          <div className="relative size-32 shrink-0 overflow-hidden rounded-full border border-navy-tint bg-blue">
-            {avatarUrl ? (
-              <Image
-                src={avatarUrl}
-                alt={`${name}'s profile picture`}
-                fill
-                sizes="128px"
-                className="object-cover"
-              />
-            ) : (
-              <span
-                aria-hidden="true"
-                className="flex size-full items-center justify-center font-display text-[40px] font-semibold text-paper"
-              >
-                {initials}
-              </span>
-            )}
+          <div className="size-32 shrink-0 rounded-full border-2 border-navy shadow-md">
+            <div className="relative size-full overflow-hidden rounded-full border border-navy-tint bg-blue">
+              {avatarUrl ? (
+                <Image
+                  src={avatarUrl}
+                  alt={`${name}'s profile picture`}
+                  fill
+                  sizes="128px"
+                  className="object-cover"
+                />
+              ) : (
+                <span
+                  aria-hidden="true"
+                  className="flex size-full items-center justify-center font-display text-[40px] font-semibold text-paper"
+                >
+                  {initials}
+                </span>
+              )}
+            </div>
           </div>
 
           {/* Saving Message */}
