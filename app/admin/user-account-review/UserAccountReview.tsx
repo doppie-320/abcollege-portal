@@ -111,16 +111,9 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
       .eq("user_id", selected.id);
     
     selected.status = status;
-    if(rejectDate) {
-      console.log("present: ", rejectDate)
-    } else {
-      console.log("not her")
-    }
     
     if(decisionError) throw decisionError;
 
-    console.log(selected);
-    console.log(rejectDate)
   } 
 
   function reject() {
