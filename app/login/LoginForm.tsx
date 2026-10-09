@@ -2,7 +2,9 @@
 
 import { startTransition, useActionState, useState, type FormEvent } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import ConfirmDialog from "@/app/home/ConfirmDialog";
 import ForgotPasswordModal from "./ForgotPasswordModal";
 import { login } from "./actions";
 
@@ -41,13 +43,27 @@ function validate(fields: Fields): Errors {
   return errors;
 }
 
-export default function LoginForm() {
+type LoginFormProps = {
+  initialError: string;
+  /** Set when a Google account with no account request just signed in. */
+  noAccountEmail: string;
+};
+
+export default function LoginForm({ initialError, noAccountEmail }: LoginFormProps) {
+  const router = useRouter();
   const [fields, setFields] = useState<Fields>(EMPTY_FIELDS);
   const [errors, setErrors] = useState<Errors>({});
   const [showPassword, setShowPassword] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  // Only for a failed click here; errors from the URL come in fresh as props,
+  // because cacheComponents keeps this component's state across navigations.
   const [googleError, setGoogleError] = useState("");
   const [forgotOpen, setForgotOpen] = useState(false);
+  const [dismissedEmail, setDismissedEmail] = useState("");
+  // Derived from props (not initial state) so coming back to this page later,
+  // e.g. after finishing sign-up, doesn't reopen a stale dialog.
+  const noAccountOpen = noAccountEmail !== "" && noAccountEmail !== dismissedEmail;
+  const shownGoogleError = googleError || initialError;
   const [state, formAction, pending] = useActionState(login, {});
 
   function setField<K extends keyof Fields>(key: K, value: Fields[K]) {
@@ -68,6 +84,8 @@ export default function LoginForm() {
 
   const handleGoogleLogin = async () => {
     setGoogleLoading(true);
+    // Clear a leftover "came from sign-up" marker from an abandoned sign-up.
+    document.cookie = "oauth_from=; path=/; max-age=0";
     const supabase = createClient();
 
     const { error } = await supabase.auth.signInWithOAuth({
@@ -83,6 +101,14 @@ export default function LoginForm() {
 
       console.error("google login failed:", error);      
     };
+  }
+
+  async function declineSignup() {
+    // They don't want an account, so drop the Google session the callback kept.
+    setDismissedEmail(noAccountEmail);
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.replace("/login");
   }
 
   return (
@@ -169,6 +195,26 @@ export default function LoginForm() {
 
       <ForgotPasswordModal open={forgotOpen} onClose={() => setForgotOpen(false)} />
 
+      {noAccountOpen && (
+        <ConfirmDialog
+          tone="warning"
+          title="Account not found"
+          message={
+            <>
+              There&apos;s no account for <strong>{noAccountEmail}</strong> yet. Do you want
+              to request an account?
+            </>
+          }
+          confirmLabel="Sign up"
+          busyLabel="Opening…"
+          cancelLabel="No"
+          onCancel={declineSignup}
+          // Keeps the Google session, so sign-up opens on the "few more details" step.
+          // replace, not push, so Back doesn't return to this dialog.
+          onConfirm={() => router.replace("/signup")}
+        />
+      )}
+
       <div className="divider">
         <span>or</span>
       </div>
@@ -184,8 +230,8 @@ export default function LoginForm() {
         {googleLoading ? "Redirecting…" : "Continue with Google"}
       </button>
 
-      {googleError.trim() !== "" && 
-        <p className="error">{googleError}</p>
+      {shownGoogleError.trim() !== "" && 
+        <p className="error">{shownGoogleError}</p>
       }
 
       <style jsx global>{`

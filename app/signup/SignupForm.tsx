@@ -5,7 +5,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import DatePicker from "@/components/DatePicker";
 import Select from "@/components/Select";
-import { register } from "./actions";
+import { register, registerWithGoogle } from "./actions";
 
 type Course = {
   id: number;
@@ -17,9 +17,18 @@ type YearLevel = {
   name: string;
 };
 
+type GoogleUser = {
+  email: string;
+  firstName: string;
+  lastName: string;
+};
+
 type SignupFormProps = {
   courses: Course[];
   yearLevels: YearLevel[];
+  /** Set when the user just came back from Google and still needs to fill in their details. */
+  googleUser: GoogleUser | null;
+  oauthFailed: boolean;
 };
 
 const TODAY_ISO = new Date().toISOString().slice(0, 10);
@@ -91,6 +100,8 @@ function validate(fields: Fields): Errors {
 }
 
 type GoogleFields = {
+  firstName: string;
+  lastName: string;
   studentId: string;
   yearLevel: string;
   program: string;
@@ -99,6 +110,8 @@ type GoogleFields = {
 };
 
 const EMPTY_GOOGLE_FIELDS: GoogleFields = {
+  firstName: "",
+  lastName: "",
   studentId: "",
   yearLevel: "",
   program: "",
@@ -111,6 +124,8 @@ type GoogleErrors = Partial<Record<keyof GoogleFields, string>>;
 function validateGoogleFields(fields: GoogleFields): GoogleErrors {
   const errors: GoogleErrors = {};
 
+  if (!fields.firstName.trim()) errors.firstName = "First name is required.";
+  if (!fields.lastName.trim()) errors.lastName = "Last name is required.";
   if (!fields.studentId.trim()) errors.studentId = "Student ID is required.";
   if (!fields.yearLevel) errors.yearLevel = "Select a year level.";
   if (!fields.program) errors.program = "Select a program.";
@@ -124,20 +139,49 @@ function validateGoogleFields(fields: GoogleFields): GoogleErrors {
 
 type Step = "form" | "googleDetails" | "googleConfirm";
 
-export default function SignupForm({courses, yearLevels,}: SignupFormProps) {
+export default function SignupForm({courses, yearLevels, googleUser, oauthFailed}: SignupFormProps) {
   const [fields, setFields] = useState<Fields>(EMPTY_FIELDS);
   const [errors, setErrors] = useState<Errors>({});
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);  
   const [successDismissed, setSuccessDismissed] = useState(false);
 
-  const [step, setStep] = useState<Step>("form");
-  const [googleFields, setGoogleFields] = useState<GoogleFields>(EMPTY_GOOGLE_FIELDS);
+  const [step, setStep] = useState<Step>(googleUser ? "googleDetails" : "form");
+  const [googleFields, setGoogleFields] = useState<GoogleFields>({
+    ...EMPTY_GOOGLE_FIELDS,
+    firstName: googleUser?.firstName ?? "",
+    lastName: googleUser?.lastName ?? "",
+  });
   const [googleErrors, setGoogleErrors] = useState<GoogleErrors>({});
   const [googleLoading, setGoogleLoading] = useState(false);
+  // Only for a failed click here; the URL error comes in fresh as a prop.
+  const [googleError, setGoogleError] = useState("");
+  const shownGoogleError =
+    googleError || (oauthFailed ? "Sign up with Google failed. Please try again." : "");
+
+  // cacheComponents keeps this component's state when navigating away and back,
+  // so the initial values above can be stale. When a (different) Google user
+  // arrives, start them on the details step with their own name. Only on
+  // arrival: submitting signs them out (googleUser becomes null) and the
+  // success screen has to stay up.
+  const [seenGoogleEmail, setSeenGoogleEmail] = useState(googleUser?.email ?? "");
+  if (googleUser && googleUser.email !== seenGoogleEmail) {
+    setSeenGoogleEmail(googleUser.email);
+    setStep("googleDetails");
+    setGoogleFields({
+      ...EMPTY_GOOGLE_FIELDS,
+      firstName: googleUser?.firstName ?? "",
+      lastName: googleUser?.lastName ?? "",
+    });
+    setGoogleErrors({});
+    setSuccessDismissed(true);
+  }
 
   const [state, formAction, pending] = useActionState(register, {});
-  const showSuccess = state.success && !pending && !successDismissed;
+  const [googleState, googleFormAction, googlePending] = useActionState(registerWithGoogle, {});
+  const showSuccess =
+    ((state.success && !pending) || (googleState.success && !googlePending)) && !successDismissed;
+  const successEmail = googleState.success ? seenGoogleEmail : fields.email;
 
   const courseOptions = courses.map((course) => ({
     value: String(course.id),
@@ -148,6 +192,9 @@ export default function SignupForm({courses, yearLevels,}: SignupFormProps) {
     value: String(yearLevel.id),
     label: yearLevel.name,
   }));
+
+  const labelOf = (options: { value: string; label: string }[], value: string) =>
+    options.find((option) => option.value === value)?.label ?? value;
 
   function setField<K extends keyof Fields>(key: K, value: Fields[K]) {
     setFields((prev) => ({ ...prev, [key]: value }));
@@ -185,20 +232,13 @@ export default function SignupForm({courses, yearLevels,}: SignupFormProps) {
 
   async function handleGoogleSignup() {
     setGoogleLoading(true);
-    try {
-      sessionStorage.setItem(
-        "pendingSignupProfile",
-        JSON.stringify({
-          studentId: googleFields.studentId.trim(),
-          yearLevel: googleFields.yearLevel,
-          program: googleFields.program,
-          birthday: googleFields.birthday || null,
-          birthdayConsent: googleFields.birthday ? googleFields.birthdayConsent : false,
-        }),
-      );
-    } catch {
-      // sessionStorage unavailable (private browsing, etc.) — proceed without it.
-    }
+    setGoogleError("");
+
+    // Google handles the account itself, then sends the user back here to fill
+    // in their student details (see app/auth/callback/route.ts).
+    // Same callback URL as the login button; this cookie is how the callback
+    // knows to come back to sign-up (expires after 10 minutes).
+    document.cookie = "oauth_from=signup; path=/; max-age=600; samesite=lax";
 
     const supabase = createClient();
     const { error } = await supabase.auth.signInWithOAuth({
@@ -207,11 +247,37 @@ export default function SignupForm({courses, yearLevels,}: SignupFormProps) {
         redirectTo: `${window.location.origin}/auth/callback`,
       },
     });
-    if (error) setGoogleLoading(false);
+
+    if (error) {
+      setGoogleLoading(false);
+      setGoogleError("Sign up with Google failed. Please try again.");
+      console.error("google signup failed:", error);
+    }
+  }
+
+  async function handleGoogleCancel() {
+    // Drop the half-finished Google session so the regular form starts clean.
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    setGoogleFields(EMPTY_GOOGLE_FIELDS);
+    setGoogleErrors({});
+    setStep("form");
+  }
+
+  function handleGoogleConfirm() {
+    const formData = new FormData();
+    formData.set("firstName", googleFields.firstName);
+    formData.set("lastName", googleFields.lastName);
+    formData.set("studentId", googleFields.studentId);
+    formData.set("yearLevelId", googleFields.yearLevel);
+    formData.set("courseId", googleFields.program);
+
+    setSuccessDismissed(false);
+    startTransition(() => googleFormAction(formData));
   }
 
   const googleConfirmDisabled =
-    googleLoading || (Boolean(googleFields.birthday) && !googleFields.birthdayConsent);
+    googlePending || (Boolean(googleFields.birthday) && !googleFields.birthdayConsent);
 
   return (
     <>
@@ -221,7 +287,7 @@ export default function SignupForm({courses, yearLevels,}: SignupFormProps) {
           <h2>Request submitted</h2>
           <p className="mono" style={{ color: "var(--ink-soft)", fontSize: 13 }}>
             A council admin will review your details and approve your account.
-            You&apos;ll get an email at <strong>{fields.email}</strong> once it&apos;s ready.
+            You&apos;ll get an email at <strong>{successEmail}</strong> once it&apos;s ready.
           </p>
           <button
             type="button"
@@ -230,6 +296,8 @@ export default function SignupForm({courses, yearLevels,}: SignupFormProps) {
             onClick={() => {
               setFields(EMPTY_FIELDS);
               setErrors({});
+              setGoogleFields(EMPTY_GOOGLE_FIELDS);
+              setStep("form");
               setSuccessDismissed(true);
             }}
           >
@@ -245,11 +313,36 @@ export default function SignupForm({courses, yearLevels,}: SignupFormProps) {
             </div>
           </div>
           <p className="stepHint">
-            Google will handle your name, email, and password. We still need these to
-            set up your student profile.
+            Signed in with Google as <strong>{googleUser?.email}</strong>. Check that your
+            name is split correctly, then fill in the rest to set up your student profile.
           </p>
 
           <form onSubmit={handleGoogleDetailsSubmit} noValidate>
+            <div className="fieldRow">
+              <div className="field">
+                <label htmlFor="gFirstName">First Name</label>
+                <input
+                  id="gFirstName"
+                  type="text"
+                  placeholder="e.g. Iya"
+                  value={googleFields.firstName}
+                  onChange={(e) => setGoogleField("firstName", e.target.value)}
+                />
+                {googleErrors.firstName && <p className="error">{googleErrors.firstName}</p>}
+              </div>
+              <div className="field">
+                <label htmlFor="gLastName">Last Name</label>
+                <input
+                  id="gLastName"
+                  type="text"
+                  placeholder="e.g. Rei"
+                  value={googleFields.lastName}
+                  onChange={(e) => setGoogleField("lastName", e.target.value)}
+                />
+                {googleErrors.lastName && <p className="error">{googleErrors.lastName}</p>}
+              </div>
+            </div>
+
             <div className="field">
               <label htmlFor="gStudentId">Student ID</label>
               <input
@@ -306,7 +399,7 @@ export default function SignupForm({courses, yearLevels,}: SignupFormProps) {
             </div>
 
             <div className="stepActions">
-              <button type="button" className="btn ghost" onClick={() => setStep("form")}>
+              <button type="button" className="btn ghost" onClick={handleGoogleCancel}>
                 Back
               </button>
               <button type="submit" className="btn submitBtn" style={{ flex: 1 }}>
@@ -326,16 +419,28 @@ export default function SignupForm({courses, yearLevels,}: SignupFormProps) {
 
           <ul className="summaryList">
             <li>
+              <span>First Name</span>
+              <strong>{googleFields.firstName.trim()}</strong>
+            </li>
+            <li>
+              <span>Last Name</span>
+              <strong>{googleFields.lastName.trim()}</strong>
+            </li>
+            <li>
+              <span>Email</span>
+              <strong>{googleUser?.email}</strong>
+            </li>
+            <li>
               <span>Student ID</span>
               <strong>{googleFields.studentId}</strong>
             </li>
             <li>
               <span>Year Level</span>
-              <strong>{googleFields.yearLevel}</strong>
+              <strong>{labelOf(yearLevelsOptions, googleFields.yearLevel)}</strong>
             </li>
             <li>
               <span>Program</span>
-              <strong>{googleFields.program}</strong>
+              <strong>{labelOf(courseOptions, googleFields.program)}</strong>
             </li>
             <li>
               <span>Birthday</span>
@@ -357,11 +462,14 @@ export default function SignupForm({courses, yearLevels,}: SignupFormProps) {
             </label>
           )}
 
+          {googleState.error && <p className="formError" role="alert">{googleState.error}</p>}
+
           <div className="stepActions">
             <button
               type="button"
               className="btn ghost"
               onClick={() => setStep("googleDetails")}
+              disabled={googlePending}
             >
               Back
             </button>
@@ -369,10 +477,10 @@ export default function SignupForm({courses, yearLevels,}: SignupFormProps) {
               type="button"
               className="btn submitBtn"
               style={{ flex: 1 }}
-              onClick={handleGoogleSignup}
+              onClick={handleGoogleConfirm}
               disabled={googleConfirmDisabled}
             >
-              {googleLoading ? "Redirecting…" : "Continue with Google"}
+              {googlePending ? "Working..." : "Request account"}
             </button>
           </div>
         </div>
@@ -551,8 +659,7 @@ export default function SignupForm({courses, yearLevels,}: SignupFormProps) {
               {pending ? "Working..." : "Request account" }
             </button> 
           </form>
-          {/*
-            <div className="divider">
+          <div className="divider">
             <span>or</span>
           </div>
 
@@ -560,12 +667,14 @@ export default function SignupForm({courses, yearLevels,}: SignupFormProps) {
             type="button"
             className="btn googleBtn"
             style={{ width: "100%" }}
-            onClick={() => setStep("googleDetails")}
+            onClick={handleGoogleSignup}
+            disabled={googleLoading}
           >
             <GoogleIcon />
-            Sign up with Google
+            {googleLoading ? "Redirecting…" : "Sign up with Google"}
           </button>
-          */}
+
+          {shownGoogleError && <p className="error">{shownGoogleError}</p>}
           
         </div>
       )}

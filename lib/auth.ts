@@ -41,6 +41,35 @@ function toId(value: unknown): number | null {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
+type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
+
+/**
+ * - approved: an admin, or an admin accepted their account request
+ * - pending / rejected: what the admin decided on their request
+ * - no-account: signed in (e.g. with Google) but never filled in the sign-up
+ *   form, so there's no student record to review
+ */
+export type AccountStatus = "approved" | "pending" | "rejected" | "no-account";
+
+export async function getAccountStatus(
+  supabase: SupabaseServerClient,
+  userId: string,
+): Promise<AccountStatus> {
+  const [{ data: adminRow }, { data: request }, { data: student }] = await Promise.all([
+    supabase.from("admins").select("id").eq("id", userId).maybeSingle(),
+    supabase.from("user_requests").select("request_status").eq("user_id", userId).maybeSingle(),
+    supabase.from("students").select("id").eq("id", userId).maybeSingle(),
+  ]);
+
+  if (adminRow || request?.request_status === "accept") return "approved";
+  if (!student) return "no-account";
+  return request?.request_status === "reject" ? "rejected" : "pending";
+}
+
+export async function isApproved(supabase: SupabaseServerClient, userId: string): Promise<boolean> {
+  return (await getAccountStatus(supabase, userId)) === "approved";
+}
+
 export async function getProfile(): Promise<Profile> {
   const supabase = await createClient();
 
@@ -48,6 +77,7 @@ export async function getProfile(): Promise<Profile> {
   const authUser = authData?.user;
 
   if (authError || !authUser) redirect("/login");
+  if (!(await isApproved(supabase, authUser.id))) redirect("/login?error=pending");
 
   const { data: user } = await supabase
     .from("users")
