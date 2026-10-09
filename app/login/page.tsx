@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import LoginForm from "./LoginForm";
 import { createClient } from "@/lib/supabase/server";
-import { LOGIN_ERRORS } from "./messages";
+import { LOGIN_ERRORS, toNotice } from "./messages";
 
 export const metadata: Metadata = {
   title: "Log In — SOE Student Portal",
@@ -62,7 +62,7 @@ export default async function LoginPage({
 
       <div className="formside">
         <LoginForm
-          initialError={error ? LOGIN_ERRORS[error] ?? "" : ""}
+          initialNotice={error && LOGIN_ERRORS[error] ? toNotice(error, LOGIN_ERRORS[error]) : null}
           noAccountEmail={noAccountEmail}
         />
       </div>

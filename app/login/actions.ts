@@ -23,7 +23,7 @@ export async function login(_prev: ActionResult, formData: FormData) : Promise<A
 
     if (status !== "approved") {
         await supabase.auth.signOut();
-        return { error: STATUS_MESSAGES[status] };
+        return { error: STATUS_MESSAGES[status], status };
     }
 
     redirect("/home");

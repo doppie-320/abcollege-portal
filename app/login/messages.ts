@@ -11,3 +11,14 @@ export const LOGIN_ERRORS: Record<string, string> = {
   pending: STATUS_MESSAGES.pending,
   rejected: STATUS_MESSAGES.rejected,
 };
+
+/** How the login page styles a message (see StatusNotice). */
+export type NoticeKind = "pending" | "rejected" | "error";
+
+export type Notice = { kind: NoticeKind; message: string };
+
+/** `status` is an account status or a `?error=` key from the URL. */
+export function toNotice(status: string | undefined, message: string): Notice {
+  const kind: NoticeKind = status === "pending" || status === "rejected" ? status : "error";
+  return { kind, message };
+}

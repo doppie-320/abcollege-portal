@@ -1,11 +1,13 @@
 "use client";
 
-import { startTransition, useActionState, useState, type FormEvent } from "react";
+import { startTransition, useActionState, useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import ConfirmDialog from "@/app/home/ConfirmDialog";
 import ForgotPasswordModal from "./ForgotPasswordModal";
+import StatusNotice from "./StatusNotice";
+import { toNotice, type Notice } from "./messages";
 import { login } from "./actions";
 
 type Fields = {
@@ -44,12 +46,13 @@ function validate(fields: Fields): Errors {
 }
 
 type LoginFormProps = {
-  initialError: string;
+  /** Status/error from the URL, e.g. after Google sends the user back. */
+  initialNotice: Notice | null;
   /** Set when a Google account with no account request just signed in. */
   noAccountEmail: string;
 };
 
-export default function LoginForm({ initialError, noAccountEmail }: LoginFormProps) {
+export default function LoginForm({ initialNotice, noAccountEmail }: LoginFormProps) {
   const router = useRouter();
   const [fields, setFields] = useState<Fields>(EMPTY_FIELDS);
   const [errors, setErrors] = useState<Errors>({});
@@ -63,8 +66,60 @@ export default function LoginForm({ initialError, noAccountEmail }: LoginFormPro
   // Derived from props (not initial state) so coming back to this page later,
   // e.g. after finishing sign-up, doesn't reopen a stale dialog.
   const noAccountOpen = noAccountEmail !== "" && noAccountEmail !== dismissedEmail;
-  const shownGoogleError = googleError || initialError;
   const [state, formAction, pending] = useActionState(login, {});
+
+  // The notice is for one moment, not for the page:
+  // - the URL notice (?error=...) only lasts until the next attempt, and the
+  //   param is stripped so a refresh doesn't bring it back;
+  // - cacheComponents keeps this component alive when you leave /login (e.g.
+  //   log in, then log out), so a result from that earlier visit is "stale".
+  const [urlNoticeUsed, setUrlNoticeUsed] = useState(false);
+  const [staleState, setStaleState] = useState<typeof state | null>(null);
+  const [noticeHidden, setNoticeHidden] = useState(false);
+
+  const [prevInitialNotice, setPrevInitialNotice] = useState(initialNotice);
+  if (initialNotice !== prevInitialNotice) {
+    setPrevInitialNotice(initialNotice);
+    setUrlNoticeUsed(false);
+    setNoticeHidden(false);
+  }
+
+  // Most recent first: a failed Google click, then the last form submit, then
+  // whatever the URL brought in.
+  const notice: Notice | null = googleError
+    ? toNotice(undefined, googleError)
+    : state.error && state !== staleState
+      ? toNotice(state.status, state.error)
+      : urlNoticeUsed
+        ? null
+        : initialNotice;
+  // Hidden while a new attempt is in flight, so the old result doesn't linger.
+  const showNotice = notice !== null && !noticeHidden && !pending;
+
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.has("error")) {
+      url.searchParams.delete("error");
+      window.history.replaceState(null, "", url);
+    }
+  }, []);
+
+  // Runs when this page is left (unmounted or hidden by cacheComponents), and
+  // when a newer result replaces `state`. Either way that result is now old.
+  // (No need to touch the URL notice: coming back brings fresh props.)
+  useEffect(() => {
+    return () => {
+      setStaleState(state);
+      setGoogleError("");
+      setGoogleLoading(false);
+    };
+  }, [state]);
+
+  function startAttempt() {
+    setGoogleError("");
+    setUrlNoticeUsed(true);
+    setNoticeHidden(false);
+  }
 
   function setField<K extends keyof Fields>(key: K, value: Fields[K]) {
     setFields((prev) => ({ ...prev, [key]: value }));
@@ -79,11 +134,13 @@ export default function LoginForm({ initialError, noAccountEmail }: LoginFormPro
     // Calling formAction by hand (not via a form/button prop) needs startTransition,
     // otherwise `pending` never flips to true.
     const formData = new FormData(event.currentTarget);
+    startAttempt();
     startTransition(() => formAction(formData));
   }
 
   const handleGoogleLogin = async () => {
     setGoogleLoading(true);
+    startAttempt();
     // Clear a leftover "came from sign-up" marker from an abandoned sign-up.
     document.cookie = "oauth_from=; path=/; max-age=0";
     const supabase = createClient();
@@ -97,7 +154,7 @@ export default function LoginForm({ initialError, noAccountEmail }: LoginFormPro
 
     if (error) {      
       setGoogleLoading(false);      
-      setGoogleError("Login with Google failed!");
+      setGoogleError("Log in with Google failed. Please try again.");
 
       console.error("google login failed:", error);      
     };
@@ -122,6 +179,10 @@ export default function LoginForm({ initialError, noAccountEmail }: LoginFormPro
           Don&apos;t have an account? <Link href="/signup">Sign up</Link>
         </span>
       </div>
+
+      {showNotice && (
+        <StatusNotice notice={notice} onDismiss={() => setNoticeHidden(true)} />
+      )}
 
       <form onSubmit={handleSubmit} noValidate>
         <div className="field">
@@ -181,7 +242,6 @@ export default function LoginForm({ initialError, noAccountEmail }: LoginFormPro
           {errors.password && <p className="error">{errors.password}</p>}
         </div>
 
-        {state.error && <p className="formError" role="alert">{state.error}</p>}
 
         <button
           type="submit"
@@ -230,9 +290,6 @@ export default function LoginForm({ initialError, noAccountEmail }: LoginFormPro
         {googleLoading ? "Redirecting…" : "Continue with Google"}
       </button>
 
-      {shownGoogleError.trim() !== "" && 
-        <p className="error">{shownGoogleError}</p>
-      }
 
       <style jsx global>{`
         .split {

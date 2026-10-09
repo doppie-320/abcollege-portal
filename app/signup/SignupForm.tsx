@@ -1,10 +1,12 @@
 "use client";
 
-import { startTransition, useActionState, useState, type FormEvent } from "react";
+import { startTransition, useActionState, useEffect, useState, type CSSProperties, type FormEvent } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import DatePicker from "@/components/DatePicker";
 import Select from "@/components/Select";
+import ConfirmDialog from "@/app/home/ConfirmDialog";
 import { register, registerWithGoogle } from "./actions";
 
 type Course = {
@@ -183,6 +185,18 @@ export default function SignupForm({courses, yearLevels, googleUser, oauthFailed
     ((state.success && !pending) || (googleState.success && !googlePending)) && !successDismissed;
   const successEmail = googleState.success ? seenGoogleEmail : fields.email;
 
+  // "Email already registered" gets a dialog instead of the inline error.
+  // Closing it (or leaving the page, which cacheComponents keeps alive) marks
+  // that result as handled, so only a new submit can reopen it.
+  const router = useRouter();
+  const [handledState, setHandledState] = useState<typeof state | null>(null);
+  const emailTaken = state.status === "user_already_exists";
+  const emailTakenOpen = emailTaken && !pending && state !== handledState;
+
+  useEffect(() => {
+    return () => setHandledState(state);
+  }, [state]);
+
   const courseOptions = courses.map((course) => ({
     value: String(course.id),
     label: course.name,
@@ -282,17 +296,70 @@ export default function SignupForm({courses, yearLevels, googleUser, oauthFailed
   return (
     <>
       {showSuccess ? (
-        <div className="success">
-          <div className="successIcon">✓</div>
-          <h2>Request submitted</h2>
-          <p className="mono" style={{ color: "var(--ink-soft)", fontSize: 13 }}>
-            A council admin will review your details and approve your account.
-            You&apos;ll get an email at <strong>{successEmail}</strong> once it&apos;s ready.
+        <div className="card success" role="status">
+          <div className="successSeal" aria-hidden="true">
+            <svg viewBox="0 0 120 120">
+              <circle className="sealOrbit" cx="60" cy="60" r="56" />
+              <circle className="sealDisc" cx="60" cy="60" r="42" />
+              <circle className="sealStroke" cx="60" cy="60" r="42" />
+              <path className="sealCheck" d="M42 61 L55 74 L80 47" />
+            </svg>
+            {Array.from({ length: 8 }, (_, i) => (
+              <span key={i} className="sealSpark" style={{ "--i": i } as CSSProperties} />
+            ))}
+          </div>
+
+          <span className="eyebrow successEyebrow">REQUEST RECEIVED</span>
+          <h2 className="successTitle">You&apos;re on the list</h2>
+          <p className="successLead">
+            A council admin will review your details. We&apos;ll email you as soon as
+            your account is approved.
           </p>
+
+          <dl className="successTicket">
+            <div>
+              <dt>Email</dt>
+              <dd>{successEmail}</dd>
+            </div>
+            <div>
+              <dt>Status</dt>
+              <dd>
+                <span className="statusPill">
+                  <i />
+                  Pending review
+                </span>
+              </dd>
+            </div>
+          </dl>
+
+          <ol className="successSteps">
+            <li className="isDone">
+              <span className="stepDot">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M5 12.5 10 17.5 19 7" />
+                </svg>
+              </span>
+              <span className="stepLabel">Submitted</span>
+            </li>
+            <li className="isCurrent">
+              <span className="stepDot" />
+              <span className="stepLabel">Council review</span>
+            </li>
+            <li>
+              <span className="stepDot" />
+              <span className="stepLabel">Account ready</span>
+            </li>
+          </ol>
+
+          <Link href="/login" className="btn submitBtn successCta">
+            Go to log in
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M5 12h14M13 6l6 6-6 6" />
+            </svg>
+          </Link>
           <button
             type="button"
-            className="btn ghost"
-            style={{ width: "100%", marginTop: 8 }}
+            className="successBack"
             onClick={() => {
               setFields(EMPTY_FIELDS);
               setErrors({});
@@ -301,7 +368,7 @@ export default function SignupForm({courses, yearLevels, googleUser, oauthFailed
               setSuccessDismissed(true);
             }}
           >
-            Back to form
+            Back to sign-up form
           </button>
         </div>
       ) : step === "googleDetails" ? (
@@ -648,7 +715,7 @@ export default function SignupForm({courses, yearLevels, googleUser, oauthFailed
               {errors.confirmPassword && <p className="error">{errors.confirmPassword}</p>}
             </div>
 
-            {state.error && <p className="formError" role="alert">{state.error}</p>}
+            {state.error && !emailTaken && <p className="formError" role="alert">{state.error}</p>}
 
             <button
               type="submit"
@@ -677,6 +744,24 @@ export default function SignupForm({courses, yearLevels, googleUser, oauthFailed
           {shownGoogleError && <p className="error">{shownGoogleError}</p>}
           
         </div>
+      )}
+
+      {emailTakenOpen && (
+        <ConfirmDialog
+          tone="warning"
+          title="Account already exists"
+          message={
+            <>
+              There&apos;s already an account for <strong>{fields.email.trim()}</strong>.
+              Do you want to log in instead?
+            </>
+          }
+          confirmLabel="Go to log in"
+          busyLabel="Opening…"
+          cancelLabel="Cancel"
+          onCancel={() => setHandledState(state)}
+          onConfirm={() => router.push("/login")}
+        />
       )}
 
       <style jsx global>{`
@@ -963,21 +1048,375 @@ export default function SignupForm({courses, yearLevels, googleUser, oauthFailed
           background: var(--vellum-2);
         }
 
+        /* ---------- Request submitted ---------- */
+
         .success {
           text-align: center;
         }
 
-        .successIcon {
-          width: 48px;
-          height: 48px;
-          border-radius: 50%;
+        /* Staggered entrance: seal first, then each block. */
+        .success > * {
+          animation: fadeInUp 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+        }
+        .success > :nth-child(2) { animation-delay: 0.55s; }
+        .success > :nth-child(3) { animation-delay: 0.62s; }
+        .success > :nth-child(4) { animation-delay: 0.69s; }
+        .success > :nth-child(5) { animation-delay: 0.78s; }
+        .success > :nth-child(6) { animation-delay: 0.87s; }
+        .success > :nth-child(n + 7) { animation-delay: 0.96s; }
+
+        .successSeal {
+          position: relative;
+          width: 108px;
+          height: 108px;
+          margin: 0 auto 14px;
+          animation: popIn 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+        }
+
+        .successSeal svg {
+          width: 100%;
+          height: 100%;
+          overflow: visible;
+        }
+
+        /* Dashed blueprint ring that slowly turns. */
+        .sealOrbit {
+          fill: none;
+          stroke: var(--rule);
+          stroke-width: 1.5;
+          stroke-dasharray: 3 7;
+          transform-origin: 60px 60px;
+          animation: sealSpin 24s linear infinite;
+        }
+
+        .sealDisc {
+          fill: var(--navy);
+          transform-origin: 60px 60px;
+          animation: sealDisc 0.5s 0.15s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+        }
+
+        .sealStroke {
+          fill: none;
+          stroke: var(--orange);
+          stroke-width: 3;
+          stroke-linecap: round;
+          stroke-dasharray: 264;
+          stroke-dashoffset: 264;
+          transform: rotate(-90deg);
+          transform-origin: 60px 60px;
+          animation: sealDraw 0.7s 0.2s ease-out forwards;
+        }
+
+        .sealCheck {
+          fill: none;
+          stroke: var(--white);
+          stroke-width: 6;
+          stroke-linecap: round;
+          stroke-linejoin: round;
+          stroke-dasharray: 60;
+          stroke-dashoffset: 60;
+          animation: sealDraw 0.35s 0.55s cubic-bezier(0.65, 0, 0.35, 1) forwards;
+        }
+
+        /* Little burst of ticks once the check lands. */
+        .sealSpark {
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          width: 3px;
+          height: 10px;
+          margin: -5px 0 0 -1.5px;
+          border-radius: 2px;
+          background: var(--orange);
+          opacity: 0;
+          transform: rotate(calc(var(--i) * 45deg)) translateY(-48px);
+          animation: sealSpark 0.6s 0.75s ease-out forwards;
+        }
+
+        .sealSpark:nth-of-type(even) {
           background: var(--navy);
-          color: var(--white);
+          height: 7px;
+        }
+
+        .successEyebrow {
+          color: var(--orange);
+          letter-spacing: 0.08em;
+          margin-bottom: 6px;
+        }
+
+        .successTitle {
+          font-size: 28px;
+          letter-spacing: -0.01em;
+          margin-bottom: 8px;
+        }
+
+        .successLead {
+          font-size: 13.5px;
+          line-height: 1.6;
+          color: var(--ink-soft);
+          max-width: 30em;
+          margin: 0 auto 18px;
+        }
+
+        /* Receipt-style card with a perforated edge. */
+        .successTicket {
+          position: relative;
+          margin: 0 0 18px;
+          padding: 4px 16px;
+          background: var(--white);
+          border: 1px solid var(--rule);
+          border-left: 3px solid var(--navy);
+          border-radius: 6px;
+          text-align: left;
+          box-shadow: 0 1px 0 var(--rule-soft), 0 8px 24px -16px rgba(13, 30, 56, 0.35);
+        }
+
+        .successTicket::after {
+          content: "";
+          position: absolute;
+          left: 12px;
+          right: 12px;
+          bottom: -1px;
+          height: 1px;
+          background: repeating-linear-gradient(90deg, var(--rule) 0 6px, transparent 6px 11px);
+        }
+
+        .successTicket > div {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          padding: 10px 0;
+        }
+
+        .successTicket > div + div {
+          border-top: 1px dashed var(--rule-soft);
+        }
+
+        .successTicket dt {
+          font-family: "IBM Plex Mono", monospace;
+          font-size: 10.5px;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          color: var(--ink-soft);
+          flex-shrink: 0;
+        }
+
+        .successTicket dd {
+          margin: 0;
+          font-size: 13.5px;
+          font-weight: 600;
+          color: var(--ink);
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .statusPill {
+          display: inline-flex;
+          align-items: center;
+          gap: 7px;
+          padding: 3px 10px 3px 8px;
+          border-radius: 999px;
+          background: rgba(217, 83, 30, 0.1);
+          color: #b84418;
+          font-size: 12px;
+          font-weight: 600;
+        }
+
+        .statusPill i {
+          position: relative;
+          width: 7px;
+          height: 7px;
+          border-radius: 50%;
+          background: var(--orange);
+        }
+
+        .statusPill i::after {
+          content: "";
+          position: absolute;
+          inset: 0;
+          border-radius: 50%;
+          background: var(--orange);
+          animation: statusPulse 1.6s ease-out infinite;
+        }
+
+        /* Submitted -> Council review -> Account ready */
+        .successSteps {
+          list-style: none;
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          margin: 0 0 20px;
+          padding: 0;
+        }
+
+        .successSteps li {
+          position: relative;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 7px;
+        }
+
+        /* Connector to the previous step. */
+        .successSteps li + li::before {
+          content: "";
+          position: absolute;
+          top: 8px;
+          right: calc(50% + 14px);
+          width: calc(100% - 28px);
+          height: 2px;
+          background: repeating-linear-gradient(90deg, var(--rule) 0 4px, transparent 4px 8px);
+        }
+
+        .successSteps li.isCurrent::before {
+          background: var(--navy);
+        }
+
+        .stepDot {
+          position: relative;
+          z-index: 1;
+          width: 18px;
+          height: 18px;
+          border-radius: 50%;
+          border: 2px solid var(--rule);
+          background: var(--white);
           display: flex;
           align-items: center;
           justify-content: center;
-          font-size: 22px;
-          margin: 0 auto 18px;
+          color: var(--white);
+        }
+
+        .isDone .stepDot {
+          background: var(--navy);
+          border-color: var(--navy);
+        }
+
+        .isCurrent .stepDot {
+          border-color: var(--orange);
+          box-shadow: 0 0 0 4px rgba(217, 83, 30, 0.14);
+        }
+
+        .isCurrent .stepDot::after {
+          content: "";
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: var(--orange);
+          animation: statusBlink 1.6s ease-in-out infinite;
+        }
+
+        .stepLabel {
+          font-family: "IBM Plex Mono", monospace;
+          font-size: 10.5px;
+          letter-spacing: 0.04em;
+          text-transform: uppercase;
+          color: var(--ink-soft);
+        }
+
+        .isDone .stepLabel,
+        .isCurrent .stepLabel {
+          color: var(--navy-deep);
+        }
+
+        .successCta {
+          width: 100%;
+          text-decoration: none;
+        }
+
+        .successCta svg {
+          transition: transform 0.2s ease;
+        }
+
+        .successCta:hover svg {
+          transform: translateX(3px);
+        }
+
+        .successBack {
+          display: block;
+          margin: 12px auto 0;
+          background: none;
+          border: none;
+          padding: 2px 0;
+          font-size: 12.5px;
+          color: var(--ink-soft);
+          cursor: pointer;
+        }
+
+        .successBack:hover {
+          color: var(--navy);
+          text-decoration: underline;
+        }
+
+        @keyframes sealSpin {
+          to {
+            transform: rotate(360deg);
+          }
+        }
+
+        @keyframes sealDisc {
+          from {
+            transform: scale(0.6);
+            opacity: 0;
+          }
+          to {
+            transform: none;
+            opacity: 1;
+          }
+        }
+
+        @keyframes sealDraw {
+          to {
+            stroke-dashoffset: 0;
+          }
+        }
+
+        @keyframes sealSpark {
+          0% {
+            opacity: 0;
+            transform: rotate(calc(var(--i) * 45deg)) translateY(-40px) scaleY(0.4);
+          }
+          40% {
+            opacity: 1;
+          }
+          100% {
+            opacity: 0;
+            transform: rotate(calc(var(--i) * 45deg)) translateY(-62px) scaleY(1);
+          }
+        }
+
+        @keyframes statusPulse {
+          from {
+            transform: scale(1);
+            opacity: 0.6;
+          }
+          to {
+            transform: scale(2.8);
+            opacity: 0;
+          }
+        }
+
+        @keyframes statusBlink {
+          50% {
+            opacity: 0.35;
+          }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .success *,
+          .success > *,
+          .success *::before,
+          .success *::after {
+            animation: none !important;
+          }
+          .sealStroke,
+          .sealCheck {
+            stroke-dashoffset: 0;
+          }
+          .sealSpark {
+            display: none;
+          }
         }
 
         @media (max-width: 1024px), (orientation: portrait) {

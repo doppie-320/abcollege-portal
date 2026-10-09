@@ -22,6 +22,11 @@ export async function register(_prev: ActionResult, formData: FormData) : Promis
 
     if(error) {
         console.error("Register failed:", error);
+
+        if(error.code === "user_already_exists") {
+            return { error: "An account with this email already exists.", status: "user_already_exists" }
+        }
+
         return { error: "Could not complete your registration" }
     }
 
