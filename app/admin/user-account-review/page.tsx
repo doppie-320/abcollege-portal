@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import UserAccountReview from "./UserAccountReview";
 import { getProfile, isAdmin } from "@/lib/auth";
-import { fetchApplicants } from "@/lib/applicants-db";
+import { fetchApplicants } from "@/lib/applicants-server";
 
 export const metadata: Metadata = {
   title: "User Account Review — Admin",

@@ -125,7 +125,16 @@ export default function PostModal({
       <div className="modalPanel" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
         <div className="modalTopBar">
           <span className="modalTopBarTitle mono">
-            ANNOUNCEMENT{announcement.tag ? ` / ${announcement.tag.toUpperCase()}` : ""}
+            <span className="modalTopBarIcon">
+              <MegaphoneIcon />
+            </span>
+            Announcement
+            {announcement.tag && (
+              <>
+                <span className="crumbSep" aria-hidden="true">/</span>
+                <span className="crumbTag">{announcement.tag}</span>
+              </>
+            )}
           </span>
           <button type="button" className="modalClose" onClick={onClose} aria-label="Close post">
             <CloseIcon />
@@ -143,10 +152,20 @@ export default function PostModal({
 
           <div className="commentsList">
             <div className="commentsHead mono">
+              <span className="commentsHeadIcon">
+                <BubbleIcon />
+              </span>
               Comments <span className="commentsCount">{commentCount}</span>
             </div>
             {commentCount === 0 ? (
-              <p className="commentsEmpty">No comments yet. Be the first to reply.</p>
+              <button type="button" className="commentsEmpty" onClick={() => inputRef.current?.focus()}>
+                <span className="commentsEmptyIcon">
+                  <BubbleIcon />
+                </span>
+                <span>
+                  <strong>No comments yet.</strong> Be the first to reply.
+                </span>
+              </button>
             ) : (
               announcement.comments.map((comment) => {
                 // A comment still being posted has a temp id the database doesn't know yet.
@@ -157,12 +176,12 @@ export default function PostModal({
                 const isEditing = editingId === comment.id;
 
                 return (
-                  <div className="commentItem" key={comment.id}>
+                  <div className={`commentItem ${isSaved ? "" : "sending"}`} key={comment.id}>
                     <CommentAvatar src={comment.authorAvatar} initials={comment.authorInitials} />
                     <div className="commentBubble">
                       <div className="commentMeta">
                         <span className="commentAuthor">{comment.authorName}</span>
-                        <span className="commentTime mono">{getRelativeTime(comment.postedAt)}</span>
+                        <span className="commentTime mono">{isSaved ? getRelativeTime(comment.postedAt) : "Sending…"}</span>
                       </div>
 
                       {isEditing ? (
@@ -227,8 +246,9 @@ export default function PostModal({
               if (commentError) setCommentError("");
             }}
           />
-          <button type="submit" className="commentPostBtn" disabled={!draft.trim() || submitting}>
+          <button type="submit" className="commentPostBtn sendBtn" disabled={!draft.trim() || submitting}>
             Post
+            <SendIcon />
           </button>
         </form>
         {commentError && <p className="commentError" role="alert">{commentError}</p>}
@@ -263,6 +283,7 @@ export default function PostModal({
           justify-content: center;
           padding: 24px;
           z-index: 100;
+          backdrop-filter: blur(3px);
           animation: fadeIn 0.15s ease backwards;
         }
 
@@ -285,8 +306,14 @@ export default function PostModal({
           align-items: center;
           justify-content: space-between;
           gap: 12px;
-          padding: 10px 12px 10px 18px;
-          background: var(--navy);
+          padding: 10px 12px 10px 14px;
+          background-color: var(--navy);
+          /* Same blueprint grid + glow as the site nav. */
+          background-image:
+            radial-gradient(ellipse 300px 160% at 0% 50%, rgba(46, 92, 138, 0.55), transparent 70%),
+            linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+          background-size: auto, 16px 16px, 16px 16px;
           border-bottom: 3px solid var(--orange);
           flex-shrink: 0;
         }
@@ -298,9 +325,38 @@ export default function PostModal({
         }
 
         .modalTopBarTitle {
-          font-size: 11.5px;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 11px;
           color: #c6d3e5;
           letter-spacing: 0.08em;
+          text-transform: uppercase;
+        }
+
+        .modalTopBarIcon {
+          width: 24px;
+          height: 24px;
+          border-radius: 50%;
+          background: var(--orange);
+          color: var(--white);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        }
+
+        .crumbSep {
+          color: rgba(198, 211, 229, 0.45);
+        }
+
+        .crumbTag {
+          color: var(--white);
+          padding: 2px 8px;
+          border: 1px solid rgba(217, 83, 30, 0.7);
+          background: rgba(217, 83, 30, 0.18);
+          border-radius: 999px;
+          font-size: 10px;
         }
 
         .modalClose {
@@ -312,11 +368,12 @@ export default function PostModal({
           cursor: pointer;
           display: flex;
           flex-shrink: 0;
-          transition: background 0.15s ease;
+          transition: background 0.15s ease, transform 0.2s ease;
         }
 
         .modalClose:hover {
           background: rgba(255, 255, 255, 0.24);
+          transform: rotate(90deg);
         }
 
         .modalClose:focus-visible {
@@ -328,6 +385,8 @@ export default function PostModal({
           flex: 1;
           overflow-y: auto;
           padding: 20px 22px;
+          scrollbar-width: thin;
+          scrollbar-color: #c9bfa0 transparent;
         }
 
         .commentsList {
@@ -344,27 +403,90 @@ export default function PostModal({
           letter-spacing: 0.08em;
           text-transform: uppercase;
           color: var(--navy);
-          margin-bottom: 6px;
+          margin-bottom: 10px;
+        }
+
+        .commentsHeadIcon {
+          width: 20px;
+          height: 20px;
+          border-radius: 50%;
+          background: #fcebdf;
+          color: var(--orange);
+          display: flex;
+          align-items: center;
+          justify-content: center;
         }
 
         .commentsCount {
           color: var(--ink-soft);
+          background: var(--vellum);
+          border: 1px solid var(--rule-soft);
+          padding: 0 7px;
+          border-radius: 999px;
+          font-size: 10.5px;
         }
 
         .commentsEmpty {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          width: 100%;
+          text-align: left;
+          font: inherit;
           font-size: 13px;
           color: var(--ink-soft);
-          margin: 8px 0 4px;
+          margin: 4px 0;
+          padding: 14px 16px;
+          background: none;
+          border: 1px dashed #c9bfa0;
+          border-radius: 8px;
+          cursor: pointer;
+          transition: border-color 0.15s ease, background 0.15s ease;
+        }
+
+        .commentsEmpty:hover {
+          border-color: var(--orange);
+          background: rgba(217, 83, 30, 0.04);
+        }
+
+        .commentsEmpty strong {
+          color: var(--ink);
+          font-weight: 600;
+        }
+
+        .commentsEmptyIcon {
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          background: var(--vellum);
+          color: var(--ink-soft);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
         }
 
         .commentItem {
           display: flex;
+          align-items: flex-start;
           gap: 10px;
-          padding: 10px 0;
+          padding: 10px 8px;
+          margin: 0 -8px;
+          border-radius: 6px;
+          animation: fadeInUp 0.25s ease backwards;
+          transition: background 0.15s ease;
+        }
+
+        .commentItem:hover {
+          background: rgba(237, 231, 217, 0.5);
         }
 
         .commentItem + .commentItem {
           border-top: 1px dashed #d8cfb4;
+        }
+
+        .commentItem.sending {
+          opacity: 0.6;
         }
 
         .commentBubble {
@@ -454,10 +576,43 @@ export default function PostModal({
         .commentInput {
           flex: 1;
           margin-bottom: 0 !important;
-          padding: 8px 12px !important;
-          border-radius: 5px !important;
+          padding: 8px 14px !important;
+          border-radius: 999px !important;
           font-size: 13px !important;
           box-shadow: none !important;
+          transition: border-color 0.15s ease, box-shadow 0.15s ease;
+        }
+
+        .commentInput:focus {
+          outline: none !important;
+          border-color: var(--navy) !important;
+          box-shadow: 0 0 0 3px rgba(46, 92, 138, 0.15) !important;
+        }
+
+        .sendBtn {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          border-radius: 999px;
+          padding: 7px 14px 7px 16px;
+        }
+
+        .sendBtn:not(:disabled) {
+          background: var(--orange);
+          border-color: var(--orange);
+        }
+
+        .sendBtn:hover:not(:disabled) {
+          background: #b84418;
+          border-color: #b84418;
+        }
+
+        .sendBtn :global(svg) {
+          transition: transform 0.2s ease;
+        }
+
+        .sendBtn:hover:not(:disabled) :global(svg) {
+          transform: translate(2px, -2px);
         }
 
         .commentPostBtn {
@@ -496,8 +651,44 @@ export default function PostModal({
           color: var(--ink-soft);
           cursor: not-allowed;
         }
+
+        @media (prefers-reduced-motion: reduce) {
+          .modalClose:hover {
+            transform: none;
+          }
+
+          .commentItem {
+            animation: none;
+          }
+        }
       `}</style>
     </div>
+  );
+}
+
+function MegaphoneIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="m3 11 18-5v12L3 14v-3z" />
+      <path d="M11.6 16.8a3 3 0 1 1-5.8-1.6" />
+    </svg>
+  );
+}
+
+function BubbleIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5Z" />
+    </svg>
+  );
+}
+
+function SendIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="m22 2-7 20-4-9-9-4Z" />
+      <path d="M22 2 11 13" />
+    </svg>
   );
 }
 
