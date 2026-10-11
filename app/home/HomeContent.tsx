@@ -4,7 +4,7 @@ import Link from "next/link";
 import AnnouncementCard from "./AnnouncementCard";
 import CreatePostModal, { type NewPost } from "./CreatePostModal";
 import Select from "@/components/Select";
-import SiteNav from "@/components/NavigationHeader";
+import SiteNav, { PAGE_RESELECT_EVENT } from "@/components/NavigationHeader";
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "../../lib/supabase/client"
 import { useRouter } from "next/navigation";
@@ -268,9 +268,10 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
 
         console.log(loadedAnnouncements);
 
-        const loadedTags = (announcementData || []).map((row) => ({
-          key: row.tag,
-          label: row.tag
+        // One filter option per tag, even when several posts share it.
+        const loadedTags = [...new Set((announcementData || []).map((row) => row.tag))].map((tag) => ({
+          key: tag,
+          label: tag
         }));
 
         setTags(loadedTags)
@@ -284,6 +285,10 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
     };
 
     loadAnnouncements();
+
+    // Clicking the SOE HUB logo or Home while already on /home reloads the feed.
+    window.addEventListener(PAGE_RESELECT_EVENT, loadAnnouncements);
+    return () => window.removeEventListener(PAGE_RESELECT_EVENT, loadAnnouncements);
   }, []);
 
   const visibleAnnouncements = announcements.filter((a) => {
@@ -497,7 +502,10 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
           </div>
 
           <div className="heroRule">
-            <span className="date mono">{dateLine}</span>
+            <span className="date mono">
+              <span className="liveDot" aria-hidden="true" />
+              {dateLine}
+            </span>
           </div>
         </div>
 
@@ -547,21 +555,28 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
               </div>
             </div>
 
-            <div className="tick-frame">
+            {/* Each post is its own segment; only the outer corners of the stack are rounded. */}
+            <div className="feed tick-frame">
               <span className="tick-bl"></span>
               <span className="tick-br"></span>
 
-              <div className="sectionHead">
-                <span className="mono sectionLabel">Announcements</span>
-                <span className="mono sectionMeta">
+              <header className="feedHead">
+                <span className="feedHeadIcon">
+                  <MegaphoneIcon />
+                </span>
+                <span className="mono feedHeadLabel">Announcements</span>
+                <span className="mono feedHeadMeta">
                   {visibleAnnouncements.length === announcements.length
                     ? `${announcements.length} posted`
                     : `${visibleAnnouncements.length} of ${announcements.length}`}
                 </span>
-              </div>
+              </header>
 
               {!currentUser ? null : visibleAnnouncements.length === 0 ? (
                 <p className="emptyState">
+                  <span className="emptyIcon">
+                    <SearchIcon />
+                  </span>
                   {announcements.length === 0 ? "Nothing has been posted yet." : "No announcements match your search."}
                 </p>
               ) : (
@@ -584,12 +599,12 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
             </div>
           </div>
 
-          <div>
+          <aside className="sideColumn">
             <div className="sideBlock tick-frame">
               <span className="tick-bl"></span>
               <span className="tick-br"></span>
               <div className="sectionHead">
-                <span className="mono sectionLabel">01 — Birthdays today</span>
+                <span className="mono sectionLabel"><span className="sectionNum">01</span> Birthdays today</span>
               </div>
               <div className="comingSoon">
                 <span className="badge">COMING SOON</span>
@@ -601,14 +616,14 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
               <span className="tick-bl"></span>
               <span className="tick-br"></span>
               <div className="sectionHead">
-                <span className="mono sectionLabel">02 — Countdown</span>
+                <span className="mono sectionLabel"><span className="sectionNum">02</span> Countdown</span>
               </div>
               <div className="comingSoon">
                 <span className="badge">COMING SOON</span>
                 <p>Events within 7 days will count down here.</p>
               </div>
             </div>
-          </div>
+          </aside>
         </div>
       </div>
 
@@ -821,11 +836,167 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
           color: var(--ink-soft);
         }
 
-        .emptyState {
+        .sectionNum {
+          color: var(--orange);
+          margin-right: 6px;
+        }
+
+        /* ---------- Segmented announcement feed ---------- */
+        .feed.tick-frame {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+          padding: 0;
+          border: none;
+          background: none;
+        }
+
+        /* Corner ticks frame the whole stack rather than each segment. */
+        .feed.tick-frame::before,
+        .feed.tick-frame::after,
+        .feed.tick-frame .tick-bl,
+        .feed.tick-frame .tick-br {
+          z-index: 2;
+        }
+
+        .feed.tick-frame::before {
+          top: 0;
+          left: 0;
+          border-radius: 8px 0 0 0;
+        }
+
+        .feed.tick-frame::after {
+          top: 0;
+          right: 0;
+          border-radius: 0 8px 0 0;
+        }
+
+        .feed.tick-frame .tick-bl {
+          bottom: 0;
+          left: 0;
+          border-radius: 0 0 0 8px;
+        }
+
+        .feed.tick-frame .tick-br {
+          bottom: 0;
+          right: 0;
+          border-radius: 0 0 8px 0;
+        }
+
+        /* :where keeps this at one class of specificity so segment-specific rules win. */
+        .feed > :where(:not(.tick-bl, .tick-br)) {
+          background: var(--white);
+          border: 1px solid #c9bfa0;
+          border-radius: 0;
+        }
+
+        .feed > .feedHead {
+          border-top-left-radius: 8px;
+          border-top-right-radius: 8px;
+        }
+
+        .feed > :last-child {
+          border-bottom-left-radius: 8px;
+          border-bottom-right-radius: 8px;
+        }
+
+        .feed > .feedHead {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 11px 20px;
+          border-bottom: 2px solid var(--navy);
+          color: var(--navy);
+          animation: fadeInUp 0.4s ease backwards;
+        }
+
+        .feedHeadIcon {
+          width: 28px;
+          height: 28px;
+          border-radius: 50%;
+          background: #fcebdf;
+          color: var(--orange);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        }
+
+        .feedHeadLabel {
+          font-size: 11px;
+          letter-spacing: 0.1em;
+          text-transform: uppercase;
+          flex: 1;
+        }
+
+        .feedHeadMeta {
+          font-size: 10.5px;
+          color: var(--ink-soft);
+          padding: 2px 8px;
+          background: var(--vellum);
+          border: 1px solid var(--rule-soft);
+          border-radius: 999px;
+        }
+
+        .feed > .emptyState {
+          display: flex;
+          align-items: center;
+          gap: 10px;
           font-size: 13px;
           color: var(--ink-soft);
-          padding: 20px 0 4px;
+          padding: 22px 24px;
           margin-bottom: 0;
+        }
+
+        .emptyIcon {
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          border: 1px dashed #c9bfa0;
+          background: var(--vellum);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        }
+
+        /* ---------- Hero accents ---------- */
+        .date {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .liveDot {
+          width: 7px;
+          height: 7px;
+          border-radius: 50%;
+          background: var(--orange);
+          box-shadow: 0 0 0 0 rgba(217, 83, 30, 0.5);
+          animation: livePulse 2s ease-out infinite;
+        }
+
+        @keyframes livePulse {
+          0% {
+            box-shadow: 0 0 0 0 rgba(217, 83, 30, 0.5);
+          }
+          70%,
+          100% {
+            box-shadow: 0 0 0 7px rgba(217, 83, 30, 0);
+          }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .liveDot {
+            animation: none;
+          }
+        }
+
+        /* Follows the reader down the feed; --nav-offset (set by SiteNav) keeps it clear of the nav bar. */
+        .sideColumn {
+          position: sticky;
+          top: calc(var(--nav-offset, 0px) + 20px);
+          transition: top 0.25s ease;
         }
 
         .sideBlock {
@@ -868,6 +1039,11 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
           .layout {
             grid-template-columns: 1fr;
           }
+
+          /* Stacked under the feed on narrow screens, so there's nothing to follow. */
+          .sideColumn {
+            position: static;
+          }
         }
       `}</style>
     </>
@@ -905,6 +1081,15 @@ function PlusIcon() {
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
       <line x1="12" y1="5" x2="12" y2="19" />
       <line x1="5" y1="12" x2="19" y2="12" />
+    </svg>
+  );
+}
+
+function MegaphoneIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="m3 11 18-5v12L3 14v-3z" />
+      <path d="M11.6 16.8a3 3 0 1 1-5.8-1.6" />
     </svg>
   );
 }

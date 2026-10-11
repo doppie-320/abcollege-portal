@@ -25,7 +25,6 @@ export default function AdminProfileContent({ profile }: AdminProfileContentProp
         avatarUrl={profile.avatarUrl}
         nameOverride="ADMIN"
         links={[]}
-        brandHref="/admin"
         profileHref="/admin/profile"
         profileLabel="My profile"
         isProfilePage

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import MediaGrid from "./MediaGrid";
 import ImageLightbox from "./ImageLightbox";
@@ -8,12 +8,33 @@ import RichTextBody from "./RichTextBody";
 import PostMenu from "./PostMenu";
 import { type Announcement, type User, getPerson, getRelativeTime } from "@/app/home/HomeContent";
 
-async function reactorNames(reactedBy: string[], currentUserId: string): Promise<string[]> {
-  const names = await Promise.all(
-    reactedBy.map(async (id) => (id === currentUserId ? "You" : (await getPerson(id)).name))
+type Reactor = {
+  id: string;
+  name: string;
+  initials: string;
+  avatar: string;
+  isYou: boolean;
+};
+
+/** Faces shown stacked next to the heart before the count. */
+const FACEPILE_MAX = 3;
+
+async function loadReactors(reactedBy: string[], currentUser: User): Promise<Reactor[]> {
+  const reactors = await Promise.all(
+    reactedBy.map(async (id): Promise<Reactor> => {
+      if (id === currentUser.id) {
+        return { id, name: currentUser.name, initials: currentUser.initials, avatar: currentUser.avatar_path, isYou: true };
+      }
+      try {
+        const person = await getPerson(id);
+        return { id, name: person.name || "Unknown", initials: person.initials || "?", avatar: person.avatar_path, isYou: false };
+      } catch {
+        return { id, name: "Unknown", initials: "?", avatar: "", isYou: false };
+      }
+    })
   );
-  names.sort((a) => (a === "You" ? -1 : 0));
-  return names;
+  // You first, everyone else in the order they reacted.
+  return reactors.sort((a, b) => Number(b.isYou) - Number(a.isYou));
 }
 
 export default function PostContent({
@@ -40,7 +61,8 @@ export default function PostContent({
 }) {
   const [showReactors, setShowReactors] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
-  const [names, setNames] = useState<string[]>([]);
+  const [reactors, setReactors] = useState<Reactor[]>([]);
+  const reactorsRef = useRef<HTMLDivElement>(null);
 
   const [fetchedAuthor, setAuthor] = useState<User | null>(null);
   const author = authorOverride ?? fetchedAuthor;
@@ -63,14 +85,35 @@ export default function PostContent({
 
   useEffect(() => {
     let active = true;
-    reactorNames(announcement.reactedBy, currentUser.id).then((resolvedNames) => {
-      if (active) setNames(resolvedNames);
+    loadReactors(announcement.reactedBy, currentUser).then((resolved) => {
+      if (active) setReactors(resolved);
     });
 
     return () => {
       active = false;
     };
-  }, [announcement.reactedBy, currentUser.id]);
+  }, [announcement.reactedBy, currentUser]);
+
+  useEffect(() => {
+    if (!showReactors) return;
+
+    function onDocMouseDown(e: MouseEvent) {
+      if (reactorsRef.current && !reactorsRef.current.contains(e.target as Node)) setShowReactors(false);
+    }
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setShowReactors(false);
+    }
+
+    document.addEventListener("mousedown", onDocMouseDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onDocMouseDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [showReactors]);
+
+  // Last reactor left: close the list instead of leaving an empty card open.
+  const reactorsOpen = showReactors && reactors.length > 0;
 
   return (
     <div className="postContent">
@@ -135,21 +178,45 @@ export default function PostContent({
           >
             <HeartIcon filled={reacted} />
           </button>
-          {names.length > 0 && (
-            <div className="countWrap">
+          {reactors.length > 0 && (
+            <div className="countWrap" ref={reactorsRef}>
               <button
                 type="button"
-                className="countBtn"
+                className={`countBtn faceBtn ${reactorsOpen ? "open" : ""}`}
                 onClick={() => setShowReactors((v) => !v)}
-                aria-label="See who reacted"
+                aria-label={`See who reacted (${reactors.length})`}
+                aria-expanded={reactorsOpen}
               >
-                {names.length}
-              </button>
-              {showReactors && (
-                <div className="reactorPopover">
-                  {names.map((name) => (
-                    <div key={name}>{name}</div>
+                <span className="facepile" aria-hidden="true">
+                  {reactors.slice(0, FACEPILE_MAX).map((reactor) => (
+                    <ReactorAvatar key={reactor.id} reactor={reactor} size={20} />
                   ))}
+                </span>
+                {reactors.length}
+              </button>
+              {reactorsOpen && (
+                <div className="reactorPopover" role="dialog" aria-label="People who reacted">
+                  <div className="reactorHead">
+                    <span className="reactorHeadIcon">
+                      <HeartIcon filled size={11} />
+                    </span>
+                    <span className="mono reactorHeadLabel">Reactions</span>
+                    <span className="mono reactorHeadCount">{reactors.length}</span>
+                  </div>
+                  <ul className="reactorList">
+                    {reactors.map((reactor, index) => (
+                      <li key={reactor.id} className="reactorRow" style={{ animationDelay: `${Math.min(index, 8) * 25}ms` }}>
+                        <span className="reactorFace">
+                          <ReactorAvatar reactor={reactor} size={28} />
+                          <span className="reactorBadge" aria-hidden="true">
+                            <HeartIcon filled size={7} />
+                          </span>
+                        </span>
+                        <span className="reactorName">{reactor.name}</span>
+                        {reactor.isYou && <span className="mono youTag">You</span>}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               )}
             </div>
@@ -182,7 +249,9 @@ export default function PostContent({
           display: flex;
           align-items: center;
           gap: 10px;
-          margin-bottom: 12px;
+          margin-bottom: 14px;
+          padding-bottom: 12px;
+          border-bottom: 1px solid #c9bfa0;
         }
 
         .avatar {
@@ -294,20 +363,168 @@ export default function PostContent({
           text-decoration: underline;
         }
 
+        .faceBtn {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          padding: 2px 8px 2px 3px;
+          border-radius: 999px;
+          transition: background 0.15s ease, color 0.15s ease;
+        }
+
+        .faceBtn:hover,
+        .faceBtn.open {
+          text-decoration: none;
+          background: var(--vellum-2);
+          color: var(--navy);
+        }
+
+        .facepile {
+          display: flex;
+        }
+
+        .facepile > :global(*) {
+          box-shadow: 0 0 0 2px var(--white);
+          transition: margin 0.2s ease;
+        }
+
+        .facepile > :global(* + *) {
+          margin-left: -7px;
+        }
+
+        /* Fan the faces out a little on hover. */
+        .faceBtn:hover .facepile > :global(* + *),
+        .faceBtn.open .facepile > :global(* + *) {
+          margin-left: -3px;
+        }
+
         .reactorPopover {
           position: absolute;
-          bottom: 100%;
-          left: 0;
-          margin-bottom: 6px;
-          background: var(--navy-deep);
-          color: var(--white);
-          font-size: 12px;
-          padding: 8px 10px;
-          border-radius: 5px;
-          white-space: nowrap;
+          bottom: calc(100% + 10px);
+          left: -6px;
+          width: 240px;
+          background: var(--white);
+          color: var(--ink);
+          border: 1px solid #c9bfa0;
+          border-radius: 8px;
+          box-shadow: 0 14px 32px rgba(13, 30, 56, 0.2);
           z-index: 5;
           transform-origin: bottom left;
           animation: popIn 0.15s ease backwards;
+        }
+
+        /* Little pointer down at the count. */
+        .reactorPopover::after {
+          content: "";
+          position: absolute;
+          top: 100%;
+          left: 18px;
+          width: 10px;
+          height: 10px;
+          margin-top: -5px;
+          background: var(--white);
+          border-right: 1px solid #c9bfa0;
+          border-bottom: 1px solid #c9bfa0;
+          transform: rotate(45deg);
+        }
+
+        .reactorHead {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 9px 12px;
+          border-bottom: 1px solid #e4dcc9;
+        }
+
+        .reactorHeadIcon {
+          width: 20px;
+          height: 20px;
+          border-radius: 50%;
+          background: #fcebdf;
+          color: var(--orange);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .reactorHeadLabel {
+          flex: 1;
+          font-size: 10.5px;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          color: var(--navy);
+        }
+
+        .reactorHeadCount {
+          font-size: 10.5px;
+          color: var(--ink-soft);
+          background: var(--vellum);
+          padding: 1px 7px;
+          border-radius: 999px;
+        }
+
+        .reactorList {
+          list-style: none;
+          margin: 0;
+          padding: 4px;
+          max-height: 232px;
+          overflow-y: auto;
+        }
+
+        .reactorRow {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 6px 8px;
+          border-radius: 6px;
+          animation: fadeIn 0.2s ease backwards;
+          transition: background 0.15s ease;
+        }
+
+        .reactorRow:hover {
+          background: var(--vellum);
+        }
+
+        .reactorFace {
+          position: relative;
+          display: flex;
+          flex-shrink: 0;
+        }
+
+        .reactorBadge {
+          position: absolute;
+          right: -3px;
+          bottom: -3px;
+          width: 14px;
+          height: 14px;
+          border-radius: 50%;
+          background: var(--orange);
+          color: var(--white);
+          border: 2px solid var(--white);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .reactorName {
+          flex: 1;
+          min-width: 0;
+          font-size: 13px;
+          font-weight: 500;
+          color: var(--ink);
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .youTag {
+          font-size: 9.5px;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+          color: var(--orange);
+          border: 1px solid rgba(217, 83, 30, 0.4);
+          padding: 0 5px;
+          border-radius: 3px;
         }
 
         .postActions {
@@ -315,9 +532,9 @@ export default function PostContent({
           align-items: center;
           justify-content: flex-start;
           gap: 12px;
-          margin-top: 14px;
+          margin-top: 16px;
           padding-top: 10px;
-          border-top: 1px dashed #d8cfb4;
+          border-top: 1px solid #c9bfa0;
         }
 
         .actionGroup {
@@ -366,11 +583,35 @@ export default function PostContent({
   );
 }
 
-function HeartIcon({ filled }: { filled?: boolean }) {
+function ReactorAvatar({ reactor, size }: { reactor: Reactor; size: number }) {
+  if (reactor.avatar) {
+    return (
+      <Image
+        src={reactor.avatar}
+        alt=""
+        width={size}
+        height={size}
+        className="shrink-0 rounded-full border border-navy-tint object-cover"
+        style={{ width: size, height: size }}
+      />
+    );
+  }
+
+  return (
+    <span
+      className="flex shrink-0 items-center justify-center rounded-full bg-navy font-display font-semibold text-paper"
+      style={{ width: size, height: size, fontSize: Math.round(size * 0.4) }}
+    >
+      {reactor.initials}
+    </span>
+  );
+}
+
+function HeartIcon({ filled, size = 15 }: { filled?: boolean; size?: number }) {
   return (
     <svg
-      width={15}
-      height={15}
+      width={size}
+      height={size}
       viewBox="0 0 24 24"
       fill={filled ? "currentColor" : "none"}
       stroke="currentColor"
