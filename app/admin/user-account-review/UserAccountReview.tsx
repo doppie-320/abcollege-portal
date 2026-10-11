@@ -52,6 +52,7 @@ const BLUEPRINT_GRID =
   "[background-image:linear-gradient(rgba(255,255,255,0.07)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.07)_1px,transparent_1px)] [background-size:24px_24px]";
 
 export default function UserAccountReview({ profile, applicants }: UserAccountReviewProps) {
+  const [reviewApplicants, setReviewApplicants] = useState(applicants);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [pageIndex, setPageIndex] = useState(0);
@@ -87,18 +88,20 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
 
   const counts = useMemo(() => {
     const tally: Record<ApplicantStatus, number> = { pending: 0, accept: 0, reject: 0 };
-    for (const applicant of applicants) {
+    for (const applicant of reviewApplicants) {
       tally[decisions[applicant.id]?.status ?? applicant.status]++;
     }
     return tally;
-  }, [applicants, decisions]);
+  }, [reviewApplicants, decisions]);
 
   const reviewed = counts.accept + counts.reject;
-  const reviewedPct = applicants.length ? Math.round((reviewed / applicants.length) * 100) : 0;
+  const reviewedPct = reviewApplicants.length
+    ? Math.round((reviewed / reviewApplicants.length) * 100)
+    : 0;
 
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    return applicants.filter((applicant) => {
+    return reviewApplicants.filter((applicant) => {
       const status = decisions[applicant.id]?.status ?? applicant.status;
       if (statusFilter !== "all" && status !== statusFilter) return false;
       if (!needle) return true;
@@ -114,7 +117,7 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
         .toLowerCase()
         .includes(needle);
     });
-  }, [applicants, query, statusFilter, decisions]);
+  }, [reviewApplicants, query, statusFilter, decisions]);
 
   const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
   const page = Math.min(pageIndex, pageCount - 1);
@@ -145,10 +148,27 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
     if (!selected) return;
 
     if (status === "reject" && !rejectDate) {
-      const { error: rejectError } = await supabase.rpc("reject_user", {target_user: selected.id});
-      
+      const { error: rejectError } = await supabase.rpc("reject_user", {
+        target_user: selected.id,
+      });
+
       if (rejectError) throw rejectError;
-      console.log("delete insta, not delay")
+
+      const remainingVisible = visible.filter((applicant) => applicant.id !== selected.id);
+      const selectedIndex = visible.findIndex((applicant) => applicant.id === selected.id);
+      const nextSelected =
+        remainingVisible[Math.min(selectedIndex, remainingVisible.length - 1)] ?? null;
+      const nextPageCount = Math.max(1, Math.ceil(remainingVisible.length / PAGE_SIZE));
+
+      setReviewApplicants((prev) => prev.filter((applicant) => applicant.id !== selected.id));
+      setDecisions((prev) => {
+        const next = { ...prev };
+        delete next[selected.id];
+        return next;
+      });
+      setSelectedId(nextSelected?.id ?? null);
+      setPageIndex((prev) => Math.min(prev, nextPageCount - 1));
+      return;
     }
 
     const { error: decisionError } = await supabase
@@ -203,8 +223,9 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
             </Link>
             <h1 className="mb-1 text-[30px] leading-none">User Account Review</h1>
             <p className="mb-0 text-xs text-ink-soft">
-              {applicants.length} registration{applicants.length === 1 ? "" : "s"} on file. Select an
-              applicant to review the details they applied with.
+              {reviewApplicants.length} registration
+              {reviewApplicants.length === 1 ? "" : "s"} on file. Select an applicant to review the
+              details they applied with.
             </p>
           </div>
 
@@ -231,7 +252,7 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
               <div className="mono mb-1.5 flex justify-between text-[10px] tracking-[0.06em] text-ink-soft uppercase">
                 <span>Review progress</span>
                 <span className="tabular-nums">
-                  {reviewed}/{applicants.length} &middot; {reviewedPct}%
+                  {reviewed}/{reviewApplicants.length} &middot; {reviewedPct}%
                 </span>
               </div>
               <div
@@ -295,7 +316,8 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
               >
                 {STATUS_FILTERS.map((filter) => {
                   const isActive = statusFilter === filter.value;
-                  const count = filter.value === "all" ? applicants.length : counts[filter.value];
+                  const count =
+                    filter.value === "all" ? reviewApplicants.length : counts[filter.value];
                   return (
                     <button
                       key={filter.value}
@@ -324,7 +346,7 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
                 })}
               </div>
               <p className="mono mt-2 mb-0 text-[10px] text-ink-soft">
-                {visible.length} of {applicants.length} shown
+                {visible.length} of {reviewApplicants.length} shown
               </p>
             </div>
 
