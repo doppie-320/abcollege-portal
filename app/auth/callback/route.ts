@@ -56,3 +56,4 @@ export async function GET(request: Request) {
 
   return NextResponse.redirect(`${origin}${failurePath}?error=oauth-failed`);
 }
+

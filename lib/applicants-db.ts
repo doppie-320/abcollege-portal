@@ -44,7 +44,7 @@ export async function fetchApplicants(): Promise<Applicant[]> {
 
   const { data: requestData, error: requestError } = await supabase
     .from("users")
-    .select("id, first_name, last_name, email_address, students!inner(student_id, year_level, birthdate, courses(name)), user_requests!inner(request_status, reject_date, submitted_at)")
+    .select("id, first_name, last_name, email_address, birthdate, students!inner(student_id, year_level, courses(name)), user_requests!inner(request_status, reject_date, submitted_at)")
 
   if (requestError) {
     console.error("Supabase error:", requestError.message);
@@ -65,7 +65,7 @@ export async function fetchApplicants(): Promise<Applicant[]> {
       email: user.email_address ?? "",
       studentId: student?.student_id ?? "N/A",
       yearLevel: String(student?.year_level ?? "N/A"),
-      birthday: student?.birthdate || undefined,
+      birthday: user.birthdate || undefined,
       program: course?.name ?? "N/A",
       status: (request?.request_status ?? "pending") as ApplicantStatus,
       rejectDate: request?.reject_date ?? new Date().toISOString(),

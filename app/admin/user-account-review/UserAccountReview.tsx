@@ -118,6 +118,13 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
     const supabase = createClient();
     if (!selected) return;
 
+    if (status === "reject" && !rejectDate) {
+      const { error: rejectError } = await supabase.rpc("reject_user", {target_user: selected.id});
+      
+      if (rejectError) throw rejectError;
+      console.log("delete insta, not delay")
+    }
+
     const { error: decisionError } = await supabase
       .from("user_requests")
       .update({
