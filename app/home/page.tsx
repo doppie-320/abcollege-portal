@@ -4,6 +4,8 @@ import type { Metadata } from "next";
 import HomeContent from "./HomeContent";
 
 import { createClient } from "@/lib/supabase/server";
+import { isApproved } from "@/lib/auth";
+import { redirect } from "next/navigation";
 
 export const metadata: Metadata = {
   title: "Home — SOE Hub",
@@ -15,6 +17,7 @@ export default async function HomePage() {
   const { data: authUser, error: authError } = await supabase.auth.getUser();
 
   if (authError) throw authError;
+  if (!(await isApproved(supabase, authUser.user.id))) redirect("/login?error=pending");
 
   const { data: userData, error: userError } = await supabase
     .from("users")

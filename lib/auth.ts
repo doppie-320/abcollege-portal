@@ -12,6 +12,8 @@ export type Profile = {
   program: string;
   yearLevel: string;
   avatarUrl: string;
+  /** Council role from the admins table. Empty for non-admins or when unset. */
+  role: string;
 };
 
 const UNKNOWN = "—";
@@ -39,6 +41,35 @@ function toId(value: unknown): number | null {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
+type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
+
+/**
+ * - approved: an admin, or an admin accepted their account request
+ * - pending / rejected: what the admin decided on their request
+ * - no-account: signed in (e.g. with Google) but never filled in the sign-up
+ *   form, so there's no student record to review
+ */
+export type AccountStatus = "approved" | "pending" | "rejected" | "no-account";
+
+export async function getAccountStatus(
+  supabase: SupabaseServerClient,
+  userId: string,
+): Promise<AccountStatus> {
+  const [{ data: adminRow }, { data: request }, { data: student }] = await Promise.all([
+    supabase.from("admins").select("id").eq("id", userId).maybeSingle(),
+    supabase.from("user_requests").select("request_status").eq("user_id", userId).maybeSingle(),
+    supabase.from("students").select("id").eq("id", userId).maybeSingle(),
+  ]);
+
+  if (adminRow || request?.request_status === "accept") return "approved";
+  if (!student) return "no-account";
+  return request?.request_status === "reject" ? "rejected" : "pending";
+}
+
+export async function isApproved(supabase: SupabaseServerClient, userId: string): Promise<boolean> {
+  return (await getAccountStatus(supabase, userId)) === "approved";
+}
+
 export async function getProfile(): Promise<Profile> {
   const supabase = await createClient();
 
@@ -46,6 +77,7 @@ export async function getProfile(): Promise<Profile> {
   const authUser = authData?.user;
 
   if (authError || !authUser) redirect("/login");
+  if (!(await isApproved(supabase, authUser.id))) redirect("/login?error=pending");
 
   const { data: user } = await supabase
     .from("users")
@@ -62,7 +94,7 @@ export async function getProfile(): Promise<Profile> {
   const courseId = toId(metadata.course_id);
   const yearLevelId = toId(metadata.year_level);
 
-  const [{ data: course }, { data: yearLevel }] = await Promise.all([
+  const [{ data: course }, { data: yearLevel }, { data: adminRow }] = await Promise.all([
     courseId === null
       ? Promise.resolve({ data: null })
       : supabase.from("courses").select("id, name").eq("id", courseId).maybeSingle(),
@@ -73,6 +105,9 @@ export async function getProfile(): Promise<Profile> {
           .select("id, name")
           .eq("id", yearLevelId)
           .maybeSingle(),
+    // The admins table has no role column yet, so a failed read just means
+    // "no role" rather than failing the whole profile.
+    supabase.from("admins").select("role").eq("id", authUser.id).maybeSingle(),
   ]);
 
   const avatarUrl = avatarPath? 
@@ -89,6 +124,24 @@ export async function getProfile(): Promise<Profile> {
     email: toDisplay(authUser.email),
     program: toDisplay(course?.name),
     yearLevel: toDisplay(yearLevel?.name),
-    avatarUrl: avatarUrl
+    avatarUrl: avatarUrl,
+    role: clean(adminRow?.role)
   };
+}
+
+export async function isAdmin(): Promise<boolean> {
+  const supabase = await createClient();
+
+  const { data: authData } = await supabase.auth.getUser();
+  if (!authData?.user) return false;
+
+  const { data: adminRow, error } = await supabase
+    .from("admins")
+    .select("id")
+    .eq("id", authData.user.id)
+    .maybeSingle();
+
+  if (error) throw error;
+
+  return adminRow !== null;
 }

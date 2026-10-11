@@ -383,6 +383,12 @@
     color: var(--orange);
   }
 
+  .tag.grey {
+    border: none;
+    color: var(--ink-soft);
+    background-color: #d9d9d9;
+  }
+
   .hairline {
     border: none;
     border-top: 1px solid #c9bfa0;

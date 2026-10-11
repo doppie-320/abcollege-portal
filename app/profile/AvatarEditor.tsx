@@ -76,6 +76,8 @@ type AvatarEditorProps = {
   name: string;
   /** Rendered beside the picture, so callers control the side column layout. */
   children?: ReactNode;
+  /** Card caption above the picture. Defaults to the student-facing wording. */
+  eyebrow?: string;
   avatarUrl: string;
 };
 
@@ -84,6 +86,7 @@ export default function AvatarEditor({
   initials,
   name,
   children,
+  eyebrow = "STUDENT CARD",
   avatarUrl
 }: AvatarEditorProps) {
   const { isSaving, error, save, reset } = useAvatarEditor(avatarUrl, userId);
@@ -107,7 +110,7 @@ export default function AvatarEditor({
 
   return (
     <div className="flex w-full flex-col gap-2.5">
-      <span className="eyebrow">STUDENT CARD</span>
+      <span className="eyebrow">{eyebrow}</span>
 
       <div className="flex w-full items-start gap-6">
         <div className="flex w-32 shrink-0 flex-col items-center gap-2.5">
