@@ -1,10 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import AvatarEditor, {
-  AvatarEditButton,
-  AvatarRemoveButton,
-} from "@/app/profile/AvatarEditor";
+import AvatarEditor from "@/app/profile/AvatarEditor";
 import SiteNav from "@/components/NavigationHeader";
 import type { Profile } from "@/lib/auth";
 
@@ -63,10 +60,6 @@ export default function AdminProfileContent({ profile }: AdminProfileContentProp
               <h2 className="mb-2 text-2xl [overflow-wrap:anywhere]">{profile.name}</h2>
               <div className="mb-4 flex flex-wrap gap-1.5">
                 <span className="tag orange">{roleBadge}</span>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <AvatarEditButton />
-                <AvatarRemoveButton />
               </div>
             </div>
           </AvatarEditor>
