@@ -22,6 +22,15 @@ type UserAccountReviewProps = {
 
 const PAGE_SIZE = 10;
 
+type StatusFilter = "all" | ApplicantStatus;
+
+const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "pending", label: "Pending" },
+  { value: "accept", label: "Accepted" },
+  { value: "reject", label: "Rejected" },
+];
+
 /** Shared by both panels so the list and the detail card always line up. */
 const PANEL_HEIGHT = "h-[clamp(515px,calc(100vh-300px),640px)]";
 
@@ -30,6 +39,7 @@ const FOOTER_BAR = "flex h-14 shrink-0 items-center gap-3 border-t border-rule-s
 
 export default function UserAccountReview({ profile, applicants }: UserAccountReviewProps) {
   const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [pageIndex, setPageIndex] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(applicants[0]?.id ?? null);
   const [decisions, setDecisions] = useState<
@@ -62,10 +72,11 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
 
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    if (!needle) return applicants;
-
-    return applicants.filter((applicant) =>
-      [
+    return applicants.filter((applicant) => {
+      const status = decisions[applicant.id]?.status ?? applicant.status;
+      if (statusFilter !== "all" && status !== statusFilter) return false;
+      if (!needle) return true;
+      return [
         applicant.firstName,
         applicant.lastName,
         applicant.email,
@@ -75,9 +86,9 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
       ]
         .join(" ")
         .toLowerCase()
-        .includes(needle),
-    );
-  }, [applicants, query]);
+        .includes(needle);
+    });
+  }, [applicants, query, statusFilter, decisions]);
 
   const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
   const page = Math.min(pageIndex, pageCount - 1);
@@ -98,6 +109,11 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
     setPageIndex(0);
   }
 
+  function onStatusFilterChange(value: StatusFilter) {
+    setStatusFilter(value);
+    setPageIndex(0);
+  }
+
   async function decide(status: ApplicantStatus, rejectDate?: string) {
     const supabase = createClient();
     if (!selected) return;
@@ -110,10 +126,12 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
       })
       .eq("user_id", selected.id);
     
-    selected.status = status;
-    
     if(decisionError) throw decisionError;
 
+    setDecisions((prev) => ({
+      ...prev,
+      [selected.id]: { status, rejectDate },
+    }));
   } 
 
   function reject() {
@@ -177,6 +195,30 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
                 autoComplete="off"
                 className="mb-0 py-2 text-[13px] outline-none focus:outline-none focus:ring-0 shadow-none rounded-lg"
               />
+              <div
+                role="group"
+                aria-label="Filter applicants by status"
+                className="mt-2.5 flex flex-wrap gap-1.5"
+              >
+                {STATUS_FILTERS.map((filter) => {
+                  const isActive = statusFilter === filter.value;
+                  return (
+                    <button
+                      key={filter.value}
+                      type="button"
+                      onClick={() => onStatusFilterChange(filter.value)}
+                      aria-pressed={isActive}
+                      className={`mono cursor-pointer rounded-md border px-2 py-1 text-[10px] tracking-[0.04em] uppercase transition-colors duration-150 ease-in-out focus-visible:outline-2 focus-visible:outline-(--grey) focus-visible:-outline-offset-[2px] ${
+                        isActive
+                          ? "border-navy bg-navy text-white"
+                          : "border-rule bg-transparent text-ink-soft hover:bg-[rgba(0,0,0,0.05)] hover:text-navy-deep"
+                      }`}
+                    >
+                      {filter.label}
+                    </button>
+                  );
+                })}
+              </div>
               <p className="mono mt-2 mb-0 text-[10px] text-ink-soft">
                 {visible.length} of {applicants.length} shown
               </p>
@@ -184,7 +226,26 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
 
             {visible.length === 0 ? (
               <p className="flex flex-1 items-center justify-center px-4 py-10 text-center text-[13px] text-ink-soft">
-                No applicants match &ldquo;{query.trim()}&rdquo;.
+                {query.trim() ? (
+                  <>
+                    No applicants match &ldquo;{query.trim()}&rdquo;
+                    {statusFilter !== "all" && (
+                      <>
+                        {" "}
+                        in{" "}
+                        {STATUS_FILTERS.find((f) => f.value === statusFilter)?.label.toLowerCase()}
+                      </>
+                    )}
+                    .
+                  </>
+                ) : statusFilter !== "all" ? (
+                  <>
+                    No {STATUS_FILTERS.find((f) => f.value === statusFilter)?.label.toLowerCase()}{" "}
+                    applicants.
+                  </>
+                ) : (
+                  "No applicants on file."
+                )}
               </p>
             ) : (
               <>
@@ -216,7 +277,7 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
                               {applicant.studentId} &middot; {applicant.program}
                             </span>
                           </span>
-                          <span className={`tag rounded-lg ${status === "pending" ? "orange" : ""}`}>
+                          <span className={`tag rounded-lg ${status === "reject" ? "grey" : status === "accept" ? "orange" : ""}`}>
                             {STATUS_LABELS[status]}
                           </span>
                         </button>

@@ -18,8 +18,8 @@ export type Applicant = {
 
 export const STATUS_LABELS: Record<ApplicantStatus, string> = {
   pending: "Pending",
-  accept: "Accept",
-  reject: "Reject",
+  accept: "Accepted",
+  reject: "Rejected",
 };
 
 const UNKNOWN = "—";

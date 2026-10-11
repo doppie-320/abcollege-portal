@@ -76,7 +76,7 @@ export default function AdminContent({ profile }: AdminContentProps) {
               </div>
 
               <span className="mt-auto flex items-center gap-2 pt-2 font-mono text-[11px] text-blue">
-                Open module
+                View Accounts
                 <span className="transition-transform duration-150 group-hover:translate-x-1">
                   &rarr;
                 </span>
