@@ -37,7 +37,6 @@ export default function AdminContent({ profile }: AdminContentProps) {
         avatarUrl={profile.avatarUrl}
         nameOverride="ADMIN"
         links={[]}
-        brandHref="/admin"
         profileHref="/admin/profile"
         profileLabel="My profile"
       />

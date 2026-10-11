@@ -93,14 +93,16 @@ export default function AnnouncementCard({
       )}
 
       <style jsx>{`
+        /* The segment's border, background and corner rounding come from .feed in HomeContent. */
         .announceItem {
-          padding: 24px 0;
+          padding: 22px 24px 16px;
           animation: fadeInUp 0.4s ease backwards;
           animation-delay: 0.25s;
+          transition: box-shadow 0.2s ease;
         }
 
-        .announceItem:first-of-type {
-          padding-top: 0;
+        .announceItem:hover {
+          box-shadow: inset 3px 0 0 var(--orange);
         }
 
         .announceItem:nth-of-type(1) {
@@ -117,10 +119,6 @@ export default function AnnouncementCard({
 
         .announceItem:nth-of-type(4) {
           animation-delay: 0.2s;
-        }
-
-        .announceItem + .announceItem {
-          border-top: 1px solid #c9bfa0;
         }
       `}</style>
     </div>
