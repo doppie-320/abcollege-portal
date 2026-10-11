@@ -104,15 +104,33 @@ export default function UserMenu({
         .userMenuTrigger {
           background: none;
           border: none;
-          padding: 0;
+          padding: 4px 10px 4px 4px;
+          border-radius: 999px;
           font-family: inherit;
           cursor: pointer;
+          transition: background-color 0.15s ease;
+        }
+
+        .userMenuTrigger:hover,
+        .userMenuTrigger[aria-expanded='true'] {
+          background-color: rgba(255, 255, 255, 0.08);
+        }
+
+        .userMenuTrigger .dot,
+        .userMenuTrigger :global(img) {
+          transition: box-shadow 0.15s ease;
+        }
+
+        .userMenuTrigger:hover .dot,
+        .userMenuTrigger:hover :global(img),
+        .userMenuTrigger[aria-expanded='true'] .dot,
+        .userMenuTrigger[aria-expanded='true'] :global(img) {
+          box-shadow: 0 0 0 2px var(--orange);
         }
 
         .userMenuTrigger:focus-visible {
           outline: 2px solid var(--grid);
-          outline-offset: 3px;
-          border-radius: 6px;
+          outline-offset: 2px;
         }
 
         .userMenuName {
