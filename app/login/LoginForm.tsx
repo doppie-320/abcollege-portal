@@ -1,9 +1,13 @@
 "use client";
 
-import { startTransition, useActionState, useState, type FormEvent } from "react";
+import { startTransition, useActionState, useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import ConfirmDialog from "@/app/home/ConfirmDialog";
 import ForgotPasswordModal from "./ForgotPasswordModal";
+import StatusNotice from "./StatusNotice";
+import { toNotice, type Notice } from "./messages";
 import { login } from "./actions";
 
 type Fields = {
@@ -41,14 +45,81 @@ function validate(fields: Fields): Errors {
   return errors;
 }
 
-export default function LoginForm() {
+type LoginFormProps = {
+  /** Status/error from the URL, e.g. after Google sends the user back. */
+  initialNotice: Notice | null;
+  /** Set when a Google account with no account request just signed in. */
+  noAccountEmail: string;
+};
+
+export default function LoginForm({ initialNotice, noAccountEmail }: LoginFormProps) {
+  const router = useRouter();
   const [fields, setFields] = useState<Fields>(EMPTY_FIELDS);
   const [errors, setErrors] = useState<Errors>({});
   const [showPassword, setShowPassword] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  // Only for a failed click here; errors from the URL come in fresh as props,
+  // because cacheComponents keeps this component's state across navigations.
   const [googleError, setGoogleError] = useState("");
   const [forgotOpen, setForgotOpen] = useState(false);
+  const [dismissedEmail, setDismissedEmail] = useState("");
+  // Derived from props (not initial state) so coming back to this page later,
+  // e.g. after finishing sign-up, doesn't reopen a stale dialog.
+  const noAccountOpen = noAccountEmail !== "" && noAccountEmail !== dismissedEmail;
   const [state, formAction, pending] = useActionState(login, {});
+
+  // The notice is for one moment, not for the page:
+  // - the URL notice (?error=...) only lasts until the next attempt, and the
+  //   param is stripped so a refresh doesn't bring it back;
+  // - cacheComponents keeps this component alive when you leave /login (e.g.
+  //   log in, then log out), so a result from that earlier visit is "stale".
+  const [urlNoticeUsed, setUrlNoticeUsed] = useState(false);
+  const [staleState, setStaleState] = useState<typeof state | null>(null);
+  const [noticeHidden, setNoticeHidden] = useState(false);
+
+  const [prevInitialNotice, setPrevInitialNotice] = useState(initialNotice);
+  if (initialNotice !== prevInitialNotice) {
+    setPrevInitialNotice(initialNotice);
+    setUrlNoticeUsed(false);
+    setNoticeHidden(false);
+  }
+
+  // Most recent first: a failed Google click, then the last form submit, then
+  // whatever the URL brought in.
+  const notice: Notice | null = googleError
+    ? toNotice(undefined, googleError)
+    : state.error && state !== staleState
+      ? toNotice(state.status, state.error)
+      : urlNoticeUsed
+        ? null
+        : initialNotice;
+  // Hidden while a new attempt is in flight, so the old result doesn't linger.
+  const showNotice = notice !== null && !noticeHidden && !pending;
+
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.has("error")) {
+      url.searchParams.delete("error");
+      window.history.replaceState(null, "", url);
+    }
+  }, []);
+
+  // Runs when this page is left (unmounted or hidden by cacheComponents), and
+  // when a newer result replaces `state`. Either way that result is now old.
+  // (No need to touch the URL notice: coming back brings fresh props.)
+  useEffect(() => {
+    return () => {
+      setStaleState(state);
+      setGoogleError("");
+      setGoogleLoading(false);
+    };
+  }, [state]);
+
+  function startAttempt() {
+    setGoogleError("");
+    setUrlNoticeUsed(true);
+    setNoticeHidden(false);
+  }
 
   function setField<K extends keyof Fields>(key: K, value: Fields[K]) {
     setFields((prev) => ({ ...prev, [key]: value }));
@@ -63,11 +134,15 @@ export default function LoginForm() {
     // Calling formAction by hand (not via a form/button prop) needs startTransition,
     // otherwise `pending` never flips to true.
     const formData = new FormData(event.currentTarget);
+    startAttempt();
     startTransition(() => formAction(formData));
   }
 
   const handleGoogleLogin = async () => {
     setGoogleLoading(true);
+    startAttempt();
+    // Clear a leftover "came from sign-up" marker from an abandoned sign-up.
+    document.cookie = "oauth_from=; path=/; max-age=0";
     const supabase = createClient();
 
     const { error } = await supabase.auth.signInWithOAuth({
@@ -79,10 +154,18 @@ export default function LoginForm() {
 
     if (error) {      
       setGoogleLoading(false);      
-      setGoogleError("Login with Google failed!");
+      setGoogleError("Log in with Google failed. Please try again.");
 
       console.error("google login failed:", error);      
     };
+  }
+
+  async function declineSignup() {
+    // They don't want an account, so drop the Google session the callback kept.
+    setDismissedEmail(noAccountEmail);
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.replace("/login");
   }
 
   return (
@@ -96,6 +179,10 @@ export default function LoginForm() {
           Don&apos;t have an account? <Link href="/signup">Sign up</Link>
         </span>
       </div>
+
+      {showNotice && (
+        <StatusNotice notice={notice} onDismiss={() => setNoticeHidden(true)} />
+      )}
 
       <form onSubmit={handleSubmit} noValidate>
         <div className="field">
@@ -155,7 +242,6 @@ export default function LoginForm() {
           {errors.password && <p className="error">{errors.password}</p>}
         </div>
 
-        {state.error && <p className="formError" role="alert">{state.error}</p>}
 
         <button
           type="submit"
@@ -168,6 +254,26 @@ export default function LoginForm() {
       </form>
 
       <ForgotPasswordModal open={forgotOpen} onClose={() => setForgotOpen(false)} />
+
+      {noAccountOpen && (
+        <ConfirmDialog
+          tone="warning"
+          title="Account not found"
+          message={
+            <>
+              There&apos;s no account for <strong>{noAccountEmail}</strong> yet. Do you want
+              to request an account?
+            </>
+          }
+          confirmLabel="Sign up"
+          busyLabel="Opening…"
+          cancelLabel="No"
+          onCancel={declineSignup}
+          // Keeps the Google session, so sign-up opens on the "few more details" step.
+          // replace, not push, so Back doesn't return to this dialog.
+          onConfirm={() => router.replace("/signup")}
+        />
+      )}
 
       <div className="divider">
         <span>or</span>
@@ -184,9 +290,6 @@ export default function LoginForm() {
         {googleLoading ? "Redirecting…" : "Continue with Google"}
       </button>
 
-      {googleError.trim() !== "" && 
-        <p className="error">{googleError}</p>
-      }
 
       <style jsx global>{`
         .split {
