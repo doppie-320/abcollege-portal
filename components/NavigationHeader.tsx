@@ -25,6 +25,17 @@ const NAV_LINKS: readonly NavLink[] = [
   { href: "#", label: "Suggestion Box" },
 ];
 
+/** Tabs for admins on /home — standard links plus User Account Review. */
+export const HOME_ADMIN_NAV_LINKS: readonly NavLink[] = [
+  ...NAV_LINKS,
+  { href: "/admin/user-account-review", label: "User Account Review" },
+];
+
+/** Extra entries shown in the profile dropdown, e.g. the admin console. */
+export const ADMIN_MENU_LINKS: readonly NavLink[] = [
+  { href: "/admin", label: "Admin console" },
+];
+
 type SiteNavProps = {
   initials: string;
   name: string;
@@ -38,6 +49,8 @@ type SiteNavProps = {
   /** Overrides the user menu's profile entry so admins skip the student page. */
   profileHref?: string;
   profileLabel?: string;
+  /** Extra entries shown in the profile dropdown (e.g. admin console). */
+  menuLinks?: readonly NavLink[];
 };
 
 export default function SiteNav({
@@ -50,7 +63,8 @@ export default function SiteNav({
   links = NAV_LINKS,
   brandHref = "/home",
   profileHref,
-  profileLabel
+  profileLabel,
+  menuLinks
 }: SiteNavProps) {
   const pathname = usePathname();
   const barRef = useRef<HTMLDivElement>(null);
@@ -143,6 +157,7 @@ export default function SiteNav({
           isProfilePage={isProfilePage}
           profileHref={profileHref}
           profileLabel={profileLabel}
+          menuLinks={menuLinks}
         />
       </header>
       <div className="header-accent" />

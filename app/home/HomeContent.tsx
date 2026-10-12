@@ -4,7 +4,7 @@ import Link from "next/link";
 import AnnouncementCard from "./AnnouncementCard";
 import CreatePostModal, { type NewPost } from "./CreatePostModal";
 import Select from "@/components/Select";
-import SiteNav, { PAGE_RESELECT_EVENT } from "@/components/NavigationHeader";
+import SiteNav, { ADMIN_MENU_LINKS, HOME_ADMIN_NAV_LINKS, PAGE_RESELECT_EVENT } from "@/components/NavigationHeader";
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "../../lib/supabase/client"
 import { useRouter } from "next/navigation";
@@ -480,6 +480,8 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
         name={current_user.name}
         userId={current_user.id}
         avatarUrl={current_user.avatar_path}
+        links={is_admin ? HOME_ADMIN_NAV_LINKS : undefined}
+        menuLinks={is_admin ? ADMIN_MENU_LINKS : undefined}
       />
 
       <div className="page-wrap">
