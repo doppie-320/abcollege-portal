@@ -3,7 +3,13 @@
 import { useEffect, useId, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { logout } from "@/app/profile/actions";
+
+type MenuLink = {
+  href: string;
+  label: string;
+};
 
 type Props = {
   initials: string;
@@ -15,6 +21,8 @@ type Props = {
   /** Overrides the profile entry so admins are not sent to the student page. */
   profileHref?: string;
   profileLabel?: string;
+  /** Extra entries shown above the profile entry (e.g. admin console). */
+  menuLinks?: readonly MenuLink[];
   avatarUrl: string;
 };
 
@@ -26,9 +34,11 @@ export default function UserMenu({
   avatarUrl,
   isProfilePage = false,
   profileHref = "/profile",
-  profileLabel = "Student profile"
+  profileLabel = "Student profile",
+  menuLinks = [],
 }: Props) {
   const [open, setOpen] = useState(false);
+  const pathname = usePathname();
   const containerRef = useRef<HTMLDivElement>(null);
   const panelId = useId();
   const chipLabel = nameOverride ?? name;
@@ -79,6 +89,17 @@ export default function UserMenu({
 
       {open && (
         <div className="userMenuPanel" id={panelId}>
+          {menuLinks.map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              className="userMenuItem"
+              aria-current={pathname === link.href ? "page" : undefined}
+              onClick={() => setOpen(false)}
+            >
+              <span className="userMenuItemFace">{link.label}</span>
+            </Link>
+          ))}
           <Link
             href={profileHref}
             className="userMenuItem"

@@ -2,8 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createClient } from "@/lib/supabase/client";
-import Link from "next/link";
-import SiteNav from "@/components/NavigationHeader";
+import SiteNav, { ADMIN_MENU_LINKS } from "@/components/NavigationHeader";
 import ConfirmDialog from "@/app/home/ConfirmDialog";
 import {
   STATUS_LABELS,
@@ -181,19 +180,15 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
         avatarUrl={profile.avatarUrl}
         nameOverride="ADMIN"
         links={[]}
+        brandHref="/admin"
         profileHref="/admin/profile"
         profileLabel="My profile"
+        menuLinks={ADMIN_MENU_LINKS}
       />
 
       <div className="page-wrap">
         <div className="mb-6 flex flex-wrap items-end justify-between gap-x-8 gap-y-5">
           <div>
-            <Link
-              href="/admin"
-              className="mono mb-3 inline-block text-[11px] text-blue no-underline hover:underline"
-            >
-              &larr; Back to admin console
-            </Link>
             <h1 className="mb-1 text-[30px] leading-none">User Account Review</h1>
             <p className="mb-0 text-xs text-ink-soft">
               {applicants.length} registration{applicants.length === 1 ? "" : "s"} on file. Select an

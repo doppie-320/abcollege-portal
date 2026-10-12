@@ -1,8 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import AvatarEditor from "@/app/profile/AvatarEditor";
-import SiteNav from "@/components/NavigationHeader";
+import SiteNav, { ADMIN_MENU_LINKS } from "@/components/NavigationHeader";
 import type { Profile } from "@/lib/auth";
 
 type AdminProfileContentProps = {
@@ -25,19 +24,15 @@ export default function AdminProfileContent({ profile }: AdminProfileContentProp
         avatarUrl={profile.avatarUrl}
         nameOverride="ADMIN"
         links={[]}
+        brandHref="/admin"
         profileHref="/admin/profile"
         profileLabel="My profile"
+        menuLinks={ADMIN_MENU_LINKS}
         isProfilePage
       />
 
       <div className="page-wrap">
         <div className="mb-6">
-          <Link
-            href="/admin"
-            className="mono mb-3 inline-block text-[11px] text-blue no-underline hover:underline"
-          >
-            &larr; Back to admin console
-          </Link>
           <h1 className="mb-1 text-[30px] leading-none">My Profile</h1>
           <p className="mb-0 text-xs text-ink-soft">
             The council account you review student registrations with.
