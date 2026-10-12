@@ -346,6 +346,7 @@ export default function CreatePostModal({
       {showDiscard && (
         <ConfirmDialog
           tone="warning"
+          eyebrow={isEdit ? "UNSAVED EDITS" : "UNSAVED DRAFT"}
           title={isEdit ? "Discard your changes?" : "Discard this post?"}
           message={
             isEdit ? (

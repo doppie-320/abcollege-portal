@@ -258,6 +258,7 @@ export default function PostModal({
 
       {deletingComment && (
         <ConfirmDialog
+          eyebrow="DELETE · COMMENT"
           title="Delete this comment?"
           message={
             deletingComment.authorId === currentUser.id

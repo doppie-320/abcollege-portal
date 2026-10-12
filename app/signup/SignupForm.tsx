@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import DatePicker from "@/components/DatePicker";
 import Select from "@/components/Select";
-import ConfirmDialog from "@/app/home/ConfirmDialog";
+import ConfirmDialog, { USER_ICON } from "@/app/home/ConfirmDialog";
 import { register, registerWithGoogle } from "./actions";
 
 type Course = {
@@ -749,6 +749,8 @@ export default function SignupForm({courses, yearLevels, googleUser, oauthFailed
       {emailTakenOpen && (
         <ConfirmDialog
           tone="warning"
+          eyebrow="ALREADY REGISTERED"
+          icon={USER_ICON}
           title="Account already exists"
           message={
             <>

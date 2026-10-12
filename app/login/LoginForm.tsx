@@ -4,7 +4,7 @@ import { startTransition, useActionState, useEffect, useState, type FormEvent } 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import ConfirmDialog from "@/app/home/ConfirmDialog";
+import ConfirmDialog, { USER_ICON } from "@/app/home/ConfirmDialog";
 import ForgotPasswordModal from "./ForgotPasswordModal";
 import StatusNotice from "./StatusNotice";
 import { toNotice, type Notice } from "./messages";
@@ -258,6 +258,8 @@ export default function LoginForm({ initialNotice, noAccountEmail }: LoginFormPr
       {noAccountOpen && (
         <ConfirmDialog
           tone="warning"
+          eyebrow="NEW TO THE PORTAL?"
+          icon={USER_ICON}
           title="Account not found"
           message={
             <>
