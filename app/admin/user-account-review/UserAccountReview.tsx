@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createClient } from "@/lib/supabase/client";
 import SiteNav, { ADMIN_MENU_LINKS } from "@/components/NavigationHeader";
-import ConfirmDialog from "@/app/home/ConfirmDialog";
+import RejectDialog, { type RejectMode } from "./RejectDialog";
 import {
   STATUS_LABELS,
   applicantBirthday,
@@ -37,8 +37,6 @@ const STATUS_STYLES: Record<ApplicantStatus, { dot: string; text: string; border
   accept: { dot: "bg-blue", text: "text-blue", border: "border-blue/40" },
   reject: { dot: "bg-[#b3261e]", text: "text-[#b3261e]", border: "border-[#b3261e]/40" },
 };
-
-type RejectMode = "delayed" | "immediate";
 
 /** Shared by both panels so the list and the detail card always line up. */
 const PANEL_HEIGHT = "h-[clamp(515px,calc(100vh-300px),640px)]";
@@ -508,12 +506,6 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
 
                 {/* Footer */}
                 <div className={`${FOOTER_BAR} px-6`}>
-                  <span className="mono text-[11px] text-ink-soft">
-                    {selectedStatus === null || selectedStatus === "pending"
-                      ? "No decision recorded yet."
-                      : `Marked ${STATUS_LABELS[selectedStatus].toLowerCase()} — not saved yet.`}
-                  </span>
-
                   <button
                     type="button"
                     className="ml-auto btn rounded-lg primary px-2.5 py-1 text-sm font-normal"
@@ -591,27 +583,9 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
       </div>
 
       {pendingReject && selected && (
-        <ConfirmDialog
-          tone={pendingReject === "immediate" ? "danger" : "warning"}
-          title={
-            pendingReject === "immediate" ? "Reject immediately?" : "Reject this application?"
-          }
-          message={
-            pendingReject === "immediate" ? (
-              <>
-                <strong>{applicantName(selected)}</strong>&rsquo;s registration will be rejected
-                right away, with no 7-day grace period. This can&rsquo;t be undone.
-              </>
-            ) : (
-              <>
-                <strong>{applicantName(selected)}</strong>&rsquo;s registration will be rejected
-                and their account will be deleted automatically in 7 days.
-              </>
-            )
-          }
-          confirmLabel="Reject application"
-          busyLabel="Rejecting…"
-          errorMessage="Couldn't reject this application. Please try again."
+        <RejectDialog
+          mode={pendingReject}
+          applicant={selected}
           onCancel={() => setPendingReject(null)}
           onConfirm={confirmReject}
         />
