@@ -253,7 +253,11 @@ export default function LoginForm({ initialNotice, noAccountEmail }: LoginFormPr
         </button>
       </form>
 
-      <ForgotPasswordModal open={forgotOpen} onClose={() => setForgotOpen(false)} />
+      <ForgotPasswordModal
+        open={forgotOpen}
+        onClose={() => setForgotOpen(false)}
+        initialEmail={fields.email.trim()}
+      />
 
       {noAccountOpen && (
         <ConfirmDialog
