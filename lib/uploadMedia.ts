@@ -1,8 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-// Public Supabase Storage bucket for files embedded in announcements.
-// Must exist (set up by the backend) with an insert policy for authenticated
-// users; uploads go to <user id>/<uuid>-<file name>.
+// Public Supabase Storage bucket for files embedded in announcements, created
+// by supabase/migrations/20261013120000_announcement_media_bucket.sql. Only
+// admins may upload, and only to <user id>/<uuid>-<file name>.
 export const MEDIA_BUCKET = "announcement-media";
 export const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 
