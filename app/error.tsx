@@ -13,110 +13,51 @@ export default function ErrorPage({
         console.error(error);
     }, [error])
 
-    return(
-        <main className="errorWrap">
-            <div className="tick-frame errorCard">
-                <span className="tick-bl" />
-                <span className="tick-br" />
+    // Same layout as global-not-found.tsx, so the two "something's off" pages match.
+    return (
+        <main className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-6">
+            {/* Giant transparent backdrop */}
+            <div
+                aria-hidden="true"
+                className="font-display pointer-events-none absolute inset-0 flex items-center justify-center leading-none font-bold tracking-tighter text-navy-deep/[0.08] select-none"
+            >
+                <span className="text-[44vw] whitespace-nowrap sm:text-[30vw] lg:text-[26rem]">
+                    Oops
+                </span>
+            </div>
 
-                <div className="errorIcon">!</div>
-                <span className="eyebrow">SOMETHING WENT WRONG</span>
-                <h2>We couldn&apos;t load this page</h2>
-                <p className="errorSub">
-                    This might be a temporary problem. Try again, or head back to the home page.
+            {/* Foreground content */}
+            <div className="relative z-10 w-full max-w-md animate-fade-in-up text-center">
+                <h1 className="font-display mb-3 text-5xl font-medium tracking-tight text-ink">
+                    Something Went Wrong
+                </h1>
+                <p className="mx-auto mb-8 max-w-sm text-sm text-ink-soft">
+                    We couldn&apos;t load this page. It might be a temporary problem, so try
+                    again or head back home.
                 </p>
 
                 {/* Real messages only in dev; production server errors are generic anyway. */}
                 {process.env.NODE_ENV === "development" && error.message && (
-                    <p className="mono errorDetail">{error.message}</p>
+                    <p className="mono mx-auto mb-8 max-w-sm rounded-[5px] border border-orange bg-orange/[0.06] px-3 py-2.5 text-left text-xs [overflow-wrap:anywhere] text-orange">
+                        {error.message}
+                    </p>
                 )}
 
-                <div className="errorActions">
-                    <button type="button" className="btn primary" onClick={() => retry()}>
+                <div className="flex items-center justify-center gap-3 max-sm:flex-col">
+                    <button type="button" className="btn" onClick={() => retry()}>
                         Try again
                     </button>
                     <Link href="/home" className="btn ghost">
-                        Go home
+                        Go home <span aria-hidden="true">&rarr;</span>
                     </Link>
                 </div>
 
-                {error.digest && <p className="mono errorDigest">Error ID: {error.digest}</p>}
+                {error.digest && (
+                    <p className="mono mt-6 mb-0 text-[11px] text-ink-soft">
+                        Error ID: <span className="select-all">{error.digest}</span>
+                    </p>
+                )}
             </div>
-
-            <style jsx>{`
-                .errorWrap {
-                    min-height: 100vh;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    padding: 24px 16px;
-                }
-
-                .errorCard {
-                    width: 100%;
-                    max-width: 440px;
-                    padding: 36px 32px 28px;
-                    text-align: center;
-                    animation: fadeInUp 0.4s ease backwards;
-                }
-
-                .errorIcon {
-                    width: 48px;
-                    height: 48px;
-                    border-radius: 50%;
-                    background: var(--orange);
-                    color: var(--white);
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    font-family: 'Space Grotesk', sans-serif;
-                    font-weight: 700;
-                    font-size: 22px;
-                    margin: 0 auto 18px;
-                    animation: popIn 0.2s ease 0.15s backwards;
-                }
-
-                .errorSub {
-                    color: var(--ink-soft);
-                    font-size: 14px;
-                }
-
-                .errorDetail {
-                    font-size: 12px;
-                    color: var(--orange);
-                    background: rgba(217, 83, 30, 0.08);
-                    border: 1px solid var(--orange);
-                    padding: 10px 12px;
-                    text-align: left;
-                    overflow-wrap: anywhere;
-                }
-
-                .errorActions {
-                    display: flex;
-                    gap: 10px;
-                    margin-top: 8px;
-                }
-
-                .errorActions :global(.btn) {
-                    flex: 1;
-                }
-
-                .errorDigest {
-                    font-size: 11px;
-                    color: var(--ink-soft);
-                    margin: 18px 0 0;
-                }
-
-                @media (max-width: 480px) {
-                    .errorCard {
-                        padding: 28px 20px 22px;
-                    }
-
-                    .errorActions {
-                        flex-direction: column;
-                    }
-                }
-            `}</style>
         </main>
     );
 }

@@ -260,7 +260,7 @@ export default function CalendarContent({
           <div className="calHeroMain">
             <span className="eyebrow calHeroEyebrow">SOE HUB / SCHOOL CALENDAR</span>
             <h1>
-              WHAT&apos;S <span className="calHeroAccent">ON</span>
+              WHAT&apos;S ON
             </h1>
             <div className="calHeroRule">
               <span className="mono calHeroDate">
@@ -655,10 +655,6 @@ export default function CalendarContent({
         .calHeroMain {
           min-width: 0;
           animation: fadeInUp 0.5s ease backwards;
-        }
-
-        .calHeroAccent {
-          color: var(--orange);
         }
 
         .calStats {

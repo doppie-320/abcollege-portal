@@ -16,7 +16,9 @@ export default async function HomePage() {
 
   const { data: authUser, error: authError } = await supabase.auth.getUser();
 
-  if (authError) throw authError;
+  // Signed out or the session expired: send them to log in (like getProfile does)
+  // instead of throwing "Auth session missing!" into the error page.
+  if (authError || !authUser.user) redirect("/login");
   if (!(await isApproved(supabase, authUser.user.id))) redirect("/login?error=pending");
 
   const { data: userData, error: userError } = await supabase
