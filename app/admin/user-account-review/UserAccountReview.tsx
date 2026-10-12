@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createClient } from "@/lib/supabase/client";
-import SiteNav, { ADMIN_MENU_LINKS } from "@/components/NavigationHeader";
+import SiteNav, { ADMIN_MENU_LINKS, HOME_ADMIN_NAV_LINKS } from "@/components/NavigationHeader";
 import RejectDialog, { type RejectMode } from "./RejectDialog";
 import {
   STATUS_LABELS,
@@ -203,11 +203,7 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
         name={profile.name}
         userId={profile.id}
         avatarUrl={profile.avatarUrl}
-        nameOverride="ADMIN"
-        links={[]}
-        brandHref="/admin"
-        profileHref="/admin/profile"
-        profileLabel="My profile"
+        links={HOME_ADMIN_NAV_LINKS}
         menuLinks={ADMIN_MENU_LINKS}
       />
 
