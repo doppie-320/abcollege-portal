@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
+import { useBackdropDismiss } from "@/lib/useBackdropDismiss";
 import { createClient } from "@/lib/supabase/client";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -15,6 +16,7 @@ export default function ForgotPasswordModal({ open, onClose }: Props) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
+  const backdrop = useBackdropDismiss(onClose);
 
   useEffect(() => {
     if (!open) return;
@@ -67,9 +69,7 @@ export default function ForgotPasswordModal({ open, onClose }: Props) {
   return (
     <div
       className="modalOverlay"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+      {...backdrop}
     >
       <div className="modalPanel" role="dialog" aria-modal="true" aria-labelledby="forgotTitle">
         <button type="button" className="modalClose" aria-label="Close" onClick={onClose}>

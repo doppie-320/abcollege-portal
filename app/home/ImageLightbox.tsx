@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { useBackdropDismiss } from "@/lib/useBackdropDismiss";
 import Image from "next/image";
 import type { MediaImage } from "@/lib/mock/social-db";
 
@@ -16,6 +17,7 @@ export default function ImageLightbox({
   onIndexChange: (index: number) => void;
 }) {
   const hasMultiple = items.length > 1;
+  const backdrop = useBackdropDismiss(onClose);
   const current = items[index];
 
   useEffect(() => {
@@ -34,7 +36,7 @@ export default function ImageLightbox({
   }, [index, hasMultiple, items.length, onClose, onIndexChange]);
 
   return (
-    <div className="lightboxBackdrop" onClick={onClose}>
+    <div className="lightboxBackdrop" {...backdrop}>
       <button type="button" className="lightboxClose" onClick={onClose} aria-label="Close image viewer">
         <CloseIcon />
       </button>

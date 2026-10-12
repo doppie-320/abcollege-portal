@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useBackdropDismiss } from "@/lib/useBackdropDismiss";
 
 type Tone = "danger" | "warning";
 
@@ -43,6 +44,7 @@ export default function ConfirmDialog({
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const backdrop = useBackdropDismiss(onCancel, !busy);
   const cancelRef = useRef<HTMLButtonElement>(null);
   const colors = TONES[tone];
 
@@ -77,10 +79,12 @@ export default function ConfirmDialog({
   return (
     <div
       className="backdrop"
+      onMouseDown={backdrop.onMouseDown}
+      onMouseUp={backdrop.onMouseUp}
       onClick={(e) => {
         // Don't let the click reach a parent modal's backdrop.
         e.stopPropagation();
-        if (!busy) onCancel();
+        backdrop.onClick();
       }}
     >
       <div

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
+import { useBackdropDismiss } from "@/lib/useBackdropDismiss";
 import { createPortal } from "react-dom";
 import { EditorContent, useEditor, useEditorState, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -54,6 +55,7 @@ export default function CreatePostModal({
   const [tag, setTag] = useState(initialPost?.tag ?? tags[0] ?? "");
   const [bodyChanged, setBodyChanged] = useState(false);
   const [showDiscard, setShowDiscard] = useState(false);
+  const backdrop = useBackdropDismiss(requestClose);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [uploading, setUploading] = useState(0);
@@ -193,7 +195,7 @@ export default function CreatePostModal({
   }
 
   return (
-    <div className="modalBackdrop" onClick={requestClose}>
+    <div className="modalBackdrop" {...backdrop}>
       <form
         className="modalPanel"
         onClick={(e) => e.stopPropagation()}

@@ -20,7 +20,7 @@ export const PAGE_RESELECT_EVENT = "site-nav:page-reselect";
 
 const NAV_LINKS: readonly NavLink[] = [
   { href: "/home", label: "Home" },
-  { href: "#", label: "Calendar" },
+  { href: "/calendar", label: "Calendar" },
   { href: "#", label: "Attendance" },
   { href: "#", label: "Suggestion Box" },
 ];

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useBackdropDismiss } from "@/lib/useBackdropDismiss";
 import Image from "next/image";
 import PostContent from "./PostContent";
 import PostMenu from "./PostMenu";
@@ -28,6 +29,7 @@ export default function PostModal({
   canModerate?: boolean;
 }) {
   const [draft, setDraft] = useState("");
+  const backdrop = useBackdropDismiss(onClose);
   const [submitting, setSubmitting] = useState(false);
   const [commentError, setCommentError] = useState("");
 
@@ -121,7 +123,7 @@ export default function PostModal({
   }
 
   return (
-    <div className="modalBackdrop" onClick={onClose}>
+    <div className="modalBackdrop" {...backdrop}>
       <div className="modalPanel" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
         <div className="modalTopBar">
           <span className="modalTopBarTitle mono">
