@@ -168,6 +168,45 @@ export default function SiteNav({
             </Link>
           ))}
         </nav>
+        {/* Tablet: tabs live as icons in the header (no floating bar). */}
+        <nav className="tablet-icon-nav" aria-label="Primary">
+          {links
+            .filter((link) => link.icon)
+            .map((link) => {
+              const Icon = NAV_ICONS[link.icon as NavIconKind];
+              // Route-less tabs stay inert so a click never pushes "#"
+              // into the router and breaks later navigation.
+              if (link.href === "#") {
+                return (
+                  <button
+                    key={link.label}
+                    type="button"
+                    aria-label={`${link.label} (coming soon)`}
+                    title={`${link.label} — coming soon`}
+                    aria-disabled="true"
+                    className="tablet-icon-nav-item is-disabled"
+                    onClick={(e) => e.preventDefault()}
+                  >
+                    <Icon size={22} strokeWidth={2} aria-hidden="true" />
+                  </button>
+                );
+              }
+              const active = pathname === link.href;
+              return (
+                <Link
+                  key={link.label}
+                  href={link.href}
+                  aria-label={link.label}
+                  title={link.label}
+                  aria-current={active ? "page" : undefined}
+                  className={`tablet-icon-nav-item${active ? " is-active" : ""}`}
+                  onClick={(e) => onLinkClick(e, link.href)}
+                >
+                  <Icon size={22} strokeWidth={active ? 2.4 : 2} aria-hidden="true" />
+                </Link>
+              );
+            })}
+        </nav>
         <UserMenu
           initials={initials}
           name={name}
@@ -210,16 +249,134 @@ export default function SiteNav({
     </nav>
 
     <style jsx global>{`
-        .mobile-tabbar {
+      /* Floating bar is phone-only; the tablet icon nav shows in its range. */
+      .mobile-tabbar {
+        display: none;
+      }
+
+      .tablet-icon-nav {
         display: none;
       }
 
       @media (max-width: 900px) {
-        /* Desktop text tabs move into the floating bar. */
+        /* Desktop text tabs hide below desktop widths. */
         .site-header .main-nav {
           display: none;
         }
+      }
 
+      /* Tablet: tabs live as icons in the header — no floating bar. */
+      @media (min-width: 521px) and (max-width: 900px) {
+        /* Belt-and-suspenders: the floating bar must never show on tablet. */
+        .mobile-tabbar.tick-frame {
+          display: none;
+        }
+
+        .site-header {
+          position: relative;
+        }
+
+        /* Always dead-centre of the header, regardless of brand/chip widths. */
+        .tablet-icon-nav {
+          display: flex;
+          align-items: center;
+          gap: 2px;
+          height: 100%;
+          position: absolute;
+          left: 50%;
+          top: 0;
+          bottom: 0;
+          transform: translateX(-50%);
+        }
+
+        .tablet-icon-nav-item {
+          position: relative;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 48px;
+          height: 100%;
+          background: none;
+          border: none;
+          font: inherit;
+          color: #c6d3e5;
+          text-decoration: none;
+          cursor: pointer;
+          transition: color 0.15s ease, background-color 0.15s ease;
+        }
+
+        .tablet-icon-nav-item:hover {
+          color: var(--white);
+          background-color: rgba(255, 255, 255, 0.04);
+        }
+
+        .tablet-icon-nav-item.is-active {
+          color: var(--white);
+          background-color: rgba(255, 255, 255, 0.06);
+        }
+
+        /* Orange tab indicator growing from the centre, like the desktop tabs. */
+        .tablet-icon-nav-item::after {
+          content: '';
+          position: absolute;
+          left: 12px;
+          right: 12px;
+          bottom: 0;
+          height: 3px;
+          border-radius: 3px 3px 0 0;
+          background: var(--orange);
+          transform: scaleX(0);
+          transition: transform 0.2s ease;
+        }
+
+        .tablet-icon-nav-item:hover::after {
+          transform: scaleX(0.5);
+        }
+
+        .tablet-icon-nav-item.is-active::after {
+          transform: scaleX(1);
+        }
+
+        .tablet-icon-nav-item:focus-visible {
+          outline: 2px solid var(--grid);
+          outline-offset: -6px;
+          border-radius: 6px;
+        }
+
+        .tablet-icon-nav-item.is-disabled {
+          opacity: 0.45;
+          cursor: not-allowed;
+        }
+
+        .tablet-icon-nav-item.is-disabled:hover {
+          color: #c6d3e5;
+          background-color: transparent;
+        }
+
+        .tablet-icon-nav-item.is-disabled::after {
+          display: none;
+        }
+      }
+
+      /* Narrow tablets: slimmer centred icons so they never collide
+         with the brand or the user chip (5-icon admin case). */
+      @media (min-width: 521px) and (max-width: 700px) {
+        .tablet-icon-nav {
+          gap: 0;
+        }
+
+        .tablet-icon-nav-item {
+          width: 42px;
+        }
+
+        .tablet-icon-nav-item::after {
+          left: 9px;
+          right: 9px;
+        }
+      }
+
+      /* Phone: floating icon bar below the screen. */
+      @media (max-width: 520px) {
         /* Keep page content clear of the floating bar. */
         body {
           padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px));
@@ -228,8 +385,8 @@ export default function SiteNav({
         .mobile-tabbar.tick-frame {
           display: flex;
           align-items: center;
-          justify-content: space-around;
-          gap: 4px;
+          justify-content: center;
+          gap: 6px;
           position: fixed;
           left: 50%;
           transform: translateX(-50%);
@@ -254,11 +411,13 @@ export default function SiteNav({
           align-items: center;
           justify-content: center;
           gap: 4px;
-          flex: 1 1 0;
-          min-width: 44px;
-          min-height: 44px;
-          padding: 8px 6px 8px;
-          border-radius: 4px;
+          flex: 0 0 auto;
+          width: 50px;
+          height: 50px;
+          min-width: 50px;
+          min-height: 50px;
+          padding: 6px;
+          border-radius: 10px;
           color: var(--ink-soft);
           text-decoration: none;
           transition: color 0.15s ease, background-color 0.15s ease, transform 0.15s ease;
@@ -288,9 +447,8 @@ export default function SiteNav({
           background: #D6EAFB;
         }
 
-        /* Active rectangular pip echoing the desktop tab underline. */
         .mobile-tabbar-dot {
-          width: 16px;
+          width: 25px;
           height: 2px;
           border-radius: 1px;
           background: var(--orange);

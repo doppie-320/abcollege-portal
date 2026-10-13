@@ -826,12 +826,9 @@
     padding-inline: 0.75rem;
   }
  
-  /* Hide the name text next to the avatar; the avatar/initials stay tappable.
-     Adjust this selector to whatever class UserMenu uses for its name label. */
-  .site-header .user-chip-name,
-  .site-header .user-menu-name {
-    display: none;
-  }
+  /* Icon-only user chip on phones is handled inside UserMenu's scoped styles
+     (global selectors can't reach styled-jsx-scoped classes). */
+  /* (name-hiding rule lives in components/UserMenu.tsx) */
 }
  
 @media (prefers-reduced-motion: reduce) {

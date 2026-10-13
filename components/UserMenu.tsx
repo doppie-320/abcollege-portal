@@ -243,6 +243,17 @@ export default function UserMenu({
         .userMenuItemDanger:focus-visible .userMenuItemFace {
           background: #fbe9e7;
         }
+
+        /* Tablet and phone: icon-only chip — name hides, avatar stays tappable for the dropdown. */
+        @media (max-width: 900px) {
+          .userMenuName {
+            display: none;
+          }
+
+          .userMenuTrigger {
+            padding: 4px;
+          }
+        }
       `}</style>
     </div>
   );
