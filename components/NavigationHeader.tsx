@@ -4,11 +4,30 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, type MouseEvent } from "react";
+import {
+  CalendarDays,
+  ClipboardCheck,
+  House,
+  Lightbulb,
+  UserCheck,
+  type LucideIcon,
+} from "lucide-react";
 import UserMenu from "./UserMenu";
+
+export type NavIconKind = "home" | "calendar" | "attendance" | "suggestion" | "review";
 
 export type NavLink = {
   href: string;
   label: string;
+  icon?: NavIconKind;
+};
+
+const NAV_ICONS: Record<NavIconKind, LucideIcon> = {
+  home: House,
+  calendar: CalendarDays,
+  attendance: ClipboardCheck,
+  suggestion: Lightbulb,
+  review: UserCheck,
 };
 
 /** Scroll distance (px) that counts as a deliberate move, so tiny jitters don't toggle the bar. */
@@ -19,16 +38,16 @@ const SCROLL_UP_THRESHOLD = 4;
 export const PAGE_RESELECT_EVENT = "site-nav:page-reselect";
 
 const NAV_LINKS: readonly NavLink[] = [
-  { href: "/home", label: "Home" },
-  { href: "/calendar", label: "Calendar" },
-  { href: "#", label: "Attendance" },
-  { href: "#", label: "Suggestion Box" },
+  { href: "/home", label: "Home", icon: "home" },
+  { href: "/calendar", label: "Calendar", icon: "calendar" },
+  { href: "#", label: "Attendance", icon: "attendance" },
+  { href: "#", label: "Suggestion Box", icon: "suggestion" },
 ];
 
 /** Tabs for admins on /home — standard links plus User Account Review. */
 export const HOME_ADMIN_NAV_LINKS: readonly NavLink[] = [
   ...NAV_LINKS,
-  { href: "/admin/user-account-review", label: "User Account Review" },
+  { href: "/admin/user-account-review", label: "User Account Review", icon: "review" },
 ];
 
 /** Extra entries shown in the profile dropdown, e.g. the admin console. */
@@ -120,6 +139,7 @@ export default function SiteNav({
   }
 
   return (
+    <>
     <div ref={barRef} className={`site-nav-bar ${hidden ? "is-hidden" : ""} ${scrolled ? "is-scrolled" : ""}`}>
       <header className="site-header">
         <Link
@@ -136,7 +156,7 @@ export default function SiteNav({
           />
           SOE HUB
         </Link>
-        <nav className="main-nav">
+        <nav className="main-nav" aria-label="Primary">
           {links.map((link) => (
             <Link
               key={link.label}
@@ -162,5 +182,136 @@ export default function SiteNav({
       </header>
       <div className="header-accent" />
     </div>
+
+    {/* Tablet / mobile: floating icon tab bar matching the rectangular tick-frame theme. */}
+    <nav className="mobile-tabbar tick-frame" aria-label="Primary">
+      <span className="tick-bl" aria-hidden="true" />
+      <span className="tick-br" aria-hidden="true" />
+      {links
+        .filter((link) => link.icon)
+        .map((link) => {
+          const Icon = NAV_ICONS[link.icon as NavIconKind];
+          const active = pathname === link.href;
+          return (
+            <Link
+              key={link.label}
+              href={link.href}
+              aria-label={link.label}
+              title={link.label}
+              aria-current={active ? "page" : undefined}
+              className={`mobile-tabbar-item${active ? " is-active" : ""}`}
+              onClick={(e) => onLinkClick(e, link.href)}
+            >
+              <Icon size={22} strokeWidth={active ? 2.4 : 2} aria-hidden="true" />
+              <span className="mobile-tabbar-dot" aria-hidden="true" />
+            </Link>
+          );
+        })}
+    </nav>
+
+    <style jsx global>{`
+        .mobile-tabbar {
+        display: none;
+      }
+
+      @media (max-width: 900px) {
+        /* Desktop text tabs move into the floating bar. */
+        .site-header .main-nav {
+          display: none;
+        }
+
+        /* Keep page content clear of the floating bar. */
+        body {
+          padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+        }
+
+        .mobile-tabbar.tick-frame {
+          display: flex;
+          align-items: center;
+          justify-content: space-around;
+          gap: 4px;
+          position: fixed;
+          left: 50%;
+          transform: translateX(-50%);
+          bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+          z-index: 100;
+          width: min(480px, calc(100% - 24px));
+          /* Rectangular theme bar: override tick-frame padding but keep its
+             6px radius + navy corner ticks. */
+          padding: 4px 10px;
+          background: var(--white);
+          border: 1px solid #c9bfa0;
+          border-radius: 6px;
+          box-shadow:
+            0 10px 30px rgba(13, 30, 56, 0.22),
+            0 2px 8px rgba(13, 30, 56, 0.12);
+        }
+
+        .mobile-tabbar-item {
+          position: relative;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 4px;
+          flex: 1 1 0;
+          min-width: 44px;
+          min-height: 44px;
+          padding: 8px 6px 8px;
+          border-radius: 4px;
+          color: var(--ink-soft);
+          text-decoration: none;
+          transition: color 0.15s ease, background-color 0.15s ease, transform 0.15s ease;
+        }
+
+        .mobile-tabbar-item:hover {
+          color: var(--navy);
+          background-color: rgba(19, 42, 77, 0.06);
+        }
+
+        .mobile-tabbar-item:active {
+          transform: scale(0.94);
+        }
+
+        .mobile-tabbar-item:focus-visible {
+          outline: 2px solid var(--blue);
+          outline-offset: 2px;
+        }
+
+        .mobile-tabbar-item.is-active {
+          color: var(--navy);
+          background: #E6F3FF;
+        }
+
+        .mobile-tabbar-item.is-active:hover {
+          color: var(--navy);
+          background: #D6EAFB;
+        }
+
+        /* Active rectangular pip echoing the desktop tab underline. */
+        .mobile-tabbar-dot {
+          width: 16px;
+          height: 2px;
+          border-radius: 1px;
+          background: var(--orange);
+          opacity: 0;
+          transform: scale(0.5);
+          transition: opacity 0.15s ease, transform 0.15s ease;
+        }
+
+        .mobile-tabbar-item.is-active .mobile-tabbar-dot {
+          opacity: 1;
+          transform: scale(1);
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .mobile-tabbar-item,
+        .mobile-tabbar-dot {
+          transition: none;
+        }
+      }
+    `}</style>
+    </>
   );
 }
