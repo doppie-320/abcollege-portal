@@ -386,16 +386,19 @@ export default function SiteNav({
           display: flex;
           align-items: center;
           justify-content: center;
-          gap: 6px;
+          gap: 2px;
           position: fixed;
           left: 50%;
           transform: translateX(-50%);
           bottom: calc(12px + env(safe-area-inset-bottom, 0px));
           z-index: 100;
-          width: min(480px, calc(100% - 24px));
+          /* Compressed: shrink-wrap the icons and stay centred, so there is
+             never dead space at the sides on any phone width. */
+          width: auto;
+          max-width: calc(100% - 24px);
           /* Rectangular theme bar: override tick-frame padding but keep its
              6px radius + navy corner ticks. */
-          padding: 4px 10px;
+          padding: 5px 15px;
           background: var(--white);
           border: 1px solid #c9bfa0;
           border-radius: 6px;
