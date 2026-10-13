@@ -1042,9 +1042,9 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
             grid-template-columns: 1fr;
           }
 
-          /* Stacked under the feed on narrow screens, so there's nothing to follow. */
+          /* Tablet and below: birthdays + countdown are laptop-only. */
           .sideColumn {
-            position: static;
+            display: none;
           }
         }
       `}</style>
