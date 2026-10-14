@@ -29,7 +29,8 @@ export default function PostModal({
   canModerate?: boolean;
 }) {
   const [draft, setDraft] = useState("");
-  const backdrop = useBackdropDismiss(onClose);
+  const [closing, setClosing] = useState(false);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [commentError, setCommentError] = useState("");
 
@@ -43,6 +44,24 @@ export default function PostModal({
   const commentCount = announcement.comments.length;
   const previousCommentCount = useRef(commentCount);
   const [modalAuthor, setModalAuthor] = useState<User | null>(null);
+
+  function requestClose() {
+    if (closing) return;
+    if (typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      onClose();
+      return;
+    }
+    setClosing(true);
+    closeTimer.current = setTimeout(onClose, 250);
+  }
+
+  useEffect(() => {
+    return () => {
+      if (closeTimer.current) clearTimeout(closeTimer.current);
+    };
+  }, []);
+
+  const backdrop = useBackdropDismiss(requestClose);
 
   useEffect(() => {
     if (!announcement.authorId) {
@@ -87,7 +106,7 @@ export default function PostModal({
         if (!savingEdit) cancelEdit();
         return;
       }
-      onClose();
+      requestClose();
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
@@ -142,9 +161,10 @@ export default function PostModal({
   }
 
   return (
-    <div className="modalBackdrop" {...backdrop}>
-      <div className="modalPanel" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+    <div className={`modalBackdrop ${closing ? "closing" : ""}`} {...backdrop}>
+      <div className={`modalPanel ${closing ? "closing" : ""}`} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
         <div className="modalTopBar">
+          <span className="sheetHandle" aria-hidden="true" />
           <span className="modalTopBarTitle mono">
             <span className="modalTopBarIcon">
               <MegaphoneIcon />
@@ -157,7 +177,7 @@ export default function PostModal({
               </>
             )}
           </span>
-          <button type="button" className="modalClose" onClick={onClose} aria-label="Close post">
+          <button type="button" className="modalClose" onClick={requestClose} aria-label="Close post">
             <CloseIcon />
           </button>
         </div>
@@ -283,21 +303,22 @@ export default function PostModal({
 
             <form className="commentForm" onSubmit={submitComment}>
               <CommentAvatar src={currentUser.avatar_path} initials={currentUser.initials} />
-              <input
-                ref={inputRef}
-                type="text"
-                className="commentInput"
-                placeholder="Write a comment..."
-                value={draft}
-                onChange={(e) => {
-                  setDraft(e.target.value);
-                  if (commentError) setCommentError("");
-                }}
-              />
-              <button type="submit" className="commentPostBtn sendBtn" disabled={!draft.trim() || submitting}>
-                Post
-                <SendIcon />
-              </button>
+              <div className="commentInputWrap">
+                <input
+                  ref={inputRef}
+                  type="text"
+                  className="commentInput"
+                  placeholder="Write a comment..."
+                  value={draft}
+                  onChange={(e) => {
+                    setDraft(e.target.value);
+                    if (commentError) setCommentError("");
+                  }}
+                />
+                <button type="submit" className="sendBtn" disabled={!draft.trim() || submitting} aria-label="Post comment">
+                  <SendIcon />
+                </button>
+              </div>
             </form>
             {commentError && <p className="commentError" role="alert">{commentError}</p>}
           </div>
@@ -330,41 +351,106 @@ export default function PostModal({
           inset: 0;
           background: rgba(13, 30, 56, 0.55);
           display: flex;
-          align-items: center;
+          align-items: flex-end;
           justify-content: center;
-          padding: 24px;
+          padding: 0;
           z-index: 100;
           backdrop-filter: blur(3px);
           animation: fadeIn 0.15s ease backwards;
         }
 
+        .modalBackdrop.closing {
+          animation: fadeOut 0.25s ease forwards;
+        }
+
+        @keyframes fadeOut {
+          from {
+            opacity: 1;
+          }
+          to {
+            opacity: 0;
+          }
+        }
+
         .modalPanel {
           width: 100%;
-          max-width: 560px;
-          max-height: 85vh;
+          max-width: 100%;
+          height: 92vh;
+          height: 92dvh;
+          max-height: 92vh;
+          max-height: 92dvh;
           background: var(--white);
-          border-radius: 8px;
+          border-radius: 16px 16px 0 0;
           border: 1px solid #c9bfa0;
+          border-bottom: none;
           display: flex;
           flex-direction: column;
           overflow: hidden;
-          box-shadow: 0 24px 60px rgba(13, 30, 56, 0.35);
-          animation: popIn 0.2s ease backwards;
+          box-shadow: 0 -12px 48px rgba(13, 30, 56, 0.35);
+          animation: sheetUp 0.28s cubic-bezier(0.32, 0.9, 0.35, 1) backwards;
+        }
+
+        .modalPanel.closing {
+          animation: sheetDown 0.25s cubic-bezier(0.4, 0, 0.4, 1) forwards;
+        }
+
+        @keyframes sheetUp {
+          from {
+            transform: translateY(100%);
+          }
+          to {
+            transform: translateY(0);
+          }
+        }
+
+        @keyframes sheetDown {
+          from {
+            transform: translateY(0);
+          }
+          to {
+            transform: translateY(100%);
+          }
+        }
+
+        @keyframes popOut {
+          from {
+            opacity: 1;
+            transform: scale(1);
+          }
+          to {
+            opacity: 0;
+            transform: scale(0.96) translateY(8px);
+          }
         }
 
         @media (min-width: 820px) {
+          .modalBackdrop {
+            align-items: center;
+            padding: 24px;
+          }
+
           .modalPanel {
             max-width: 920px;
             height: min(640px, 85vh);
+            max-height: 85vh;
+            border-radius: 8px;
+            border-bottom: 1px solid #c9bfa0;
+            box-shadow: 0 24px 60px rgba(13, 30, 56, 0.35);
+            animation: popIn 0.2s ease backwards;
+          }
+
+          .modalPanel.closing {
+            animation: popOut 0.2s ease forwards;
           }
         }
 
         .modalTopBar {
+          position: relative;
           display: flex;
           align-items: center;
           justify-content: space-between;
           gap: 12px;
-          padding: 10px 12px 10px 14px;
+          padding: 18px 12px 10px 14px;
           background-color: var(--navy);
           /* Same blueprint grid + glow as the site nav. */
           background-image:
@@ -417,6 +503,27 @@ export default function PostModal({
           font-size: 10px;
         }
 
+        .sheetHandle {
+          position: absolute;
+          top: 7px;
+          left: 50%;
+          transform: translateX(-50%);
+          width: 40px;
+          height: 4px;
+          border-radius: 999px;
+          background: rgba(255, 255, 255, 0.5);
+        }
+
+        @media (min-width: 820px) {
+          .modalTopBar {
+            padding-top: 10px;
+          }
+
+          .sheetHandle {
+            display: none;
+          }
+        }
+
         .modalClose {
           background: rgba(255, 255, 255, 0.12);
           border: none;
@@ -448,12 +555,7 @@ export default function PostModal({
         }
 
         .postPane {
-          padding: 20px 22px;
-          flex-shrink: 0;
-          overflow-y: auto;
-          max-height: 42vh;
-          scrollbar-width: thin;
-          scrollbar-color: #c9bfa0 transparent;
+          display: none;
         }
 
         .commentsPane {
@@ -461,17 +563,11 @@ export default function PostModal({
           flex-direction: column;
           flex: 1;
           min-height: 0;
-          border-top: 1px solid #c9bfa0;
           background: #fdfcf7;
         }
 
         .modalAuthor {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          padding: 16px 20px 12px;
-          border-bottom: 1px solid #c9bfa0;
-          flex-shrink: 0;
+          display: none;
         }
 
         .modalAuthorAvatar {
@@ -542,6 +638,7 @@ export default function PostModal({
           }
 
           .postPane {
+            display: block;
             flex: 1.15;
             min-width: 0;
             max-height: none;
@@ -557,6 +654,15 @@ export default function PostModal({
             min-height: 0;
             border-top: none;
             border-left: 1px solid #c9bfa0;
+          }
+
+          .modalAuthor {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 16px 20px 12px;
+            border-bottom: 1px solid #c9bfa0;
+            flex-shrink: 0;
           }
 
           .commentsScroll {
@@ -745,16 +851,31 @@ export default function PostModal({
           display: flex;
           gap: 8px;
           align-items: center;
-          padding: 12px 22px;
+          padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
           background: var(--vellum);
           border-top: 1px solid #c9bfa0;
           flex-shrink: 0;
         }
 
+        @media (min-width: 820px) {
+          .commentForm {
+            padding: 12px 22px;
+          }
+        }
+
+        .commentInputWrap {
+          position: relative;
+          flex: 1;
+          min-width: 0;
+          display: flex;
+          align-items: center;
+        }
+
         .commentInput {
+          width: 100%;
           flex: 1;
           margin-bottom: 0 !important;
-          padding: 8px 14px !important;
+          padding: 8px 40px 8px 14px !important;
           border-radius: 999px !important;
           font-size: 13px !important;
           box-shadow: none !important;
@@ -768,21 +889,44 @@ export default function PostModal({
         }
 
         .sendBtn {
+          position: absolute;
+          right: 4px;
+          top: 50%;
+          transform: translateY(-50%);
+          width: 28px;
+          height: 28px;
           display: flex;
           align-items: center;
-          gap: 6px;
-          border-radius: 999px;
-          padding: 7px 14px 7px 16px;
+          justify-content: center;
+          border-radius: 50%;
+          border: none;
+          background: transparent;
+          color: #b8ad90;
+          cursor: pointer;
+          flex-shrink: 0;
+          transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
+        }
+
+        .sendBtn:focus-visible {
+          outline: 2px solid var(--navy);
+          outline-offset: 1px;
         }
 
         .sendBtn:not(:disabled) {
           background: var(--orange);
-          border-color: var(--orange);
+          color: var(--white);
         }
 
         .sendBtn:hover:not(:disabled) {
           background: #b84418;
-          border-color: #b84418;
+        }
+
+        .sendBtn:active:not(:disabled) {
+          transform: translateY(-50%) scale(0.92);
+        }
+
+        .sendBtn:disabled {
+          cursor: default;
         }
 
         .sendBtn :global(svg) {
@@ -831,6 +975,10 @@ export default function PostModal({
         }
 
         @media (prefers-reduced-motion: reduce) {
+          .modalPanel {
+            animation: none;
+          }
+
           .modalClose:hover {
             transform: none;
           }
