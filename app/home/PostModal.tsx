@@ -6,7 +6,7 @@ import Image from "next/image";
 import PostContent from "./PostContent";
 import PostMenu from "./PostMenu";
 import ConfirmDialog from "./ConfirmDialog";
-import { getRelativeTime, type Announcement, type Comment, type User } from "@/app/home/HomeContent";
+import { getPerson, getRelativeTime, type Announcement, type Comment, type User } from "@/app/home/HomeContent";
 
 export default function PostModal({
   announcement,
@@ -42,6 +42,25 @@ export default function PostModal({
   const scrollRef = useRef<HTMLDivElement>(null);
   const commentCount = announcement.comments.length;
   const previousCommentCount = useRef(commentCount);
+  const [modalAuthor, setModalAuthor] = useState<User | null>(null);
+
+  useEffect(() => {
+    if (!announcement.authorId) {
+      setModalAuthor(null);
+      return;
+    }
+    let active = true;
+    getPerson(announcement.authorId)
+      .then((resolved) => {
+        if (active) setModalAuthor(resolved);
+      })
+      .catch(() => {
+        if (active) setModalAuthor(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [announcement.authorId]);
 
   useEffect(() => {
     if (commentCount > previousCommentCount.current) {
@@ -144,116 +163,145 @@ export default function PostModal({
         </div>
         <div className="modalAccent"></div>
 
-        <div className="modalScroll" ref={scrollRef}>
-          <PostContent
-            announcement={announcement}
-            currentUser={currentUser}
-            onToggleReaction={onToggleReaction}
-            onCommentClick={() => inputRef.current?.focus()}
-          />
+        <div className="modalBody">
+          <div className="postPane">
+            <PostContent
+              announcement={announcement}
+              currentUser={currentUser}
+              onToggleReaction={onToggleReaction}
+              onCommentClick={() => inputRef.current?.focus()}
+              hideAuthor
+              hideActions
+            />
+          </div>
 
-          <div className="commentsList">
-            <div className="commentsHead mono">
-              <span className="commentsHeadIcon">
-                <BubbleIcon />
-              </span>
-              Comments <span className="commentsCount">{commentCount}</span>
+          <div className="commentsPane">
+            <div className="modalAuthor">
+              {modalAuthor?.avatar_path ? (
+                <Image
+                  src={modalAuthor.avatar_path}
+                  alt=""
+                  width={36}
+                  height={36}
+                  className="size-9 shrink-0 rounded-full border border-navy-tint object-cover"
+                />
+              ) : (
+                <span className="modalAuthorAvatar">{modalAuthor?.initials ?? "?"}</span>
+              )}
+              <div className="modalAuthorText">
+                <div className="modalAuthorName">{modalAuthor?.name ?? "Unknown"}</div>
+                <div className="modalAuthorMeta">
+                  {modalAuthor?.isAdmin?.role && <span className="modalAuthorRole">{modalAuthor.isAdmin.role}</span>}
+                  <span className="mono modalAuthorTime">POSTED {getRelativeTime(announcement.postedAt).toUpperCase()}</span>
+                  {announcement.tag && <span className="tag modalAuthorTag">{announcement.tag}</span>}
+                </div>
+              </div>
             </div>
-            {commentCount === 0 ? (
-              <button type="button" className="commentsEmpty" onClick={() => inputRef.current?.focus()}>
-                <span className="commentsEmptyIcon">
-                  <BubbleIcon />
-                </span>
-                <span>
-                  <strong>No comments yet.</strong> Be the first to reply.
-                </span>
-              </button>
-            ) : (
-              announcement.comments.map((comment) => {
-                // A comment still being posted has a temp id the database doesn't know yet.
-                const isSaved = !comment.id.startsWith("temp-");
-                const isOwn = comment.authorId === currentUser.id;
-                const canEdit = isSaved && isOwn;
-                const canDelete = isSaved && (isOwn || canModerate);
-                const isEditing = editingId === comment.id;
+            <div className="commentsScroll" ref={scrollRef}>
+              <div className="commentsList">
+                <div className="commentsHead mono">
+                  <span className="commentsHeadIcon">
+                    <BubbleIcon />
+                  </span>
+                  Comments <span className="commentsCount">{commentCount}</span>
+                </div>
+                {commentCount === 0 ? (
+                  <button type="button" className="commentsEmpty" onClick={() => inputRef.current?.focus()}>
+                    <span className="commentsEmptyIcon">
+                      <BubbleIcon />
+                    </span>
+                    <span>
+                      <strong>No comments yet.</strong> Be the first to reply.
+                    </span>
+                  </button>
+                ) : (
+                  announcement.comments.map((comment) => {
+                    // A comment still being posted has a temp id the database doesn't know yet.
+                    const isSaved = !comment.id.startsWith("temp-");
+                    const isOwn = comment.authorId === currentUser.id;
+                    const canEdit = isSaved && isOwn;
+                    const canDelete = isSaved && (isOwn || canModerate);
+                    const isEditing = editingId === comment.id;
 
-                return (
-                  <div className={`commentItem ${isSaved ? "" : "sending"}`} key={comment.id}>
-                    <CommentAvatar src={comment.authorAvatar} initials={comment.authorInitials} />
-                    <div className="commentBubble">
-                      <div className="commentMeta">
-                        <span className="commentAuthor">{comment.authorName}</span>
-                        <span className="commentTime mono">{isSaved ? getRelativeTime(comment.postedAt) : "Sending…"}</span>
-                      </div>
-
-                      {isEditing ? (
-                        <form
-                          className="commentEdit"
-                          onSubmit={(e) => {
-                            e.preventDefault();
-                            void saveEdit(comment);
-                          }}
-                        >
-                          <textarea
-                            className="commentEditInput"
-                            value={editDraft}
-                            rows={2}
-                            autoFocus
-                            disabled={savingEdit}
-                            aria-label="Edit comment"
-                            onChange={(e) => {
-                              setEditDraft(e.target.value);
-                              if (editError) setEditError("");
-                            }}
-                          />
-                          {editError && <p className="commentEditError" role="alert">{editError}</p>}
-                          <div className="commentEditActions">
-                            <button type="button" className="commentCancelBtn" onClick={cancelEdit} disabled={savingEdit}>
-                              Cancel
-                            </button>
-                            <button type="submit" className="commentPostBtn" disabled={!editDraft.trim() || savingEdit}>
-                              {savingEdit ? "Saving..." : "Save"}
-                            </button>
+                    return (
+                      <div className={`commentItem ${isSaved ? "" : "sending"}`} key={comment.id}>
+                        <CommentAvatar src={comment.authorAvatar} initials={comment.authorInitials} />
+                        <div className="commentBubble">
+                          <div className="commentMeta">
+                            <span className="commentAuthor">{comment.authorName}</span>
+                            <span className="commentTime mono">{isSaved ? getRelativeTime(comment.postedAt) : "Sending…"}</span>
                           </div>
-                        </form>
-                      ) : (
-                        <div className="commentBody">{comment.body}</div>
-                      )}
-                    </div>
 
-                    {!isEditing && (canEdit || canDelete) && (
-                      <PostMenu
-                        noun="comment"
-                        onEdit={canEdit ? () => startEdit(comment) : undefined}
-                        onDelete={canDelete ? () => setDeletingComment(comment) : undefined}
-                      />
-                    )}
-                  </div>
-                );
-              })
-            )}
+                          {isEditing ? (
+                            <form
+                              className="commentEdit"
+                              onSubmit={(e) => {
+                                e.preventDefault();
+                                void saveEdit(comment);
+                              }}
+                            >
+                              <textarea
+                                className="commentEditInput"
+                                value={editDraft}
+                                rows={2}
+                                autoFocus
+                                disabled={savingEdit}
+                                aria-label="Edit comment"
+                                onChange={(e) => {
+                                  setEditDraft(e.target.value);
+                                  if (editError) setEditError("");
+                                }}
+                              />
+                              {editError && <p className="commentEditError" role="alert">{editError}</p>}
+                              <div className="commentEditActions">
+                                <button type="button" className="commentCancelBtn" onClick={cancelEdit} disabled={savingEdit}>
+                                  Cancel
+                                </button>
+                                <button type="submit" className="commentPostBtn" disabled={!editDraft.trim() || savingEdit}>
+                                  {savingEdit ? "Saving..." : "Save"}
+                                </button>
+                              </div>
+                            </form>
+                          ) : (
+                            <div className="commentBody">{comment.body}</div>
+                          )}
+                        </div>
+
+                        {!isEditing && (canEdit || canDelete) && (
+                          <PostMenu
+                            noun="comment"
+                            onEdit={canEdit ? () => startEdit(comment) : undefined}
+                            onDelete={canDelete ? () => setDeletingComment(comment) : undefined}
+                          />
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            <form className="commentForm" onSubmit={submitComment}>
+              <CommentAvatar src={currentUser.avatar_path} initials={currentUser.initials} />
+              <input
+                ref={inputRef}
+                type="text"
+                className="commentInput"
+                placeholder="Write a comment..."
+                value={draft}
+                onChange={(e) => {
+                  setDraft(e.target.value);
+                  if (commentError) setCommentError("");
+                }}
+              />
+              <button type="submit" className="commentPostBtn sendBtn" disabled={!draft.trim() || submitting}>
+                Post
+                <SendIcon />
+              </button>
+            </form>
+            {commentError && <p className="commentError" role="alert">{commentError}</p>}
           </div>
         </div>
-
-        <form className="commentForm" onSubmit={submitComment}>
-          <CommentAvatar src={currentUser.avatar_path} initials={currentUser.initials} />
-          <input
-            ref={inputRef}
-            type="text"
-            className="commentInput"
-            placeholder="Write a comment..."
-            value={draft}
-            onChange={(e) => {
-              setDraft(e.target.value);
-              if (commentError) setCommentError("");
-            }}
-          />
-          <button type="submit" className="commentPostBtn sendBtn" disabled={!draft.trim() || submitting}>
-            Post
-            <SendIcon />
-          </button>
-        </form>
-        {commentError && <p className="commentError" role="alert">{commentError}</p>}
       </div>
 
       {deletingComment && (
@@ -302,6 +350,13 @@ export default function PostModal({
           overflow: hidden;
           box-shadow: 0 24px 60px rgba(13, 30, 56, 0.35);
           animation: popIn 0.2s ease backwards;
+        }
+
+        @media (min-width: 820px) {
+          .modalPanel {
+            max-width: 920px;
+            height: min(640px, 85vh);
+          }
         }
 
         .modalTopBar {
@@ -384,18 +439,138 @@ export default function PostModal({
           outline-offset: 1px;
         }
 
-        .modalScroll {
+        .modalBody {
           flex: 1;
-          overflow-y: auto;
+          min-height: 0;
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+        }
+
+        .postPane {
           padding: 20px 22px;
+          flex-shrink: 0;
+          overflow-y: auto;
+          max-height: 42vh;
           scrollbar-width: thin;
           scrollbar-color: #c9bfa0 transparent;
         }
 
-        .commentsList {
-          margin-top: 18px;
-          padding-top: 14px;
+        .commentsPane {
+          display: flex;
+          flex-direction: column;
+          flex: 1;
+          min-height: 0;
           border-top: 1px solid #c9bfa0;
+          background: #fdfcf7;
+        }
+
+        .modalAuthor {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 16px 20px 12px;
+          border-bottom: 1px solid #c9bfa0;
+          flex-shrink: 0;
+        }
+
+        .modalAuthorAvatar {
+          width: 36px;
+          height: 36px;
+          border-radius: 50%;
+          background: var(--navy);
+          color: var(--white);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-family: "Space Grotesk", sans-serif;
+          font-weight: 600;
+          font-size: 13px;
+          flex-shrink: 0;
+        }
+
+        .modalAuthorText {
+          flex: 1;
+          min-width: 0;
+        }
+
+        .modalAuthorName {
+          font-size: 13.5px;
+          font-weight: 600;
+          color: var(--ink);
+        }
+
+        .modalAuthorMeta {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          margin-top: 1px;
+          flex-wrap: wrap;
+        }
+
+        .modalAuthorRole {
+          font-size: 11.5px;
+          color: var(--ink-soft);
+        }
+
+        .modalAuthorTime {
+          font-size: 11px;
+          color: var(--ink-soft);
+        }
+
+        .modalAuthorTag {
+          text-transform: uppercase;
+          letter-spacing: 0.04em;
+          border-radius: 3px;
+          font-size: 9.5px;
+          padding: 1px 6px;
+        }
+
+        .commentsScroll {
+          flex: 1;
+          min-height: 0;
+          overflow-y: auto;
+          padding: 16px 22px 12px;
+          scrollbar-width: thin;
+          scrollbar-color: #c9bfa0 transparent;
+        }
+
+        @media (min-width: 820px) {
+          .modalBody {
+            flex-direction: row;
+            overflow: hidden;
+          }
+
+          .postPane {
+            flex: 1.15;
+            min-width: 0;
+            max-height: none;
+            overflow-y: auto;
+            padding: 24px 26px;
+            scrollbar-width: thin;
+            scrollbar-color: #c9bfa0 transparent;
+          }
+
+          .commentsPane {
+            flex: 1;
+            min-width: 0;
+            min-height: 0;
+            border-top: none;
+            border-left: 1px solid #c9bfa0;
+          }
+
+          .commentsScroll {
+            flex: 1;
+            min-height: 0;
+            overflow-y: auto;
+            padding: 18px 20px 12px;
+            scrollbar-width: thin;
+            scrollbar-color: #c9bfa0 transparent;
+          }
+        }
+
+        .commentsList {
+          /* border-top moved to the pane divider on two-column layout */
         }
 
         .commentsHead {
