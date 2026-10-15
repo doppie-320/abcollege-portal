@@ -12,11 +12,11 @@ INSERT INTO public.yearlevels (id, name) VALUES (9001, 'Test Year');
 
 -- The signup trigger creates public.users and a pending user_requests row.
 INSERT INTO auth.users (id, email, raw_user_meta_data) VALUES
-  ('a0000000-0000-0000-0000-000000000001', 'admin@test.local',    '{"first_name":"Ada","last_name":"Admin"}'),
-  ('a0000000-0000-0000-0000-000000000002', 'scanner@test.local',  '{"first_name":"Sam","last_name":"Scanner"}'),
-  ('a0000000-0000-0000-0000-000000000003', 'student@test.local',  '{"first_name":"Stu","last_name":"Dent"}'),
-  ('a0000000-0000-0000-0000-000000000004', 'pending@test.local',  '{"first_name":"Pen","last_name":"Ding"}'),
-  ('a0000000-0000-0000-0000-000000000005', 'outsider@test.local', '{"first_name":"Out","last_name":"Sider"}');
+  ('a0000000-0000-0000-0000-000000000001', 'admin@pgtap.local',    '{"first_name":"Ada","last_name":"Admin"}'),
+  ('a0000000-0000-0000-0000-000000000002', 'scanner@pgtap.local',  '{"first_name":"Sam","last_name":"Scanner"}'),
+  ('a0000000-0000-0000-0000-000000000003', 'student@pgtap.local',  '{"first_name":"Stu","last_name":"Dent"}'),
+  ('a0000000-0000-0000-0000-000000000004', 'pending@pgtap.local',  '{"first_name":"Pen","last_name":"Ding"}'),
+  ('a0000000-0000-0000-0000-000000000005', 'outsider@pgtap.local', '{"first_name":"Out","last_name":"Sider"}');
 
 UPDATE public.user_requests SET request_status = 'accept'
 WHERE user_id <> 'a0000000-0000-0000-0000-000000000004';
