@@ -1,6 +1,6 @@
 "use client";
 
-import { startTransition, useActionState, useEffect, useState, type CSSProperties, type FormEvent } from "react";
+import { startTransition, useActionState, useEffect, useState, type CSSProperties, type SubmitEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -64,6 +64,7 @@ const EMPTY_FIELDS: Fields = {
 type Errors = Partial<Record<keyof Fields, string>>;
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const STUDENT_ID_RE = /^[a-zA-Z]{3}\d{8}$/;
 
 function validate(fields: Fields): Errors {
   const errors: Errors = {};
@@ -77,7 +78,11 @@ function validate(fields: Fields): Errors {
     errors.email = "Enter a valid email address.";
   }
 
-  if (!fields.studentId.trim()) errors.studentId = "Student ID is required.";
+  if (!fields.studentId.trim()) {
+    errors.studentId = "Student ID is required.";
+  } else if (!STUDENT_ID_RE.test(fields.studentId.trim())) {
+    errors.studentId = "Must be 3 letters followed by 8 numbers (e.g. ABC12345678).";
+  }
 
   if (fields.birthday && new Date(fields.birthday) > new Date()) {
     errors.birthday = "Birthday can't be in the future.";
@@ -128,7 +133,13 @@ function validateGoogleFields(fields: GoogleFields): GoogleErrors {
 
   if (!fields.firstName.trim()) errors.firstName = "First name is required.";
   if (!fields.lastName.trim()) errors.lastName = "Last name is required.";
-  if (!fields.studentId.trim()) errors.studentId = "Student ID is required.";
+
+  if (!fields.studentId.trim()) {
+    errors.studentId = "Student ID is required.";
+  } else if (!STUDENT_ID_RE.test(fields.studentId.trim())) {
+    errors.studentId = "Must be 3 letters followed by 8 numbers (e.g. ABC12345678).";
+  }
+
   if (!fields.yearLevel) errors.yearLevel = "Select a year level.";
   if (!fields.program) errors.program = "Select a program.";
 
@@ -218,14 +229,33 @@ export default function SignupForm({courses, yearLevels, googleUser, oauthFailed
     setGoogleFields((prev) => ({ ...prev, [key]: value }));
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
+    const form = event.currentTarget;
 
     const nextErrors = validate(fields);
     setErrors(nextErrors);
 
     if (Object.keys(nextErrors).length === 0) {
-      const formData = new FormData(event.currentTarget);
+      const supabase = createClient();
+      const trimmedStudentId = fields.studentId.trim();
+
+      // Check if the student ID exists in the students table
+      const { data: existingStudent } = await supabase
+        .from("students") // Adjust table name if stored in user_requests or users
+        .select("id")
+        .eq("student_id", trimmedStudentId)
+        .maybeSingle();
+
+      if (existingStudent) {
+        setErrors((prev) => ({
+          ...prev,
+          studentId: "This Student ID is already registered.",
+        }));
+        return; // Stop form submission
+      }
+      
+      const formData = new FormData(form);
 
       formData.set("yearLevelId", fields.yearLevel);
       formData.set("courseId", fields.program);
@@ -235,7 +265,7 @@ export default function SignupForm({courses, yearLevels, googleUser, oauthFailed
     }
   }
 
-  function handleGoogleDetailsSubmit(event: FormEvent<HTMLFormElement>) {
+  function handleGoogleDetailsSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     const nextErrors = validateGoogleFields(googleFields);
     setGoogleErrors(nextErrors);
