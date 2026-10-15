@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useBackdropDismiss } from "@/lib/useBackdropDismiss";
 import { AVATAR_ACCEPT, useAvatarEditor } from "@/lib/avatar";
 
 type AvatarEditorProps = {
@@ -28,6 +29,7 @@ export default function AvatarEditor({
   const menuRef = useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [viewerOpen, setViewerOpen] = useState(false);
+  const viewerBackdrop = useBackdropDismiss(() => setViewerOpen(false));
   const hasAvatar = Boolean(avatarUrl);
 
   function openPicker() {
@@ -209,7 +211,7 @@ export default function AvatarEditor({
       {viewerOpen && hasAvatar && (
         <div
           className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 p-6"
-          onClick={() => setViewerOpen(false)}
+          {...viewerBackdrop}
         >
           <button
             type="button"

@@ -53,6 +53,8 @@ type Props = {
   placeholder?: string;
   max?: string;
   minYear?: number;
+  /** Latest year in the year dropdown; defaults to `max`'s year, or this year. */
+  maxYear?: number;
 };
 
 export default function DatePicker({
@@ -62,6 +64,7 @@ export default function DatePicker({
   placeholder = "Select a date",
   max,
   minYear,
+  maxYear,
 }: Props) {
   const [open, setOpen] = useState(false);
   const selected = parseISO(value);
@@ -101,7 +104,7 @@ export default function DatePicker({
   }
 
   const earliestYear = minYear ?? today.getFullYear() - 100;
-  const latestYear = maxDate ? maxDate.getFullYear() : today.getFullYear();
+  const latestYear = maxYear ?? (maxDate ? maxDate.getFullYear() : today.getFullYear());
   const years: number[] = [];
   for (let y = latestYear; y >= earliestYear; y--) years.push(y);
 

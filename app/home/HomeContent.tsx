@@ -548,9 +548,10 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
                     type="button"
                     className="btn createPostBtn"
                     onClick={() => setShowCreatePost(true)}
+                    aria-label="Create post"
                   >
                     <PlusIcon />
-                    Create post
+                    <span className="createPostLabel">Create post</span>
                   </button>
                   }
                 </div>
@@ -817,6 +818,44 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
           }
         }
 
+        /* Small phones (519px and below): search, filter, and post share one
+           row inside the container — the post button keeps only its icon. */
+        @media (max-width: 519px) {
+          .toolbar {
+            padding: 10px 12px;
+          }
+
+          .toolbarInner {
+            flex-wrap: nowrap;
+            gap: 8px;
+          }
+
+          .searchWrap {
+            flex: 1 1 auto;
+            flex-basis: auto;
+            min-width: 0;
+            max-width: none;
+          }
+
+          .toolbarActions {
+            width: auto;
+            flex-shrink: 0;
+            gap: 8px;
+          }
+
+          .tagFilterWrap {
+            width: 104px;
+          }
+
+          .createPostBtn {
+            padding: 8px;
+          }
+
+          .createPostBtn .createPostLabel {
+            display: none;
+          }
+        }
+
         .sectionHead {
           display: flex;
           align-items: baseline;
@@ -1042,9 +1081,9 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
             grid-template-columns: 1fr;
           }
 
-          /* Stacked under the feed on narrow screens, so there's nothing to follow. */
+          /* Tablet and below: birthdays + countdown are laptop-only. */
           .sideColumn {
-            position: static;
+            display: none;
           }
         }
       `}</style>

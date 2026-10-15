@@ -198,6 +198,23 @@ export default function Select({
           background: var(--navy);
           color: var(--white);
         }
+
+        /* Tablet and below: the panel hugs the trigger instead of forcing a
+           180px centred float that overflows small triggers and screens. */
+        @media (max-width: 900px) {
+          .selectDropdown {
+            left: 0;
+            transform: none;
+            width: 100%;
+            min-width: 0;
+          }
+
+          .selectOption {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+          }
+        }
       `}</style>
     </div>
   );

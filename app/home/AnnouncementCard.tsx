@@ -77,6 +77,7 @@ export default function AnnouncementCard({
 
       {showDeleteDialog && (
         <ConfirmDialog
+          eyebrow="DELETE · BULLETIN POST"
           title="Delete this post?"
           message={
             <>
