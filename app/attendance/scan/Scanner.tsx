@@ -1,17 +1,23 @@
 "use client";
 
-import { useState, useTransition, type FormEvent } from "react";
+import { useRef, useState, useTransition, type FormEvent } from "react";
 import { checkInState, checkInWindow, type AttendanceEvent, type AttendanceStatus, type ScannedStudent } from "@/lib/attendance";
 import { lookupScan, recordScan } from "../actions";
+import CameraReader from "./CameraReader";
 
-// Takes the token as pasted text for now. A camera reader (e.g. the
-// `html5-qrcode` package) only needs to pass what it decodes to lookupScan().
 export default function Scanner({ events }: { events: AttendanceEvent[] }) {
   const [eventId, setEventId] = useState(events[0].event_id);
+  const [cameraOn, setCameraOn] = useState(false);
+  const [pasted, setPasted] = useState("");
+  // The token currently on screen; recordScan() needs it again.
   const [token, setToken] = useState("");
   const [student, setStudent] = useState<ScannedStudent | null>(null);
-  const [message, setMessage] = useState("");
+  const [notice, setNotice] = useState<{ text: string; isError: boolean } | null>(null);
   const [pending, startTransition] = useTransition();
+  // The camera reports the same code ~10 times a second; act on each one once,
+  // and not while a lookup or decision is in flight.
+  const busyRef = useRef(false);
+  const handledRef = useRef("");
 
   const event = events.find((e) => e.event_id === eventId) ?? events[0];
   const { opens, closes } = checkInWindow(event);
@@ -21,34 +27,61 @@ export default function Scanner({ events }: { events: AttendanceEvent[] }) {
     setStudent(null);
   }
 
-  function lookup(e: FormEvent) {
-    e.preventDefault();
+  function lookup(text: string) {
+    const scanned = text.trim();
+    if (!scanned || busyRef.current) return;
+    busyRef.current = true;
+    handledRef.current = scanned;
+
     startTransition(async () => {
-      const result = await lookupScan(eventId, token);
-      if (result.error !== undefined) {
-        setStudent(null);
-        setMessage(result.error);
-        return;
+      try {
+        const result = await lookupScan(eventId, scanned);
+        if (result.error !== undefined) {
+          reset();
+          setNotice({ text: result.error, isError: true });
+          return;
+        }
+        setToken(scanned);
+        setStudent(result.data);
+        setNotice(null);
+      } finally {
+        busyRef.current = false;
       }
-      setStudent(result.data);
-      setMessage("");
     });
   }
 
+  function onCameraRead(text: string) {
+    if (student || text.trim() === handledRef.current) return;
+    lookup(text);
+  }
+
+  function onPastedSubmit(e: FormEvent) {
+    e.preventDefault();
+    lookup(pasted);
+    setPasted("");
+  }
+
   function decide(decision: AttendanceStatus) {
+    busyRef.current = true;
     startTransition(async () => {
-      const result = await recordScan(eventId, token, decision);
-      if (result.error !== undefined) {
-        setMessage(result.error);
-        return;
+      try {
+        const result = await recordScan(eventId, token, decision);
+        if (result.error !== undefined) {
+          setNotice({ text: result.error, isError: true });
+          return;
+        }
+        const name = `${student?.first_name ?? ""} ${student?.last_name ?? ""}`.trim();
+        setNotice({
+          text:
+            decision === "rejected" && result.data.status === "present"
+              ? `${name} was already marked present, so the record was kept.`
+              : `${name}: ${result.data.status}. Ready for the next student.`,
+          isError: false,
+        });
+        reset();
+      } finally {
+        busyRef.current = false;
       }
-      const name = `${student?.first_name ?? ""} ${student?.last_name ?? ""}`.trim();
-      setMessage(
-        decision === "rejected" && result.data.status === "present"
-          ? `${name} was already marked present, so the record was kept.`
-          : `${name}: ${result.data.status}.`,
-      );
-      reset();
     });
   }
 
@@ -62,7 +95,8 @@ export default function Scanner({ events }: { events: AttendanceEvent[] }) {
             onChange={(e) => {
               setEventId(Number(e.target.value));
               reset();
-              setMessage("");
+              setNotice(null);
+              handledRef.current = "";
             }}
           >
             {events.map((e) => (
@@ -75,15 +109,29 @@ export default function Scanner({ events }: { events: AttendanceEvent[] }) {
         Check-in: {checkInState(event)} ({opens.toLocaleString()} – {closes.toLocaleString()})
       </p>
 
-      <form onSubmit={lookup}>
-        <label>
-          Student code{" "}
-          <input value={token} onChange={(e) => setToken(e.target.value)} size={60} required autoFocus />
-        </label>{" "}
-        <button type="submit" disabled={pending}>Look up</button>
-      </form>
+      <p>
+        <button
+          type="button"
+          onClick={() => {
+            setCameraOn((on) => !on);
+            setNotice(null);
+          }}
+        >
+          {cameraOn ? "Stop camera" : "Start camera"}
+        </button>
+      </p>
+      {cameraOn && (
+        <CameraReader
+          active={cameraOn}
+          onRead={onCameraRead}
+          onError={(text) => {
+            setCameraOn(false);
+            setNotice({ text, isError: true });
+          }}
+        />
+      )}
 
-      {message && <p role="status">{message}</p>}
+      {notice && <p role={notice.isError ? "alert" : "status"}>{notice.text}</p>}
 
       {student && (
         <section>
@@ -113,6 +161,16 @@ export default function Scanner({ events }: { events: AttendanceEvent[] }) {
           <button type="button" disabled={pending} onClick={reset}>Cancel</button>
         </section>
       )}
+
+      <details>
+        <summary>No camera? Paste a code instead</summary>
+        <form onSubmit={onPastedSubmit}>
+          <label>
+            Student code <input value={pasted} onChange={(e) => setPasted(e.target.value)} size={60} required />
+          </label>{" "}
+          <button type="submit" disabled={pending}>Look up</button>
+        </form>
+      </details>
     </div>
   );
 }

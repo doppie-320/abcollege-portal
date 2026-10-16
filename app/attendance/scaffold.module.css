@@ -142,6 +142,16 @@
   object-fit: cover;
 }
 
+.scaffold details {
+  margin: 16px 0;
+}
+
+.scaffold summary {
+  cursor: pointer;
+  color: var(--blue);
+  margin-bottom: 8px;
+}
+
 .scaffold [role="alert"] {
   color: #b42318;
   font-weight: 600;
