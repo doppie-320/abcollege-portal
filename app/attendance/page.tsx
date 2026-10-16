@@ -1,6 +1,7 @@
 export const instant = false;
 
 import type { Metadata } from "next";
+import styles from "./scaffold.module.css";
 import Link from "next/link";
 import { getProfile, isAdmin } from "@/lib/auth";
 import { canScanAnything, fetchMyAttendance, isStudent } from "@/lib/attendance-server";
@@ -10,7 +11,7 @@ export const metadata: Metadata = {
   title: "Attendance — SOE Hub",
 };
 
-// Unstyled on purpose: backend-first scaffold for the frontend team to restyle.
+// Bare-bones on purpose: backend-first scaffold for the frontend team to restyle.
 export default async function AttendancePage() {
   const [profile, admin] = await Promise.all([getProfile(), isAdmin()]);
   const [student, canScan, history] = await Promise.all([
@@ -20,7 +21,7 @@ export default async function AttendancePage() {
   ]);
 
   return (
-    <main>
+    <main className={styles.scaffold}>
       <h1>Attendance</h1>
       <p>Signed in as {profile.name}</p>
       <ul>
@@ -41,7 +42,7 @@ export default async function AttendancePage() {
           {history.length === 0 ? (
             <p>No attendance recorded yet.</p>
           ) : (
-            <table border={1}>
+            <table>
               <thead>
                 <tr>
                   <th>Event</th>

@@ -1,6 +1,7 @@
 export const instant = false;
 
 import type { Metadata } from "next";
+import styles from "@/app/attendance/scaffold.module.css";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getProfile, isAdmin } from "@/lib/auth";
@@ -14,7 +15,7 @@ export const metadata: Metadata = {
   title: "Event Attendance — SOE Hub",
 };
 
-// Unstyled on purpose: backend-first scaffold for the frontend team to restyle.
+// Bare-bones on purpose: backend-first scaffold for the frontend team to restyle.
 export default async function EventAttendancePage(props: PageProps<"/admin/attendance/[eventId]">) {
   const [, admin] = await Promise.all([getProfile(), isAdmin()]);
   if (!admin) redirect("/home");
@@ -28,7 +29,7 @@ export default async function EventAttendancePage(props: PageProps<"/admin/atten
   const present = report.filter((row) => row.status === "present").length;
 
   return (
-    <main>
+    <main className={styles.scaffold}>
       <p><Link href="/admin/attendance">All events</Link></p>
       <h1>{event.event_name}</h1>
       <p>
@@ -71,7 +72,7 @@ export default async function EventAttendancePage(props: PageProps<"/admin/atten
       {report.length === 0 ? (
         <p>Nobody has been recorded yet.</p>
       ) : (
-        <table border={1}>
+        <table>
           <thead>
             <tr>
               <th>Student ID</th>
