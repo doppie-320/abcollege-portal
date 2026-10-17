@@ -44,6 +44,8 @@ export default function PostContent({
   onCommentClick,
   authorOverride,
   collapsible = false,
+  hideAuthor = false,
+  hideActions = false,
   onEdit,
   onDelete,
 }: {
@@ -55,6 +57,10 @@ export default function PostContent({
   authorOverride?: User;
   // Clip long bodies behind "Show more" (feed cards, not the full post view).
   collapsible?: boolean;
+  // Hide the author header (e.g. modal left pane — author lives in the side column).
+  hideAuthor?: boolean;
+  // Hide the heart / comment action row (e.g. modal left pane).
+  hideActions?: boolean;
   // Shown in the "..." menu; omit both to hide the menu (e.g. not the author).
   onEdit?: () => void;
   onDelete?: () => void;
@@ -117,6 +123,7 @@ export default function PostContent({
 
   return (
     <div className="postContent">
+      {!hideAuthor && (
       <div className="postHeader">
         {author?.avatar_path ? (
           <Image
@@ -139,6 +146,7 @@ export default function PostContent({
         </div>
         {onEdit && onDelete && <PostMenu onEdit={onEdit} onDelete={onDelete} />}
       </div>
+      )}
 
       <h3 className="postTitle">{announcement.title}</h3>
       <RichTextBody content={announcement.body} collapsible={collapsible} />
@@ -168,6 +176,7 @@ export default function PostContent({
         />
       )}
 
+      {!hideActions && (
       <div className="postActions">
         <div className="actionGroup">
           <button
@@ -234,6 +243,7 @@ export default function PostContent({
           )}
         </div>
       </div>
+      )}
 
       <style jsx>{`
         .postTitle {

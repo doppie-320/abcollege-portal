@@ -34,16 +34,10 @@ export default function GlobalNotFound() {
             {/* Plain <a> tags: global-not-found bypasses the app router,
                 so next/link client-side transitions don't fire here. */}
             <div className="flex items-center justify-center gap-3 max-sm:flex-col">
-              <a
-                href="/home"
-                className="rounded-full bg-navy-deep px-6 py-2.5 text-sm font-medium text-paper no-underline transition-colors hover:bg-navy"
-              >
+              <a href="/home" className="btn">
                 Go Home <span aria-hidden="true">&rarr;</span>
               </a>
-              <a
-                href="/login"
-                className="rounded-full border border-ink/25 bg-paper/60 px-6 py-2.5 text-sm font-medium text-ink no-underline transition-colors hover:border-ink/50"
-              >
+              <a href="/login" className="btn ghost">
                 Back to login
               </a>
             </div>

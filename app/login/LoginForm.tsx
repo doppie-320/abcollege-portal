@@ -4,8 +4,9 @@ import { startTransition, useActionState, useEffect, useState, type FormEvent } 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import ConfirmDialog from "@/app/home/ConfirmDialog";
-import ForgotPasswordModal from "./ForgotPasswordModal";
+import ConfirmDialog, { USER_ICON } from "@/app/home/ConfirmDialog";
+// Forgot password is off until custom auth emails are set up (Supabase paid feature).
+// import ForgotPasswordModal from "./ForgotPasswordModal";
 import StatusNotice from "./StatusNotice";
 import { toNotice, type Notice } from "./messages";
 import { login } from "./actions";
@@ -61,7 +62,7 @@ export default function LoginForm({ initialNotice, noAccountEmail }: LoginFormPr
   // Only for a failed click here; errors from the URL come in fresh as props,
   // because cacheComponents keeps this component's state across navigations.
   const [googleError, setGoogleError] = useState("");
-  const [forgotOpen, setForgotOpen] = useState(false);
+  // const [forgotOpen, setForgotOpen] = useState(false);
   const [dismissedEmail, setDismissedEmail] = useState("");
   // Derived from props (not initial state) so coming back to this page later,
   // e.g. after finishing sign-up, doesn't reopen a stale dialog.
@@ -213,13 +214,13 @@ export default function LoginForm({ initialNotice, noAccountEmail }: LoginFormPr
         <div className="field">
           <div className="labelRow">
             <label htmlFor="password">Password</label>
-            <button
+            {/* <button
               type="button"
               className="forgotLink"
               onClick={() => setForgotOpen(true)}
             >
               Forgot password?
-            </button>
+            </button> */}
           </div>
           <div className="passField">
             <input
@@ -253,11 +254,17 @@ export default function LoginForm({ initialNotice, noAccountEmail }: LoginFormPr
         </button>
       </form>
 
-      <ForgotPasswordModal open={forgotOpen} onClose={() => setForgotOpen(false)} />
+      {/* <ForgotPasswordModal
+        open={forgotOpen}
+        onClose={() => setForgotOpen(false)}
+        initialEmail={fields.email.trim()}
+      /> */}
 
       {noAccountOpen && (
         <ConfirmDialog
           tone="warning"
+          eyebrow="NEW TO THE PORTAL?"
+          icon={USER_ICON}
           title="Account not found"
           message={
             <>

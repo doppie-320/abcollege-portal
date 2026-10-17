@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import SiteNav, { ADMIN_MENU_LINKS } from "@/components/NavigationHeader";
+import SiteNav, { ADMIN_MENU_LINKS, HOME_ADMIN_NAV_LINKS } from "@/components/NavigationHeader";
 import type { Profile } from "@/lib/auth";
 
 type AdminModule = {
@@ -46,11 +46,7 @@ export default function AdminContent({ profile }: AdminContentProps) {
         name={profile.name}
         userId={profile.id}
         avatarUrl={profile.avatarUrl}
-        nameOverride="ADMIN"
-        links={[]}
-        brandHref="/admin"
-        profileHref="/admin/profile"
-        profileLabel="My profile"
+        links={HOME_ADMIN_NAV_LINKS}
         menuLinks={ADMIN_MENU_LINKS}
       />
 

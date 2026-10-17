@@ -19,6 +19,7 @@
     "@tiptap/starter-kit": "^3.31.3",
     "dompurify": "^3.4.16",
     "html5-qrcode": "2.3.8",
+    "lucide-react": "^1.56.0",
     "next": "latest",
     "qrcode": "1.5.4",
     "react": "^19.0.0",

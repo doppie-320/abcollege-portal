@@ -770,3 +770,110 @@
     white-space: pre-line;
   }
 }
+
+/* The toggle only exists below the desktop breakpoint. */
+.nav-toggle {
+  display: none;
+}
+ 
+/* ---------- Tablet and phone: collapse links into a dropdown panel ---------- */
+@media (max-width: 900px) {
+  .site-header {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding-inline: 1rem;
+  }
+ 
+  .nav-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;            /* 44px = comfortable touch target */
+    height: 44px;
+    margin-left: -0.5rem;
+    border: 0;
+    border-radius: 0.5rem;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+  }
+  .nav-toggle:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+  }
+ 
+  /* Three bars drawn with one element + pseudo-elements; morphs into an X when open. */
+  .nav-toggle-bars,
+  .nav-toggle-bars::before,
+  .nav-toggle-bars::after {
+    display: block;
+    width: 20px;
+    height: 2px;
+    border-radius: 2px;
+    background: currentColor;
+    transition: transform 0.2s ease, background-color 0.2s ease;
+  }
+  .nav-toggle-bars { position: relative; }
+  .nav-toggle-bars::before,
+  .nav-toggle-bars::after { content: ""; position: absolute; left: 0; }
+  .nav-toggle-bars::before { top: -6px; }
+  .nav-toggle-bars::after  { top: 6px; }
+ 
+  .is-menu-open .nav-toggle-bars { background: transparent; }
+  .is-menu-open .nav-toggle-bars::before { transform: translateY(6px) rotate(45deg); }
+  .is-menu-open .nav-toggle-bars::after  { transform: translateY(-6px) rotate(-45deg); }
+ 
+  /* Brand takes the free space so the user chip stays pinned right. */
+  .brand { margin-right: auto; }
+ 
+  /* Dropdown panel anchored under the header. */
+  .main-nav {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 40;
+    display: none;
+    flex-direction: column;
+    gap: 0;
+    padding: 0.5rem 1rem 1rem;
+    background: var(--nav-bg, #fff);          /* swap for your header background */
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+    box-shadow: 0 12px 24px -12px rgba(0, 0, 0, 0.25);
+    max-height: calc(100dvh - 100%);
+    overflow-y: auto;
+  }
+  .main-nav.is-open { display: flex; }
+ 
+  .main-nav a {
+    display: block;
+    padding: 0.875rem 0.5rem;
+    border-radius: 0.5rem;
+    min-height: 44px;
+  }
+  .main-nav a + a { border-top: 1px solid rgba(0, 0, 0, 0.06); }
+  .main-nav a.current { font-weight: 600; }
+}
+ 
+/* ---------- Phone: tighten spacing, shorten the user chip ---------- */
+@media (max-width: 520px) {
+  .site-header {
+    gap: 0.5rem;
+    padding-inline: 0.75rem;
+  }
+ 
+  /* Icon-only user chip on phones is handled inside UserMenu's scoped styles
+     (global selectors can't reach styled-jsx-scoped classes). */
+  /* (name-hiding rule lives in components/UserMenu.tsx) */
+}
+ 
+@media (prefers-reduced-motion: reduce) {
+  .nav-toggle-bars,
+  .nav-toggle-bars::before,
+  .nav-toggle-bars::after {
+    transition: none;
+  }
+}
+ 
