@@ -5,17 +5,17 @@ import Image from "next/image";
 import Link from "next/link";
 import SiteNav, { ADMIN_MENU_LINKS, HOME_ADMIN_NAV_LINKS } from "@/components/NavigationHeader";
 import { getProfile, isAdmin } from "@/lib/auth";
-import { canScanAnything, fetchMyAttendance, isStudent } from "@/lib/attendance-server";
+import { canScanAnything, fetchMyAttendance } from "@/lib/attendance-server";
+import { createClient } from "@/lib/supabase/server";
 import LocalTime from "./LocalTime";
+import HistoryList from "./HistoryList";
+import { SplitBar } from "./motion";
 import StudentToken from "./StudentToken";
 import {
-  AttendanceBadge,
   BLUEPRINT_GRID,
-  DateChip,
   EmptyState,
   Frame,
   Icon,
-  MethodTag,
   PageHeader,
   PanelHeader,
   StatStrip,
@@ -25,14 +25,36 @@ export const metadata: Metadata = {
   title: "Attendance — SOE Hub",
 };
 
+type StudentRecord = {
+  student_id: string;
+  courses: { name: string } | null;
+  yearlevels: { name: string } | null;
+};
+
+/** The student's own row; the pass reads its number from here, not the sign-up metadata. */
+async function fetchStudentRecord(userId: string): Promise<StudentRecord | null> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("students")
+    .select("student_id, courses(name), yearlevels(name)")
+    .eq("id", userId)
+    .maybeSingle<StudentRecord>();
+  if (error) throw error;
+
+  return data;
+}
+
 export default async function AttendancePage() {
   const [profile, admin] = await Promise.all([getProfile(), isAdmin()]);
   const [student, canScan, history] = await Promise.all([
-    isStudent(profile.id),
+    fetchStudentRecord(profile.id),
     canScanAnything(profile.id, admin),
     fetchMyAttendance(profile.id),
   ]);
 
+  const studentNumber = student?.student_id || profile.studentId;
+  const program = [student?.courses?.name, student?.yearlevels?.name].filter(Boolean).join(" · ") || profile.program;
   const present = history.filter((row) => row.status === "present");
   const lastCheckIn = present[0];
 
@@ -106,16 +128,17 @@ export default async function AttendancePage() {
                     </span>
                   )}
                   <div className="min-w-0">
-                    <h2 className="mb-0.5 truncate text-[18px] text-paper">{profile.name}</h2>
-                    <p className="mono mb-0 truncate text-[11px] text-navy-tint">
-                      {profile.studentId} &middot; {profile.program}
+                    <h2 className="mb-1 truncate text-[18px] leading-tight text-paper">{profile.name}</h2>
+                    <p className="mono mb-0.5 text-[13px] tracking-[0.06em] text-paper/90 tabular-nums">
+                      {studentNumber}
                     </p>
+                    <p className="mb-0 truncate text-[11.5px] text-navy-tint">{program}</p>
                   </div>
                 </div>
               </div>
 
               <div className="px-5 pt-7 pb-5">
-                <StudentToken />
+                <StudentToken name={profile.name} studentId={studentNumber} />
               </div>
             </Frame>
 
@@ -144,6 +167,18 @@ export default async function AttendancePage() {
                 ]}
               />
 
+              {history.length > 0 && (
+                <div className="border-t border-rule-soft px-4 pt-3 pb-3.5">
+                  <SplitBar
+                    label="Attendance record"
+                    segments={[
+                      { label: "Present", value: present.length, color: "bg-blue" },
+                      { label: "Rejected", value: history.length - present.length, color: "bg-[#b3261e]" },
+                    ]}
+                  />
+                </div>
+              )}
+
               {history.length === 0 ? (
                 <div className="border-t border-rule-soft">
                   <EmptyState icon="calendar" title="NO ATTENDANCE YET">
@@ -151,32 +186,7 @@ export default async function AttendancePage() {
                   </EmptyState>
                 </div>
               ) : (
-                <ul className="m-0 list-none divide-y divide-rule-soft border-t border-rule-soft">
-                  {history.map((row, index) => (
-                    <li
-                      key={`${row.event_name}-${row.recorded_at}`}
-                      className="animate-fade-in flex items-center gap-3.5 px-5 py-3.5 transition-colors duration-150 hover:bg-vellum/40"
-                      style={{ animationDelay: `${Math.min(index, 10) * 30}ms` }}
-                    >
-                      <DateChip value={row.event_start} />
-                      <div className="min-w-0 flex-1">
-                        <p className="mb-1 truncate text-[14px] font-semibold text-navy-deep">{row.event_name}</p>
-                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                          <span className="mono text-[11px] text-ink-soft">
-                            <LocalTime value={row.recorded_at} format="short" />
-                          </span>
-                          <MethodTag method={row.method} />
-                        </div>
-                        {row.note && (
-                          <p className="mt-1.5 mb-0 border-l-2 border-orange/60 pl-2 text-[12px] text-ink-soft italic">
-                            {row.note}
-                          </p>
-                        )}
-                      </div>
-                      <AttendanceBadge status={row.status} />
-                    </li>
-                  ))}
-                </ul>
+                <HistoryList history={history} />
               )}
             </Frame>
           </div>

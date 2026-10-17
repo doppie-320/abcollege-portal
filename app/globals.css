@@ -42,6 +42,8 @@
   --animate-fade-in-up: fadeInUp 0.4s ease backwards;
   --animate-fade-in: fadeIn 0.3s ease backwards;
   --animate-pop-in: popIn 0.2s ease backwards;
+  --animate-scan-sweep: scanSweep 2.2s ease-in-out infinite alternate;
+  --animate-sheen: sheen 0.9s ease-out both;
 }
 
 @layer base {
@@ -173,6 +175,31 @@
     to {
       opacity: 1;
       transform: none;
+    }
+  }
+
+  /* Laser line over the live camera, bouncing between the frame edges. */
+  @keyframes scanSweep {
+    from {
+      top: 10%;
+    }
+    to {
+      top: 90%;
+    }
+  }
+
+  /* One pass of light down a freshly drawn QR code. */
+  @keyframes sheen {
+    from {
+      transform: translateY(-100%);
+      opacity: 0;
+    }
+    25% {
+      opacity: 1;
+    }
+    to {
+      transform: translateY(300%);
+      opacity: 0;
     }
   }
 

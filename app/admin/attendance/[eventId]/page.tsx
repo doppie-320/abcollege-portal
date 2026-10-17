@@ -8,8 +8,8 @@ import { getProfile, isAdmin } from "@/lib/auth";
 import { checkInState } from "@/lib/attendance";
 import { fetchEventAttendance } from "@/lib/attendance-server";
 import LocalTime from "@/app/attendance/LocalTime";
+import { SplitBar } from "@/app/attendance/motion";
 import {
-  AttendanceBadge,
   CheckInBadge,
   EmptyState,
   FIELD,
@@ -17,20 +17,18 @@ import {
   Frame,
   Icon,
   Initials,
-  MethodTag,
   PageHeader,
   PanelHeader,
   StatStrip,
 } from "@/app/attendance/ui";
-import { assignScanner, removeAttendance, removeScanner, setAttendance } from "../actions";
+import { assignScanner, removeScanner, setAttendance } from "../actions";
 import ActionForm from "../ActionForm";
 import EventSettings from "./EventSettings";
+import RosterTable from "./RosterTable";
 
 export const metadata: Metadata = {
   title: "Event Attendance — SOE Hub",
 };
-
-const ROSTER_COLUMNS = ["Student", "Course / year", "Status", "Recorded", "By", "Note", ""];
 
 const ICON_BUTTON =
   "flex size-8 cursor-pointer items-center justify-center rounded-md border border-transparent bg-transparent text-ink-soft transition-colors duration-150 hover:border-[#b3261e]/30 hover:bg-[rgba(205,79,60,0.08)] hover:text-[#b3261e] focus-visible:outline-2 focus-visible:outline-blue disabled:cursor-not-allowed disabled:opacity-50";
@@ -101,95 +99,23 @@ export default async function EventAttendancePage(props: PageProps<"/admin/atten
               { label: "Scanners", value: scanners.length },
             ]}
           />
+          {report.length > 0 && (
+            <div className="border-t border-rule-soft px-4 pt-3 pb-3.5">
+              <SplitBar
+                label="Check-in mix"
+                segments={[
+                  { label: "Present", value: present, color: "bg-blue" },
+                  { label: "Rejected", value: report.length - present, color: "bg-[#b3261e]" },
+                ]}
+              />
+            </div>
+          )}
         </Frame>
 
-        <div className="grid grid-cols-[minmax(0,1fr)_360px] items-start gap-6 max-[1000px]:grid-cols-1">
+        <RosterTable eventId={event.event_id} report={report} exportHref={exportHref} />
+
+        <div className="grid grid-cols-2 items-start gap-6 max-[900px]:grid-cols-1">
           <div className="flex min-w-0 flex-col gap-6">
-            {/* ───────── Roster ───────── */}
-            <Frame className="animate-fade-in-up p-0 [animation-delay:0.06s]">
-              <PanelHeader icon="users" title="Attendance roster">
-                <a href={exportHref} className="mono flex items-center gap-1.5 text-[11px] text-blue no-underline hover:text-navy">
-                  <Icon name="download" size={12} />
-                  CSV
-                </a>
-              </PanelHeader>
-
-              {report.length === 0 ? (
-                <EmptyState icon="users" title="NOBODY RECORDED YET">
-                  Students show up here as soon as they&apos;re scanned or recorded manually.
-                </EmptyState>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[760px] border-collapse text-left text-[13px]">
-                    <thead>
-                      <tr className="border-b border-rule-soft bg-vellum/50">
-                        {ROSTER_COLUMNS.map((column) => (
-                          <th
-                            key={column}
-                            scope="col"
-                            className="mono px-4 py-2.5 text-[10px] font-normal tracking-[0.08em] whitespace-nowrap text-ink-soft uppercase"
-                          >
-                            {column}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-rule-soft">
-                      {report.map((row) => (
-                        <tr key={row.user_id} className="align-top transition-colors duration-150 hover:bg-vellum/40">
-                          <td className="px-4 py-3">
-                            <span className="block font-semibold whitespace-nowrap text-navy-deep">
-                              {row.last_name}, {row.first_name}
-                            </span>
-                            <span className="mono block text-[11px] text-ink-soft">{row.student_id ?? "—"}</span>
-                          </td>
-                          <td className="px-4 py-3 text-ink-soft">
-                            {row.course ?? "—"} / {row.year_level ?? "—"}
-                          </td>
-                          <td className="px-4 py-3">
-                            <AttendanceBadge status={row.status} />
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className="mono mb-1 block text-[11px] whitespace-nowrap text-ink">
-                              <LocalTime value={row.recorded_at} format="short" />
-                            </span>
-                            <MethodTag method={row.method} />
-                          </td>
-                          <td className="px-4 py-3 text-[12.5px] text-ink-soft">{row.recorded_by ?? "—"}</td>
-                          <td className="max-w-[220px] px-4 py-3 text-[12.5px] text-ink-soft italic [overflow-wrap:anywhere]">
-                            {row.note}
-                          </td>
-                          <td className="px-3 py-2 text-right">
-                            <ActionForm
-                              action={removeAttendance}
-                              successMessage="Removed."
-                              confirm={{
-                                title: "Remove this record?",
-                                message: `${row.first_name} ${row.last_name}'s attendance for this event will be deleted.`,
-                                confirmLabel: "Remove record",
-                              }}
-                              className="flex justify-end"
-                            >
-                              <input type="hidden" name="eventId" value={event.event_id} />
-                              <input type="hidden" name="userId" value={row.user_id} />
-                              <button
-                                type="submit"
-                                className={ICON_BUTTON}
-                                aria-label={`Remove ${row.first_name} ${row.last_name}'s record`}
-                                title="Remove record"
-                              >
-                                <Icon name="trash" size={14} />
-                              </button>
-                            </ActionForm>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </Frame>
-
             {/* ───────── Manual record ───────── */}
             <Frame className="animate-fade-in-up p-0 [animation-delay:0.1s]">
               <PanelHeader icon="pen" title="Record manually" />

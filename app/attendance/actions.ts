@@ -25,19 +25,35 @@ export async function getAttendanceToken(): Promise<AttendanceResult<{ token: st
     return { data: { token: data.token, refreshInMs: Math.max(1000, new Date(data.expires_at).getTime() - Date.now()) } };
 }
 
+type StudentRow = Omit<ScannedStudent, "avatarUrl"> & { avatar_path: string | null };
+
+function withAvatarUrl(supabase: Awaited<ReturnType<typeof createClient>>, { avatar_path, ...student }: StudentRow): ScannedStudent {
+    const avatarUrl = avatar_path ? supabase.storage.from("avatars").getPublicUrl(avatar_path).data.publicUrl : "";
+    return { ...student, avatarUrl };
+}
+
 /** Who a scanned QR belongs to. Records nothing. */
 export async function lookupScan(eventId: number, token: string): Promise<AttendanceResult<ScannedStudent>> {
     const supabase = await requireUser();
 
     const { data, error } = await supabase
         .rpc("scan_student", { p_event_id: eventId, p_token: token.trim() })
-        .single<Omit<ScannedStudent, "avatarUrl"> & { avatar_path: string | null }>();
+        .single<StudentRow>();
     if (error) return toAttendanceError(error);
 
-    const { avatar_path, ...student } = data;
-    const avatarUrl = avatar_path ? supabase.storage.from("avatars").getPublicUrl(avatar_path).data.publicUrl : "";
+    return { data: withAvatarUrl(supabase, data) };
+}
 
-    return { data: { ...student, avatarUrl } };
+/** Who a typed school student ID belongs to, for a student who can't show their QR. Records nothing. */
+export async function lookupStudentId(eventId: number, studentId: string): Promise<AttendanceResult<ScannedStudent>> {
+    const supabase = await requireUser();
+
+    const { data, error } = await supabase
+        .rpc("lookup_student_by_id", { p_event_id: eventId, p_student_id: studentId.trim() })
+        .single<StudentRow>();
+    if (error) return toAttendanceError(error);
+
+    return { data: withAvatarUrl(supabase, data) };
 }
 
 /** Accept or reject the scanned student. Takes the token again, not a user id; see record_scan(). */
@@ -50,6 +66,28 @@ export async function recordScan(
 
     const { data, error } = await supabase
         .rpc("record_scan", { p_event_id: eventId, p_token: token.trim(), p_decision: decision })
+        .single<{ status: AttendanceStatus }>();
+    if (error) return toAttendanceError(error);
+
+    return { data: { status: data.status } };
+}
+
+/** Accept or reject a student by school ID; saved as a manual record with an optional note. */
+export async function recordStudentId(
+    eventId: number,
+    studentId: string,
+    decision: AttendanceStatus,
+    note: string,
+): Promise<AttendanceResult<{ status: AttendanceStatus }>> {
+    const supabase = await requireUser();
+
+    const { data, error } = await supabase
+        .rpc("record_by_student_id", {
+            p_event_id: eventId,
+            p_student_id: studentId.trim(),
+            p_decision: decision,
+            p_note: note.trim() || null,
+        })
         .single<{ status: AttendanceStatus }>();
     if (error) return toAttendanceError(error);
 

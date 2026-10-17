@@ -2,8 +2,15 @@
 
 import { useEffect, useRef, useState, useTransition, type FormEvent, type ReactNode } from "react";
 import Select from "@/components/Select";
-import { checkInState, checkInWindow, type AttendanceEvent, type AttendanceStatus, type ScannedStudent } from "@/lib/attendance";
-import { lookupScan, recordScan } from "../actions";
+import {
+  checkInState,
+  checkInWindow,
+  type AttendanceEvent,
+  type AttendanceMethod,
+  type AttendanceStatus,
+  type ScannedStudent,
+} from "@/lib/attendance";
+import { lookupScan, lookupStudentId, recordScan, recordStudentId } from "../actions";
 import LocalTime from "../LocalTime";
 import {
   AttendanceBadge,
@@ -16,6 +23,7 @@ import {
   Frame,
   Icon,
   Initials,
+  MethodTag,
   PanelHeader,
   StatStrip,
   type IconName,
@@ -23,6 +31,9 @@ import {
 import CameraReader from "./CameraReader";
 
 type Notice = { text: string; isError: boolean };
+
+/** How the student on screen was found; recording needs the same thing again. */
+type Source = { kind: "qr"; token: string } | { kind: "id"; studentId: string };
 
 /** A decision made on this device, for the session log. Not persisted. */
 type LogEntry = {
@@ -32,6 +43,7 @@ type LogEntry = {
   studentId: string;
   eventName: string;
   status: AttendanceStatus;
+  method: AttendanceMethod;
   at: string;
 };
 
@@ -41,7 +53,7 @@ function fullName(student: Pick<ScannedStudent, "first_name" | "last_name">): st
 
 const STEPS = [
   "Pick the event you're checking students into.",
-  "Start the camera and frame the student's pass.",
+  "Frame the student's pass, or type their student number if they can't show it.",
   "Compare their face with the photo on file.",
   "Accept or reject. The next pass is read automatically.",
 ];
@@ -49,12 +61,15 @@ const STEPS = [
 export default function Scanner({ events }: { events: AttendanceEvent[] }) {
   const [eventId, setEventId] = useState(events[0].event_id);
   const [cameraOn, setCameraOn] = useState(false);
-  const [pasted, setPasted] = useState("");
-  // The token currently on screen; recordScan() needs it again.
-  const [token, setToken] = useState("");
+  const [source, setSource] = useState<Source | null>(null);
   const [student, setStudent] = useState<ScannedStudent | null>(null);
+  const [manualId, setManualId] = useState("");
+  // Optional reason saved with a manual check-in.
+  const [note, setNote] = useState("");
   const [notice, setNotice] = useState<Notice | null>(null);
   const [log, setLog] = useState<LogEntry[]>([]);
+  // Big check/cross over the camera right after a decision.
+  const [flash, setFlash] = useState<{ id: number; status: AttendanceStatus; name: string } | null>(null);
   const [pending, startTransition] = useTransition();
   // The camera reports the same code ~10 times a second; act on each one once,
   // and not while a lookup or decision is in flight.
@@ -77,39 +92,67 @@ export default function Scanner({ events }: { events: AttendanceEvent[] }) {
     };
   }, [hasStudent]);
 
+  // Keyboard shortcuts while verifying: A accept, R reject, Escape cancel.
+  // decide() changes every render, so the listener reads it through a ref.
+  const decideRef = useRef<(decision: AttendanceStatus) => void>(() => {});
+  useEffect(() => {
+    decideRef.current = decide;
+  });
+
   useEffect(() => {
     if (!hasStudent || pending) return;
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key !== "Escape") return;
-      setToken("");
-      setStudent(null);
+      if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
+      const key = e.key.toLowerCase();
+      // Letters typed into the reason field aren't shortcuts.
+      const typing = e.target instanceof HTMLElement && e.target.closest("input, textarea, select");
+      if (typing && key !== "escape") return;
+      if (key === "escape") {
+        setSource(null);
+        setStudent(null);
+      } else if (key === "a") {
+        decideRef.current("present");
+      } else if (key === "r") {
+        decideRef.current("rejected");
+      }
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [hasStudent, pending]);
 
+  useEffect(() => {
+    if (!flash) return;
+    const timer = setTimeout(() => setFlash(null), 1200);
+    return () => clearTimeout(timer);
+  }, [flash]);
+
   function reset() {
-    setToken("");
+    setSource(null);
     setStudent(null);
   }
 
-  function lookup(text: string) {
-    const scanned = text.trim();
-    if (!scanned || busyRef.current) return;
+  function lookup(next: Source) {
+    if (busyRef.current) return;
     busyRef.current = true;
-    handledRef.current = scanned;
+    if (next.kind === "qr") handledRef.current = next.token;
 
     startTransition(async () => {
       try {
-        const result = await lookupScan(eventId, scanned);
+        const result =
+          next.kind === "qr" ? await lookupScan(eventId, next.token) : await lookupStudentId(eventId, next.studentId);
         if (result.error !== undefined) {
           reset();
           setNotice({ text: result.error, isError: true });
           return;
         }
-        setToken(scanned);
+        // A short buzz tells the scanner a student was found without looking.
+        navigator.vibrate?.(40);
+        setSource(next);
         setStudent(result.data);
+        setNote("");
         setNotice(null);
+        // Kept on failure so a typo can be fixed.
+        if (next.kind === "id") setManualId("");
       } finally {
         busyRef.current = false;
       }
@@ -117,14 +160,15 @@ export default function Scanner({ events }: { events: AttendanceEvent[] }) {
   }
 
   function onCameraRead(text: string) {
-    if (student || text.trim() === handledRef.current) return;
-    lookup(text);
+    const scanned = text.trim();
+    if (!scanned || student || scanned === handledRef.current) return;
+    lookup({ kind: "qr", token: scanned });
   }
 
-  function onPastedSubmit(e: FormEvent) {
+  function onManualSubmit(e: FormEvent) {
     e.preventDefault();
-    lookup(pasted);
-    setPasted("");
+    const studentId = manualId.trim();
+    if (studentId) lookup({ kind: "id", studentId });
   }
 
   function changeEvent(id: number) {
@@ -140,10 +184,14 @@ export default function Scanner({ events }: { events: AttendanceEvent[] }) {
   }
 
   function decide(decision: AttendanceStatus) {
+    if (!source) return;
     busyRef.current = true;
     startTransition(async () => {
       try {
-        const result = await recordScan(eventId, token, decision);
+        const result =
+          source.kind === "qr"
+            ? await recordScan(eventId, source.token, decision)
+            : await recordStudentId(eventId, source.studentId, decision, note);
         if (result.error !== undefined) {
           setNotice({ text: result.error, isError: true });
           return;
@@ -164,9 +212,11 @@ export default function Scanner({ events }: { events: AttendanceEvent[] }) {
             studentId: student.student_id,
             eventName: event.event_name,
             status: result.data.status,
+            method: source.kind === "qr" ? "scan" : "manual",
             at: new Date().toISOString(),
           };
           setLog((prev) => [entry, ...prev].slice(0, 50));
+          setFlash({ id: entry.id, status: entry.status, name });
         }
         reset();
       } finally {
@@ -216,7 +266,8 @@ export default function Scanner({ events }: { events: AttendanceEvent[] }) {
               ) : (
                 <div className="relative flex aspect-[4/3] max-h-[420px] w-full flex-col items-center justify-center gap-4 p-6 text-center">
                   <ViewfinderCorners />
-                  <span className="flex size-16 items-center justify-center rounded-full border border-white/15 bg-white/5 text-navy-tint">
+                  <span className="relative flex size-16 items-center justify-center rounded-full border border-white/15 bg-white/5 text-navy-tint">
+                    <span className="absolute inset-0 animate-[ping_2.6s_cubic-bezier(0,0,0.2,1)_infinite] rounded-full border border-grid/40 motion-reduce:hidden" />
                     <Icon name="camera" size={26} />
                   </span>
                   <div>
@@ -229,6 +280,30 @@ export default function Scanner({ events }: { events: AttendanceEvent[] }) {
                     <Icon name="camera" />
                     Start camera
                   </button>
+                </div>
+              )}
+
+              {cameraOn && !pending && !student && !flash && (
+                <span className="animate-scan-sweep pointer-events-none absolute inset-x-8 z-10 h-0.5 rounded-full bg-orange shadow-[0_0_14px_3px_rgba(217,83,30,0.55)] motion-reduce:hidden" />
+              )}
+
+              {flash && (
+                <div
+                  key={flash.id}
+                  className={`animate-fade-in pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 ${
+                    flash.status === "present" ? "bg-blue/45" : "bg-[#b3261e]/45"
+                  }`}
+                >
+                  <span
+                    className={`animate-pop-in flex size-20 items-center justify-center rounded-full border-4 border-paper text-paper shadow-[0_12px_32px_rgba(0,0,0,0.3)] ${
+                      flash.status === "present" ? "bg-blue" : "bg-[#b3261e]"
+                    }`}
+                  >
+                    <Icon name={flash.status === "present" ? "check" : "x"} size={38} />
+                  </span>
+                  <span className="animate-fade-in-up mono rounded-full bg-paper px-3 py-1 text-[11px] text-navy-deep shadow-lg [animation-delay:0.08s]">
+                    {flash.name || "Student"} &middot; {flash.status}
+                  </span>
                 </div>
               )}
 
@@ -265,31 +340,35 @@ export default function Scanner({ events }: { events: AttendanceEvent[] }) {
             )}
           </div>
 
-          <details className="group border-t border-rule-soft px-5 py-3">
-            <summary className="mono flex cursor-pointer list-none items-center gap-1.5 text-[11px] text-blue hover:text-navy [&::-webkit-details-marker]:hidden">
-              <span className="transition-transform duration-150 group-open:rotate-90">
-                <Icon name="chevronRight" size={12} />
-              </span>
-              No camera? Paste a code instead
-            </summary>
-            <form onSubmit={onPastedSubmit} className="animate-fade-in mt-3 flex flex-wrap items-end gap-2">
-              <label className="m-0 min-w-[200px] flex-1">
-                <span className={FIELD_LABEL}>Student code</span>
+          <form onSubmit={onManualSubmit} className="border-t border-rule-soft bg-vellum/30 px-5 py-4">
+            <label htmlFor="manual-student-id" className={FIELD_LABEL}>
+              No pass? Enter their student number
+            </label>
+            <div className="flex gap-2">
+              <div className="relative min-w-0 flex-1">
+                <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-ink-soft">
+                  <Icon name="id" size={14} />
+                </span>
                 <input
+                  id="manual-student-id"
                   type="text"
-                  value={pasted}
-                  onChange={(e) => setPasted(e.target.value)}
-                  required
+                  value={manualId}
+                  onChange={(e) => setManualId(e.target.value)}
+                  placeholder="Student number"
                   autoComplete="off"
-                  className={`${FIELD} font-mono text-[12px]`}
+                  spellCheck={false}
+                  className={`${FIELD} pl-9 font-mono tracking-wide`}
                 />
-              </label>
-              <button type="submit" disabled={pending} className="btn rounded-lg px-4 py-2 text-[13px]">
-                <Icon name="clipboard" size={13} />
-                Look up
+              </div>
+              <button type="submit" disabled={pending || !manualId.trim()} className="btn rounded-lg px-4 py-2 text-[13px]">
+                <Icon name="search" size={13} />
+                Find
               </button>
-            </form>
-          </details>
+            </div>
+            <p className="mt-1.5 mb-0 text-[11.5px] text-ink-soft">
+              Check it against their school ID. It&apos;s saved as a manual check-in under your name.
+            </p>
+          </form>
         </Frame>
 
         {/* ───────── Session log + how-to ───────── */}
@@ -301,8 +380,8 @@ export default function Scanner({ events }: { events: AttendanceEvent[] }) {
             <StatStrip
               columns="grid-cols-2"
               stats={[
-                { label: "Present", value: presentCount, dot: "bg-blue" },
-                { label: "Rejected", value: log.length - presentCount, dot: "bg-[#b3261e]" },
+                { label: "Present", value: <Bump value={presentCount} />, dot: "bg-blue" },
+                { label: "Rejected", value: <Bump value={log.length - presentCount} />, dot: "bg-[#b3261e]" },
               ]}
             />
             {log.length === 0 ? (
@@ -314,7 +393,7 @@ export default function Scanner({ events }: { events: AttendanceEvent[] }) {
             ) : (
               <ul className="m-0 max-h-[400px] list-none divide-y divide-rule-soft overflow-y-auto border-t border-rule-soft">
                 {log.map((entry) => (
-                  <li key={entry.id} className="animate-fade-in flex items-center gap-3 px-5 py-3">
+                  <li key={entry.id} className="animate-fade-in-up flex items-center gap-3 px-5 py-3 transition-colors duration-150 hover:bg-vellum/40">
                     <span className="mono flex size-8 shrink-0 items-center justify-center rounded-full border border-navy bg-vellum text-[11px] font-semibold text-navy-deep">
                       <Initials first={entry.firstName} last={entry.lastName} />
                     </span>
@@ -327,6 +406,7 @@ export default function Scanner({ events }: { events: AttendanceEvent[] }) {
                         {events.length > 1 && <> &middot; {entry.eventName}</>}
                       </span>
                     </span>
+                    {entry.method === "manual" && <MethodTag method="manual" />}
                     <AttendanceBadge status={entry.status} />
                   </li>
                 ))}
@@ -360,9 +440,16 @@ export default function Scanner({ events }: { events: AttendanceEvent[] }) {
             className="animate-pop-in max-h-full w-full max-w-[480px] overflow-y-auto rounded-t-xl border border-rule bg-paper shadow-[0_24px_60px_rgba(13,30,56,0.35)] sm:rounded-xl"
           >
             <div className={`border-b-[3px] border-orange bg-navy px-5 py-4 ${BLUEPRINT_GRID}`}>
-              <span className="mono text-[10px] tracking-[0.12em] text-navy-tint uppercase">
-                Verify identity &middot; {event.event_name}
-              </span>
+              <div className="flex items-center justify-between gap-3">
+                <span className="mono text-[10px] tracking-[0.12em] text-navy-tint uppercase">
+                  Verify identity &middot; {event.event_name}
+                </span>
+                {source?.kind === "id" && (
+                  <span className="mono shrink-0 rounded border border-orange/60 bg-orange/20 px-1.5 py-px text-[9.5px] tracking-[0.08em] text-paper">
+                    MANUAL
+                  </span>
+                )}
+              </div>
               <h2 id="verify-heading" className="mt-1 mb-0 text-[19px] text-paper">
                 Is this the person in front of you?
               </h2>
@@ -376,16 +463,16 @@ export default function Scanner({ events }: { events: AttendanceEvent[] }) {
                   alt=""
                   width={136}
                   height={136}
-                  className="size-[136px] shrink-0 rounded-lg border border-rule object-cover shadow-[3px_3px_0_var(--orange)]"
+                  className="animate-pop-in size-[136px] shrink-0 rounded-lg border border-rule object-cover shadow-[3px_3px_0_var(--orange)] [animation-delay:0.08s]"
                 />
               ) : (
-                <div className="flex size-[136px] shrink-0 flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-rule bg-vellum p-3 text-center text-ink-soft">
+                <div className="animate-pop-in flex size-[136px] shrink-0 flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-rule bg-vellum p-3 text-center text-ink-soft">
                   <Icon name="user" size={28} />
                   <span className="mono text-[10px] leading-snug">No photo on file. Check their school ID.</span>
                 </div>
               )}
 
-              <div className="w-full min-w-0 flex-1">
+              <div className="animate-fade-in-up w-full min-w-0 flex-1 [animation-delay:0.12s]">
                 <h3 className="mb-2 text-[20px] leading-tight [overflow-wrap:anywhere] max-[440px]:text-center">
                   {fullName(student) || "Unnamed student"}
                 </h3>
@@ -414,6 +501,30 @@ export default function Scanner({ events }: { events: AttendanceEvent[] }) {
               </p>
             )}
 
+            {source?.kind === "id" && (
+              <div className="animate-fade-in-up mx-5 mb-4 [animation-delay:0.16s]">
+                <p className="mb-3 flex items-start gap-2 rounded-md border border-orange/30 bg-orange/10 px-3 py-2 text-[12px] text-navy-deep">
+                  <span className="mt-px text-orange">
+                    <Icon name="alert" size={13} />
+                  </span>
+                  No QR was shown, so check their face and school ID carefully.
+                </p>
+                <label htmlFor="manual-note" className={FIELD_LABEL}>
+                  Reason (optional)
+                </label>
+                <input
+                  id="manual-note"
+                  type="text"
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  maxLength={200}
+                  placeholder="e.g. Phone died"
+                  autoComplete="off"
+                  className={FIELD}
+                />
+              </div>
+            )}
+
             {notice && (
               <div className="px-5">
                 <NoticeBanner notice={notice} onDismiss={() => setNotice(null)} />
@@ -423,6 +534,7 @@ export default function Scanner({ events }: { events: AttendanceEvent[] }) {
             <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-rule-soft bg-vellum/40 px-5 py-3.5">
               <button type="button" className="btn ghost rounded-lg px-3 py-2 text-[13px]" disabled={pending} onClick={reset}>
                 Cancel
+                <Kbd>Esc</Kbd>
               </button>
               <button
                 type="button"
@@ -432,6 +544,7 @@ export default function Scanner({ events }: { events: AttendanceEvent[] }) {
               >
                 <Icon name="x" size={13} />
                 Reject
+                <Kbd>R</Kbd>
               </button>
               <button
                 type="button"
@@ -441,6 +554,7 @@ export default function Scanner({ events }: { events: AttendanceEvent[] }) {
               >
                 {pending ? <Spinner light /> : <Icon name="check" size={13} />}
                 {pending ? "Saving…" : "Accept"}
+                {!pending && <Kbd light>A</Kbd>}
               </button>
             </div>
           </div>
@@ -491,6 +605,28 @@ function NoticeBanner({ notice, onDismiss }: { notice: Notice; onDismiss: () => 
         <Icon name="x" size={12} />
       </button>
     </div>
+  );
+}
+
+/** A number that pops each time it changes. */
+function Bump({ value }: { value: number }) {
+  return (
+    <span key={value} className="inline-block animate-pop-in tabular-nums">
+      {value}
+    </span>
+  );
+}
+
+/** Shortcut hint, shown only on devices with a mouse (and so, usually, a keyboard). */
+function Kbd({ children, light = false }: { children: ReactNode; light?: boolean }) {
+  return (
+    <kbd
+      className={`mono hidden rounded border px-1 py-px text-[9.5px] leading-none font-normal pointer-fine:inline ${
+        light ? "border-white/40 text-white/80" : "border-current/30 opacity-70"
+      }`}
+    >
+      {children}
+    </kbd>
   );
 }
 

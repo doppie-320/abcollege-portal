@@ -3,7 +3,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
-SELECT plan(26);
+SELECT plan(34);
 
 -- Fixtures --------------------------------------------------------------------
 
@@ -16,7 +16,8 @@ INSERT INTO auth.users (id, email, raw_user_meta_data) VALUES
   ('a0000000-0000-0000-0000-000000000002', 'scanner@pgtap.local',  '{"first_name":"Sam","last_name":"Scanner"}'),
   ('a0000000-0000-0000-0000-000000000003', 'student@pgtap.local',  '{"first_name":"Stu","last_name":"Dent"}'),
   ('a0000000-0000-0000-0000-000000000004', 'pending@pgtap.local',  '{"first_name":"Pen","last_name":"Ding"}'),
-  ('a0000000-0000-0000-0000-000000000005', 'outsider@pgtap.local', '{"first_name":"Out","last_name":"Sider"}');
+  ('a0000000-0000-0000-0000-000000000005', 'outsider@pgtap.local', '{"first_name":"Out","last_name":"Sider"}'),
+  ('a0000000-0000-0000-0000-000000000006', 'nophone@pgtap.local',  '{"first_name":"No","last_name":"Phone"}');
 
 UPDATE public.user_requests SET request_status = 'accept'
 WHERE user_id <> 'a0000000-0000-0000-0000-000000000004';
@@ -25,7 +26,8 @@ INSERT INTO public.admins (id) VALUES ('a0000000-0000-0000-0000-000000000001');
 
 INSERT INTO public.students (id, student_id, year_level, course) VALUES
   ('a0000000-0000-0000-0000-000000000003', 'TEST-0003', 9001, 9001),
-  ('a0000000-0000-0000-0000-000000000004', 'TEST-0004', 9001, 9001);
+  ('a0000000-0000-0000-0000-000000000004', 'TEST-0004', 9001, 9001),
+  ('a0000000-0000-0000-0000-000000000006', 'TEST-0006', 9001, 9001);
 
 INSERT INTO public.events (event_id, event_name, event_start, event_end, tag, takes_attendance) VALUES
   (9001, 'Open event',      now() - interval '10 minutes', now() + interval '1 hour', 'GENERAL', true),
@@ -183,6 +185,54 @@ SELECT is(
 );
 RESET ROLE;
 
+-- Manual check-in by school ID ------------------------------------------------
+
+SELECT ok(
+  NOT has_function_privilege('anon', 'public.record_by_student_id(bigint, text, public.attendance_status, text)', 'execute'),
+  'anon cannot check students in by ID'
+);
+
+SELECT pg_temp.login('a0000000-0000-0000-0000-000000000002');
+SELECT results_eq(
+  $$SELECT first_name, student_id, status FROM public.lookup_student_by_id(9001, ' TEST-0003 ')$$,
+  $$VALUES ('Stu'::text, 'TEST-0003'::text, 'present'::public.attendance_status)$$,
+  'scanners can look a student up by school ID'
+);
+SELECT throws_ok(
+  $$SELECT * FROM public.lookup_student_by_id(9001, 'NOPE-0000')$$,
+  'P0001', 'ATTENDANCE_STUDENT_NOT_FOUND',
+  'unknown school IDs are reported'
+);
+SELECT throws_ok(
+  $$SELECT * FROM public.lookup_student_by_id(9001, 'TEST-0004')$$,
+  'P0001', 'ATTENDANCE_NOT_STUDENT',
+  'pending students cannot be checked in by ID'
+);
+SELECT throws_ok(
+  $$SELECT * FROM public.record_by_student_id(9003, 'TEST-0006', 'present')$$,
+  'P0001', 'ATTENDANCE_CLOSED',
+  'checking in by ID follows the check-in window'
+);
+SELECT results_eq(
+  $$SELECT status, method, recorded_by, note FROM public.record_by_student_id(9001, 'TEST-0006', 'present', '  Phone died ')$$,
+  $$VALUES ('present'::public.attendance_status, 'manual'::public.attendance_method, 'a0000000-0000-0000-0000-000000000002'::uuid, 'Phone died'::text)$$,
+  'scanners can check a student in by ID, saved as manual with a note'
+);
+SELECT results_eq(
+  $$SELECT status, method FROM public.record_by_student_id(9001, 'TEST-0003', 'rejected')$$,
+  $$VALUES ('present'::public.attendance_status, 'scan'::public.attendance_method)$$,
+  'rejecting by ID does not undo a present record'
+);
+RESET ROLE;
+
+SELECT pg_temp.login('a0000000-0000-0000-0000-000000000005');
+SELECT throws_ok(
+  $$SELECT * FROM public.lookup_student_by_id(9001, 'TEST-0003')$$,
+  'P0001', 'ATTENDANCE_NOT_SCANNER',
+  'unassigned users cannot look students up by ID'
+);
+RESET ROLE;
+
 -- Admins ----------------------------------------------------------------------
 
 SELECT pg_temp.login('a0000000-0000-0000-0000-000000000003');
@@ -200,7 +250,7 @@ SELECT results_eq(
   'admins can override a record with a note'
 );
 SELECT results_eq(
-  $$SELECT event_name, student_id, last_name, course, recorded_by FROM public.attendance_report WHERE event_id = 9001$$,
+  $$SELECT event_name, student_id, last_name, course, recorded_by FROM public.attendance_report WHERE event_id = 9001 AND student_id = 'TEST-0003'$$,
   $$VALUES ('Open event'::text, 'TEST-0003'::text, 'Dent'::text, 'Test Course'::text, 'Ada Admin'::text)$$,
   'the report joins student and recorder details'
 );

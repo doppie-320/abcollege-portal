@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { CSSProperties, ReactNode } from "react";
 import type { AttendanceMethod, AttendanceStatus, checkInState } from "@/lib/attendance";
 import LocalTime from "./LocalTime";
+import { CountUp } from "./motion";
 
 export type CheckInState = ReturnType<typeof checkInState>;
 
@@ -150,7 +151,7 @@ export function StatStrip({ stats, columns = "grid-cols-3" }: { stats: Stat[]; c
             <span className="truncate">{stat.label}</span>
           </dt>
           <dd className="font-display truncate text-[26px] leading-none font-semibold text-navy-deep tabular-nums">
-            {stat.value}
+            {typeof stat.value === "number" ? <CountUp value={stat.value} /> : stat.value}
           </dd>
         </div>
       ))}
@@ -248,6 +249,13 @@ const ICON_PATHS = {
   arrowLeft: <path d="M19 12H5M12 19l-7-7 7-7" />,
   arrowRight: <path d="M5 12h14M12 5l7 7-7 7" />,
   chevronRight: <path d="m9 18 6-6-6-6" />,
+  chevronDown: <path d="m6 9 6 6 6-6" />,
+  search: (
+    <>
+      <circle cx="11" cy="11" r="7" />
+      <path d="m21 21-4.3-4.3" />
+    </>
+  ),
   sliders: <path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6" />,
   trash: <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v5M14 11v5" />,
   mail: (
@@ -257,18 +265,6 @@ const ICON_PATHS = {
     </>
   ),
   pen: <path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />,
-  copy: (
-    <>
-      <rect width="13" height="13" x="9" y="9" rx="2" />
-      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-    </>
-  ),
-  clipboard: (
-    <>
-      <rect width="8" height="4" x="8" y="2" rx="1" />
-      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
-    </>
-  ),
   id: (
     <>
       <rect width="20" height="14" x="2" y="5" rx="2" />
