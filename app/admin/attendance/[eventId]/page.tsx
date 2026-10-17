@@ -1,12 +1,27 @@
 export const instant = false;
 
 import type { Metadata } from "next";
-import styles from "@/app/attendance/scaffold.module.css";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import SiteNav, { ADMIN_MENU_LINKS } from "@/components/NavigationHeader";
 import { getProfile, isAdmin } from "@/lib/auth";
 import { checkInState } from "@/lib/attendance";
 import { fetchEventAttendance } from "@/lib/attendance-server";
+import LocalTime from "@/app/attendance/LocalTime";
+import {
+  AttendanceBadge,
+  CheckInBadge,
+  EmptyState,
+  FIELD,
+  FIELD_LABEL,
+  Frame,
+  Icon,
+  Initials,
+  MethodTag,
+  PageHeader,
+  PanelHeader,
+  StatStrip,
+} from "@/app/attendance/ui";
 import { assignScanner, removeAttendance, removeScanner, setAttendance } from "../actions";
 import ActionForm from "../ActionForm";
 import EventSettings from "./EventSettings";
@@ -15,9 +30,13 @@ export const metadata: Metadata = {
   title: "Event Attendance — SOE Hub",
 };
 
-// Bare-bones on purpose: backend-first scaffold for the frontend team to restyle.
+const ROSTER_COLUMNS = ["Student", "Course / year", "Status", "Recorded", "By", "Note", ""];
+
+const ICON_BUTTON =
+  "flex size-8 cursor-pointer items-center justify-center rounded-md border border-transparent bg-transparent text-ink-soft transition-colors duration-150 hover:border-[#b3261e]/30 hover:bg-[rgba(205,79,60,0.08)] hover:text-[#b3261e] focus-visible:outline-2 focus-visible:outline-blue disabled:cursor-not-allowed disabled:opacity-50";
+
 export default async function EventAttendancePage(props: PageProps<"/admin/attendance/[eventId]">) {
-  const [, admin] = await Promise.all([getProfile(), isAdmin()]);
+  const [profile, admin] = await Promise.all([getProfile(), isAdmin()]);
   if (!admin) redirect("/home");
 
   const eventId = Number((await props.params).eventId);
@@ -27,110 +46,270 @@ export default async function EventAttendancePage(props: PageProps<"/admin/atten
   if (!details) notFound();
   const { event, scanners, report } = details;
   const present = report.filter((row) => row.status === "present").length;
+  const exportHref = `/admin/attendance/${event.event_id}/export`;
 
   return (
-    <main className={styles.scaffold}>
-      <p><Link href="/admin/attendance">All events</Link></p>
-      <h1>{event.event_name}</h1>
-      <p>
-        {new Date(event.event_start).toLocaleString()} – {new Date(event.event_end).toLocaleString()} · Check-in:{" "}
-        {checkInState(event)}
-      </p>
+    <>
+      <SiteNav
+        initials={profile.initials}
+        name={profile.name}
+        userId={profile.id}
+        avatarUrl={profile.avatarUrl}
+        nameOverride="ADMIN"
+        links={[]}
+        brandHref="/admin"
+        profileHref="/admin/profile"
+        profileLabel="My profile"
+        menuLinks={ADMIN_MENU_LINKS}
+      />
 
-      <h2>Settings</h2>
-      <EventSettings event={event} />
+      <div className="page-wrap">
+        <PageHeader
+          back={{ href: "/admin/attendance", label: "All events" }}
+          eyebrow="SOE HUB / ADMIN PANEL / ATTENDANCE"
+          title={event.event_name}
+          description={
+            <span className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+              <CheckInBadge state={checkInState(event)} />
+              <span className="mono text-[11px]">
+                <LocalTime value={event.event_start} format="short" /> &rarr;{" "}
+                <LocalTime value={event.event_end} format="short" />
+              </span>
+            </span>
+          }
+          actions={
+            <>
+              <a href={exportHref} className="btn ghost rounded-lg px-4 py-2 text-[13.5px]">
+                <Icon name="download" />
+                Export CSV
+              </a>
+              <Link href="/attendance/scan" className="btn primary rounded-lg px-4 py-2 text-[13.5px]">
+                <Icon name="scan" />
+                Scan students
+              </Link>
+            </>
+          }
+        />
 
-      <h2>Scanners</h2>
-      {scanners.length === 0 ? (
-        <p>No scanners assigned. Admins can always scan.</p>
-      ) : (
-        <ul>
-          {scanners.map((scanner) => (
-            <li key={scanner.user_id}>
-              <ActionForm action={removeScanner} successMessage="Removed.">
-                {scanner.first_name} {scanner.last_name} ({scanner.email_address}){" "}
-                <input type="hidden" name="eventId" value={event.event_id} />
-                <input type="hidden" name="userId" value={scanner.user_id} />
-                <button type="submit">Remove</button>
-              </ActionForm>
-            </li>
-          ))}
-        </ul>
-      )}
-      <ActionForm action={assignScanner} successMessage="Assigned.">
-        <input type="hidden" name="eventId" value={event.event_id} />
-        <label>
-          Assign by email <input type="email" name="email" required />
-        </label>{" "}
-        <button type="submit">Assign</button>
-      </ActionForm>
+        <Frame className="animate-fade-in-up mb-6 p-0">
+          <StatStrip
+            columns="grid-cols-2 sm:grid-cols-4"
+            stats={[
+              { label: "Present", value: present, dot: "bg-blue" },
+              { label: "Rejected", value: report.length - present, dot: "bg-[#b3261e]" },
+              { label: "Recorded", value: report.length },
+              { label: "Scanners", value: scanners.length },
+            ]}
+          />
+        </Frame>
 
-      <h2>Attendance ({present} present, {report.length - present} rejected)</h2>
-      <p>
-        <a href={`/admin/attendance/${event.event_id}/export`}>Export CSV</a>
-      </p>
-      {report.length === 0 ? (
-        <p>Nobody has been recorded yet.</p>
-      ) : (
-        <table>
-          <thead>
-            <tr>
-              <th>Student ID</th>
-              <th>Name</th>
-              <th>Course / year</th>
-              <th>Status</th>
-              <th>Recorded</th>
-              <th>By</th>
-              <th>Note</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {report.map((row) => (
-              <tr key={row.user_id}>
-                <td>{row.student_id}</td>
-                <td>{row.last_name}, {row.first_name}</td>
-                <td>{row.course} / {row.year_level}</td>
-                <td>{row.status}</td>
-                <td>{new Date(row.recorded_at).toLocaleString()} ({row.method})</td>
-                <td>{row.recorded_by}</td>
-                <td>{row.note}</td>
-                <td>
-                  <ActionForm
-                    action={removeAttendance}
-                    successMessage="Removed."
-                    confirm={`Remove ${row.first_name} ${row.last_name}'s record?`}
-                  >
-                    <input type="hidden" name="eventId" value={event.event_id} />
-                    <input type="hidden" name="userId" value={row.user_id} />
-                    <button type="submit">Remove</button>
-                  </ActionForm>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+        <div className="grid grid-cols-[minmax(0,1fr)_360px] items-start gap-6 max-[1000px]:grid-cols-1">
+          <div className="flex min-w-0 flex-col gap-6">
+            {/* ───────── Roster ───────── */}
+            <Frame className="animate-fade-in-up p-0 [animation-delay:0.06s]">
+              <PanelHeader icon="users" title="Attendance roster">
+                <a href={exportHref} className="mono flex items-center gap-1.5 text-[11px] text-blue no-underline hover:text-navy">
+                  <Icon name="download" size={12} />
+                  CSV
+                </a>
+              </PanelHeader>
 
-      <h3>Record manually</h3>
-      <p>Overrides any existing record, e.g. for a student whose phone died.</p>
-      <ActionForm action={setAttendance}>
-        <input type="hidden" name="eventId" value={event.event_id} />
-        <label>
-          Student ID <input name="studentId" required />
-        </label>{" "}
-        <label>
-          Status{" "}
-          <select name="status" defaultValue="present">
-            <option value="present">present</option>
-            <option value="rejected">rejected</option>
-          </select>
-        </label>{" "}
-        <label>
-          Note <input name="note" />
-        </label>{" "}
-        <button type="submit">Save</button>
-      </ActionForm>
-    </main>
+              {report.length === 0 ? (
+                <EmptyState icon="users" title="NOBODY RECORDED YET">
+                  Students show up here as soon as they&apos;re scanned or recorded manually.
+                </EmptyState>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[760px] border-collapse text-left text-[13px]">
+                    <thead>
+                      <tr className="border-b border-rule-soft bg-vellum/50">
+                        {ROSTER_COLUMNS.map((column) => (
+                          <th
+                            key={column}
+                            scope="col"
+                            className="mono px-4 py-2.5 text-[10px] font-normal tracking-[0.08em] whitespace-nowrap text-ink-soft uppercase"
+                          >
+                            {column}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-rule-soft">
+                      {report.map((row) => (
+                        <tr key={row.user_id} className="align-top transition-colors duration-150 hover:bg-vellum/40">
+                          <td className="px-4 py-3">
+                            <span className="block font-semibold whitespace-nowrap text-navy-deep">
+                              {row.last_name}, {row.first_name}
+                            </span>
+                            <span className="mono block text-[11px] text-ink-soft">{row.student_id ?? "—"}</span>
+                          </td>
+                          <td className="px-4 py-3 text-ink-soft">
+                            {row.course ?? "—"} / {row.year_level ?? "—"}
+                          </td>
+                          <td className="px-4 py-3">
+                            <AttendanceBadge status={row.status} />
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="mono mb-1 block text-[11px] whitespace-nowrap text-ink">
+                              <LocalTime value={row.recorded_at} format="short" />
+                            </span>
+                            <MethodTag method={row.method} />
+                          </td>
+                          <td className="px-4 py-3 text-[12.5px] text-ink-soft">{row.recorded_by ?? "—"}</td>
+                          <td className="max-w-[220px] px-4 py-3 text-[12.5px] text-ink-soft italic [overflow-wrap:anywhere]">
+                            {row.note}
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            <ActionForm
+                              action={removeAttendance}
+                              successMessage="Removed."
+                              confirm={{
+                                title: "Remove this record?",
+                                message: `${row.first_name} ${row.last_name}'s attendance for this event will be deleted.`,
+                                confirmLabel: "Remove record",
+                              }}
+                              className="flex justify-end"
+                            >
+                              <input type="hidden" name="eventId" value={event.event_id} />
+                              <input type="hidden" name="userId" value={row.user_id} />
+                              <button
+                                type="submit"
+                                className={ICON_BUTTON}
+                                aria-label={`Remove ${row.first_name} ${row.last_name}'s record`}
+                                title="Remove record"
+                              >
+                                <Icon name="trash" size={14} />
+                              </button>
+                            </ActionForm>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Frame>
+
+            {/* ───────── Manual record ───────── */}
+            <Frame className="animate-fade-in-up p-0 [animation-delay:0.1s]">
+              <PanelHeader icon="pen" title="Record manually" />
+              <div className="px-5 py-4">
+                <p className="mb-4 text-[12.5px] text-ink-soft">
+                  Overrides any existing record, e.g. for a student whose phone died.
+                </p>
+                <ActionForm
+                  action={setAttendance}
+                  className="grid grid-cols-[minmax(0,1fr)_200px] items-end gap-3 max-[640px]:grid-cols-1"
+                >
+                  <input type="hidden" name="eventId" value={event.event_id} />
+                  <label className="m-0">
+                    <span className={FIELD_LABEL}>Student ID</span>
+                    <input type="text" name="studentId" required autoComplete="off" className={`${FIELD} font-mono`} />
+                  </label>
+                  <div>
+                    <span className={FIELD_LABEL} id="manual-status-label">
+                      Status
+                    </span>
+                    <div
+                      role="radiogroup"
+                      aria-labelledby="manual-status-label"
+                      className="flex gap-0.5 rounded-[5px] border border-rule bg-paper p-0.5"
+                    >
+                      {(["present", "rejected"] as const).map((status) => (
+                        <label key={status} className="m-0 flex-1 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="status"
+                            value={status}
+                            defaultChecked={status === "present"}
+                            className="peer sr-only"
+                          />
+                          <span className="mono block rounded-[3px] px-3 py-[7px] text-center text-[11px] tracking-[0.04em] text-ink-soft uppercase transition-colors duration-150 peer-checked:bg-navy peer-checked:text-paper peer-focus-visible:outline-2 peer-focus-visible:outline-blue hover:bg-vellum-2 peer-checked:hover:bg-navy">
+                            {status}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  <label className="m-0">
+                    <span className={FIELD_LABEL}>Note (optional)</span>
+                    <input type="text" name="note" autoComplete="off" className={FIELD} />
+                  </label>
+                  <button type="submit" className="btn rounded-lg px-4 py-2 text-[13px]">
+                    <Icon name="check" size={13} />
+                    Save record
+                  </button>
+                </ActionForm>
+              </div>
+            </Frame>
+          </div>
+
+          <div className="flex min-w-0 flex-col gap-6">
+            {/* ───────── Settings ───────── */}
+            <Frame className="animate-fade-in-up p-0 [animation-delay:0.08s]">
+              <PanelHeader icon="sliders" title="Check-in settings" />
+              <div className="px-5 py-4">
+                <EventSettings event={event} />
+              </div>
+            </Frame>
+
+            {/* ───────── Scanners ───────── */}
+            <Frame className="animate-fade-in-up p-0 [animation-delay:0.12s]">
+              <PanelHeader icon="scan" title="Scanners">
+                <span className="mono text-[11px] text-ink-soft">{scanners.length} assigned</span>
+              </PanelHeader>
+
+              {scanners.length === 0 ? (
+                <EmptyState icon="users" title="NO SCANNERS ASSIGNED">
+                  Admins can always scan. Assign council members below to let them help.
+                </EmptyState>
+              ) : (
+                <ul className="m-0 list-none divide-y divide-rule-soft">
+                  {scanners.map((scanner) => (
+                    <li key={scanner.user_id} className="flex items-start gap-3 px-5 py-3">
+                      <span className="mono mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full border border-navy bg-vellum text-[11px] font-semibold text-navy-deep">
+                        <Initials first={scanner.first_name} last={scanner.last_name} />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[13px] font-semibold text-navy-deep">
+                          {scanner.first_name} {scanner.last_name}
+                        </span>
+                        <span className="mono block truncate text-[10.5px] text-ink-soft">{scanner.email_address}</span>
+                      </span>
+                      <ActionForm action={removeScanner} successMessage="Removed." className="flex justify-end">
+                        <input type="hidden" name="eventId" value={event.event_id} />
+                        <input type="hidden" name="userId" value={scanner.user_id} />
+                        <button
+                          type="submit"
+                          className={ICON_BUTTON}
+                          aria-label={`Remove ${scanner.first_name} ${scanner.last_name} as a scanner`}
+                          title="Remove scanner"
+                        >
+                          <Icon name="x" size={14} />
+                        </button>
+                      </ActionForm>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              <div className="border-t border-rule-soft bg-vellum/30 px-5 py-4">
+                <ActionForm action={assignScanner} successMessage="Assigned." className="flex items-end gap-2">
+                  <input type="hidden" name="eventId" value={event.event_id} />
+                  <label className="m-0 min-w-0 flex-1">
+                    <span className={FIELD_LABEL}>Assign by email</span>
+                    <input type="email" name="email" required placeholder="Their account email" className={FIELD} />
+                  </label>
+                  <button type="submit" className="btn rounded-lg px-3 py-2 text-[13px]">
+                    <Icon name="plus" size={13} />
+                    Assign
+                  </button>
+                </ActionForm>
+              </div>
+            </Frame>
+          </div>
+        </div>
+      </div>
+    </>
   );
 }

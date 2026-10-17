@@ -21,7 +21,7 @@ export const PAGE_RESELECT_EVENT = "site-nav:page-reselect";
 const NAV_LINKS: readonly NavLink[] = [
   { href: "/home", label: "Home" },
   { href: "#", label: "Calendar" },
-  { href: "#", label: "Attendance" },
+  { href: "/attendance", label: "Attendance" },
   { href: "#", label: "Suggestion Box" },
 ];
 
@@ -141,7 +141,7 @@ export default function SiteNav({
             <Link
               key={link.label}
               href={link.href}
-              className={pathname === link.href ? "current" : undefined}
+              className={pathname === link.href || pathname.startsWith(`${link.href}/`) ? "current" : undefined}
               onClick={(e) => onLinkClick(e, link.href)}
             >
               {link.label}

@@ -19,8 +19,10 @@ export default function CameraReader({
   active,
   onRead,
   onError,
+  className,
 }: {
   active: boolean;
+  className?: string;
   onRead: (text: string) => void;
   onError: (message: string) => void;
 }) {
@@ -72,5 +74,5 @@ export default function CameraReader({
     };
   }, [active, elementId]);
 
-  return <div id={elementId} style={{ width: "100%", maxWidth: 400 }} />;
+  return <div id={elementId} className={className} />;
 }

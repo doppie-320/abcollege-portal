@@ -9,7 +9,8 @@ type AdminModule = {
   title: string;
   description: string;
   tag: string;
-  icon: "review";
+  cta: string;
+  icon: "review" | "attendance";
 };
 
 const ADMIN_MODULES: readonly AdminModule[] = [
@@ -19,7 +20,17 @@ const ADMIN_MODULES: readonly AdminModule[] = [
     description:
       "Check pending registrations and approve or decline student accounts.",
     tag: "Pending",
+    cta: "View Accounts",
     icon: "review",
+  },
+  {
+    href: "/admin/attendance",
+    title: "Event Attendance",
+    description:
+      "Turn on check-in for events, assign scanners, and export who attended.",
+    tag: "Events",
+    cta: "Manage Attendance",
+    icon: "attendance",
   },
 ];
 
@@ -77,7 +88,7 @@ export default function AdminContent({ profile }: AdminContentProps) {
               </div>
 
               <span className="mt-auto flex items-center gap-2 pt-2 font-mono text-[11px] text-blue">
-                View Accounts
+                {module.cta}
                 <span className="transition-transform duration-150 group-hover:translate-x-1">
                   &rarr;
                 </span>
@@ -107,6 +118,25 @@ function ModuleIcon({ name }: { name: AdminModule["icon"] }) {
         <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
         <circle cx="9" cy="7" r="4" />
         <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+      </svg>
+    );
+  }
+
+  if (name === "attendance") {
+    return (
+      <svg
+        width="22"
+        height="22"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2" />
+        <path d="m8 12 3 3 5-6" />
       </svg>
     );
   }
