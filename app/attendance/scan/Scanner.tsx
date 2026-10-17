@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition, type FormEvent, type ReactNode } from "react";
+import ConfirmDialog from "@/app/home/ConfirmDialog";
 import Select from "@/components/Select";
 import {
   checkInState,
@@ -30,7 +31,11 @@ import {
 } from "../ui";
 import CameraReader from "./CameraReader";
 
-type Notice = { text: string; isError: boolean };
+type NoticeTone = "success" | "warning" | "error";
+type Notice = { id: number; text: string; tone: NoticeTone };
+
+/** Success notices clear themselves; warnings and errors wait to be read. */
+const SUCCESS_NOTICE_MS = 3000;
 
 /** How the student on screen was found; recording needs the same thing again. */
 type Source = { kind: "qr"; token: string } | { kind: "id"; studentId: string };
@@ -66,6 +71,8 @@ export default function Scanner({ events }: { events: AttendanceEvent[] }) {
   const [manualId, setManualId] = useState("");
   // Optional reason saved with a manual check-in.
   const [note, setNote] = useState("");
+  // Rejecting asks for confirmation first.
+  const [confirmingReject, setConfirmingReject] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [log, setLog] = useState<LogEntry[]>([]);
   // Big check/cross over the camera right after a decision.
@@ -76,6 +83,7 @@ export default function Scanner({ events }: { events: AttendanceEvent[] }) {
   const busyRef = useRef(false);
   const handledRef = useRef("");
   const logIdRef = useRef(0);
+  const noticeIdRef = useRef(0);
 
   const event = events.find((e) => e.event_id === eventId) ?? events[0];
   const { opens, closes } = checkInWindow(event);
@@ -100,7 +108,7 @@ export default function Scanner({ events }: { events: AttendanceEvent[] }) {
   });
 
   useEffect(() => {
-    if (!hasStudent || pending) return;
+    if (!hasStudent || pending || confirmingReject) return;
     function onKeyDown(e: KeyboardEvent) {
       if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
       const key = e.key.toLowerCase();
@@ -113,12 +121,12 @@ export default function Scanner({ events }: { events: AttendanceEvent[] }) {
       } else if (key === "a") {
         decideRef.current("present");
       } else if (key === "r") {
-        decideRef.current("rejected");
+        setConfirmingReject(true);
       }
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [hasStudent, pending]);
+  }, [hasStudent, pending, confirmingReject]);
 
   useEffect(() => {
     if (!flash) return;
@@ -126,7 +134,18 @@ export default function Scanner({ events }: { events: AttendanceEvent[] }) {
     return () => clearTimeout(timer);
   }, [flash]);
 
+  useEffect(() => {
+    if (notice?.tone !== "success") return;
+    const timer = setTimeout(() => setNotice(null), SUCCESS_NOTICE_MS);
+    return () => clearTimeout(timer);
+  }, [notice]);
+
+  function showNotice(text: string, tone: NoticeTone) {
+    setNotice({ id: ++noticeIdRef.current, text, tone });
+  }
+
   function reset() {
+    setConfirmingReject(false);
     setSource(null);
     setStudent(null);
   }
@@ -142,7 +161,7 @@ export default function Scanner({ events }: { events: AttendanceEvent[] }) {
           next.kind === "qr" ? await lookupScan(eventId, next.token) : await lookupStudentId(eventId, next.studentId);
         if (result.error !== undefined) {
           reset();
-          setNotice({ text: result.error, isError: true });
+          showNotice(result.error, "error");
           return;
         }
         // A short buzz tells the scanner a student was found without looking.
@@ -193,17 +212,18 @@ export default function Scanner({ events }: { events: AttendanceEvent[] }) {
             ? await recordScan(eventId, source.token, decision)
             : await recordStudentId(eventId, source.studentId, decision, note);
         if (result.error !== undefined) {
-          setNotice({ text: result.error, isError: true });
+          showNotice(result.error, "error");
           return;
         }
-        const name = student ? fullName(student) : "";
-        setNotice({
-          text:
-            decision === "rejected" && result.data.status === "present"
-              ? `${name} was already marked present, so the record was kept.`
-              : `${name}: ${result.data.status}. Ready for the next student.`,
-          isError: false,
-        });
+        const name = (student && fullName(student)) || "Student";
+        if (decision === "rejected" && result.data.status === "present") {
+          showNotice(`${name} was already marked present, so the record was kept.`, "warning");
+        } else {
+          showNotice(
+            `${name} ${result.data.status === "present" ? "checked in" : "rejected"}. Ready for the next student.`,
+            "success",
+          );
+        }
         if (student) {
           const entry: LogEntry = {
             id: ++logIdRef.current,
@@ -258,7 +278,7 @@ export default function Scanner({ events }: { events: AttendanceEvent[] }) {
                     onRead={onCameraRead}
                     onError={(text) => {
                       setCameraOn(false);
-                      setNotice({ text, isError: true });
+                      showNotice(text, "error");
                     }}
                     className="relative w-full [&_video]:block [&_video]:w-full"
                   />
@@ -317,7 +337,7 @@ export default function Scanner({ events }: { events: AttendanceEvent[] }) {
               )}
             </div>
 
-            {notice && !student && <NoticeBanner notice={notice} onDismiss={() => setNotice(null)} />}
+            {notice && !student && <NoticeBanner key={notice.id} notice={notice} onDismiss={() => setNotice(null)} />}
           </div>
 
           <div className="flex flex-wrap items-center gap-3 border-t border-rule-soft px-5 py-3">
@@ -527,7 +547,7 @@ export default function Scanner({ events }: { events: AttendanceEvent[] }) {
 
             {notice && (
               <div className="px-5">
-                <NoticeBanner notice={notice} onDismiss={() => setNotice(null)} />
+                <NoticeBanner key={notice.id} notice={notice} onDismiss={() => setNotice(null)} />
               </div>
             )}
 
@@ -540,7 +560,7 @@ export default function Scanner({ events }: { events: AttendanceEvent[] }) {
                 type="button"
                 className={`${DANGER_BTN} ml-auto px-3 py-2 text-[13px]`}
                 disabled={pending}
-                onClick={() => decide("rejected")}
+                onClick={() => setConfirmingReject(true)}
               >
                 <Icon name="x" size={13} />
                 Reject
@@ -560,6 +580,25 @@ export default function Scanner({ events }: { events: AttendanceEvent[] }) {
           </div>
         </div>
       )}
+
+      {student && confirmingReject && (
+        <ConfirmDialog
+          title="Reject this check-in?"
+          message={
+            <>
+              <strong>{fullName(student) || "This student"}</strong> ({student.student_id}) will be marked rejected for{" "}
+              {event.event_name}. Only reject if they don&rsquo;t match the photo or their school ID.
+            </>
+          }
+          confirmLabel="Reject check-in"
+          cancelLabel="Go back"
+          onCancel={() => setConfirmingReject(false)}
+          onConfirm={() => {
+            setConfirmingReject(false);
+            decide("rejected");
+          }}
+        />
+      )}
     </>
   );
 }
@@ -578,22 +617,21 @@ function DetailRow({ icon, label, children }: { icon: IconName; label: string; c
   );
 }
 
+const NOTICE_TONES: Record<NoticeTone, { box: string; badge: string; bar: string; icon: IconName }> = {
+  success: { box: "border-blue/30 bg-[#e6f3ff] text-navy-deep", badge: "bg-blue", bar: "bg-blue/50", icon: "check" },
+  warning: { box: "border-orange/40 bg-[#fcebdf] text-[#7a2e0f]", badge: "bg-orange", bar: "bg-orange/50", icon: "history" },
+  error: { box: "border-[#b3261e]/30 bg-[#fbe9e7] text-[#8f1e18]", badge: "bg-[#b3261e]", bar: "bg-[#b3261e]/50", icon: "alert" },
+};
+
 function NoticeBanner({ notice, onDismiss }: { notice: Notice; onDismiss: () => void }) {
+  const tone = NOTICE_TONES[notice.tone];
   return (
     <div
-      role={notice.isError ? "alert" : "status"}
-      className={`animate-fade-in mt-4 flex items-start gap-3 rounded-lg border px-3.5 py-3 text-[13px] ${
-        notice.isError
-          ? "border-[#b3261e]/30 bg-[#fbe9e7] text-[#8f1e18]"
-          : "border-blue/30 bg-[#e6f3ff] text-navy-deep"
-      }`}
+      role={notice.tone === "error" ? "alert" : "status"}
+      className={`animate-fade-in relative mt-4 flex items-start gap-3 overflow-hidden rounded-lg border px-3.5 py-3 text-[13px] ${tone.box}`}
     >
-      <span
-        className={`mt-px flex size-5 shrink-0 items-center justify-center rounded-full text-paper ${
-          notice.isError ? "bg-[#b3261e]" : "bg-blue"
-        }`}
-      >
-        <Icon name={notice.isError ? "alert" : "check"} size={12} />
+      <span className={`mt-px flex size-5 shrink-0 items-center justify-center rounded-full text-paper ${tone.badge}`}>
+        <Icon name={tone.icon} size={12} />
       </span>
       <p className="mb-0 flex-1 font-medium">{notice.text}</p>
       <button
@@ -604,6 +642,14 @@ function NoticeBanner({ notice, onDismiss }: { notice: Notice; onDismiss: () => 
       >
         <Icon name="x" size={12} />
       </button>
+      {/* Shows how long until a success notice clears itself. */}
+      {notice.tone === "success" && (
+        <span
+          aria-hidden="true"
+          className={`animate-shrink-x absolute inset-x-0 bottom-0 h-0.5 origin-left motion-reduce:hidden ${tone.bar}`}
+          style={{ animationDuration: `${SUCCESS_NOTICE_MS}ms` }}
+        />
+      )}
     </div>
   );
 }

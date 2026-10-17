@@ -44,6 +44,7 @@
   --animate-pop-in: popIn 0.2s ease backwards;
   --animate-scan-sweep: scanSweep 2.2s ease-in-out infinite alternate;
   --animate-sheen: sheen 0.9s ease-out both;
+  --animate-shrink-x: shrinkX 3s linear forwards;
 }
 
 @layer base {
@@ -200,6 +201,16 @@
     to {
       transform: translateY(300%);
       opacity: 0;
+    }
+  }
+
+  /* Countdown bar that empties toward the left. */
+  @keyframes shrinkX {
+    from {
+      transform: scaleX(1);
+    }
+    to {
+      transform: scaleX(0);
     }
   }
 
