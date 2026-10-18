@@ -5,7 +5,12 @@ import { useMemo, useOptimistic, useState, useTransition } from "react";
 import ConfirmDialog from "@/app/home/ConfirmDialog";
 import { toast } from "@/components/Toaster";
 import { settle, type ActionResult } from "@/lib/actionResult";
-import { checkInState, type AttendanceEvent, type AttendanceStatus } from "@/lib/attendance";
+import {
+  checkInState,
+  type AttendanceEvent,
+  type AttendanceHistoryEntry,
+  type AttendanceStatus,
+} from "@/lib/attendance";
 import type { EventScanner } from "@/lib/attendance-server";
 import LocalTime from "@/app/attendance/LocalTime";
 import { SplitBar } from "@/app/attendance/motion";
@@ -87,11 +92,14 @@ export default function EventAttendance({
   event: savedEvent,
   scanners: savedScanners,
   report: savedReport,
+  history,
   recorderName,
 }: {
   event: AttendanceEvent;
   scanners: EventScanner[];
   report: RosterRow[];
+  /** Every student's history for the event, newest first. */
+  history: AttendanceHistoryEntry[];
   /** Shown as "by …" on manual records until the saved row arrives. */
   recorderName: string;
 }) {
@@ -229,7 +237,13 @@ export default function EventAttendance({
         )}
       </Frame>
 
-      <RosterTable report={report} exportHref={exportHref} onRemove={(row) => setConfirming({ kind: "record", row })} />
+      <RosterTable
+        report={report}
+        history={history}
+        eventName={event.event_name}
+        exportHref={exportHref}
+        onRemove={(row) => setConfirming({ kind: "record", row })}
+      />
 
       <div className="grid grid-cols-2 items-start gap-6 max-[900px]:grid-cols-1">
         <div className="flex min-w-0 flex-col gap-6">

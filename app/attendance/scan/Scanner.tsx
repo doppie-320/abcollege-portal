@@ -77,8 +77,8 @@ export default function Scanner({ events }: { events: AttendanceEvent[] }) {
   const [manualId, setManualId] = useState("");
   // Optional reason saved with a manual check-in.
   const [note, setNote] = useState("");
-  // Rejecting asks for confirmation first.
-  const [confirmingReject, setConfirmingReject] = useState(false);
+  // Rejecting, or changing a status already on record, asks for confirmation first.
+  const [confirming, setConfirming] = useState<AttendanceStatus | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [log, setLog] = useState<LogEntry[]>([]);
   // Big check/cross over the camera right after a decision.
@@ -108,14 +108,14 @@ export default function Scanner({ events }: { events: AttendanceEvent[] }) {
   }, [hasStudent]);
 
   // Keyboard shortcuts while verifying: A accept, R reject, Escape cancel.
-  // decide() changes every render, so the listener reads it through a ref.
-  const decideRef = useRef<(decision: AttendanceStatus) => void>(() => {});
+  // request() changes every render, so the listener reads it through a ref.
+  const requestRef = useRef<(decision: AttendanceStatus) => void>(() => {});
   useEffect(() => {
-    decideRef.current = decide;
+    requestRef.current = request;
   });
 
   useEffect(() => {
-    if (!hasStudent || pending || confirmingReject) return;
+    if (!hasStudent || pending || confirming) return;
     function onKeyDown(e: KeyboardEvent) {
       if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
       const key = e.key.toLowerCase();
@@ -126,14 +126,14 @@ export default function Scanner({ events }: { events: AttendanceEvent[] }) {
         setSource(null);
         setStudent(null);
       } else if (key === "a") {
-        decideRef.current("present");
+        requestRef.current("present");
       } else if (key === "r") {
-        setConfirmingReject(true);
+        requestRef.current("rejected");
       }
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [hasStudent, pending, confirmingReject]);
+  }, [hasStudent, pending, confirming]);
 
   useEffect(() => {
     if (!flash) return;
@@ -152,7 +152,7 @@ export default function Scanner({ events }: { events: AttendanceEvent[] }) {
   }
 
   function reset() {
-    setConfirmingReject(false);
+    setConfirming(null);
     setSource(null);
     setStudent(null);
   }
@@ -209,9 +209,17 @@ export default function Scanner({ events }: { events: AttendanceEvent[] }) {
     setNotice(null);
   }
 
+  // A plain accept goes straight through. Rejecting, or flipping a status already on record
+  // (either way), opens a confirmation first.
+  function request(decision: AttendanceStatus) {
+    if (decision === "present" && student?.status !== "rejected") void decide("present");
+    else setConfirming(decision);
+  }
+
   // The decision shows at once (flash, session log, next student) and saves in the background,
   // so the line keeps moving. If saving fails the log entry comes off and the scanner is told.
-  async function decide(decision: AttendanceStatus) {
+  // `override` lets it replace a present record; only pass it once the officer has confirmed.
+  async function decide(decision: AttendanceStatus, override = false) {
     if (!source || !student) return;
     const decided = { eventId, source, note };
     const name = fullName(student) || "Student";
@@ -228,13 +236,18 @@ export default function Scanner({ events }: { events: AttendanceEvent[] }) {
     };
     setLog((prev) => [entry, ...prev].slice(0, 50));
     setFlash({ id: entry.id, status: decision, name });
-    showNotice(`${name} ${decision === "present" ? "checked in" : "rejected"}. Ready for the next student.`, "success");
+    showNotice(
+      override
+        ? `${name}'s status changed to ${decision}. Ready for the next student.`
+        : `${name} ${decision === "present" ? "checked in" : "rejected"}. Ready for the next student.`,
+      "success",
+    );
     reset();
 
     const result = await settle(
       decided.source.kind === "qr"
-        ? recordScan(decided.eventId, decided.source.token, decision)
-        : recordStudentId(decided.eventId, decided.source.studentId, decision, decided.note),
+        ? recordScan(decided.eventId, decided.source.token, decision, override)
+        : recordStudentId(decided.eventId, decided.source.studentId, decision, decided.note, override),
     );
 
     if (result.error !== undefined) {
@@ -537,10 +550,7 @@ export default function Scanner({ events }: { events: AttendanceEvent[] }) {
             </div>
 
             {student.status && student.recorded_at && (
-              <p className="mono mx-5 mb-4 flex items-center gap-2 rounded-md bg-vellum px-3 py-2 text-[11px] text-ink-soft">
-                <Icon name="history" size={12} />
-                Already recorded {student.status} at <LocalTime value={student.recorded_at} format="time" />.
-              </p>
+              <AlreadyRecorded status={student.status} recordedAt={student.recorded_at} />
             )}
 
             {source?.kind === "id" && (
@@ -582,7 +592,7 @@ export default function Scanner({ events }: { events: AttendanceEvent[] }) {
                 type="button"
                 className={`${DANGER_BTN} ml-auto px-3 py-2 text-[13px]`}
                 disabled={pending}
-                onClick={() => setConfirmingReject(true)}
+                onClick={() => request("rejected")}
               >
                 <Icon name="x" size={13} />
                 Reject
@@ -592,7 +602,7 @@ export default function Scanner({ events }: { events: AttendanceEvent[] }) {
                 type="button"
                 className="btn primary rounded-lg px-4 py-2 text-[13px]"
                 disabled={pending}
-                onClick={() => decide("present")}
+                onClick={() => request("present")}
               >
                 <Icon name="check" size={13} />
                 Accept
@@ -603,35 +613,85 @@ export default function Scanner({ events }: { events: AttendanceEvent[] }) {
         </div>
       )}
 
-      {student && confirmingReject && (
-        <ConfirmDialog
-          eyebrow="REJECT · CHECK-IN"
-          icon={ICON_PATHS.userX}
-          title="Reject this check-in?"
-          message={
-            <>
-              <strong>{fullName(student) || "This student"}</strong> will be marked rejected for{" "}
-              <strong>{event.event_name}</strong>. Only reject if they don&rsquo;t match the photo or their school ID.
-            </>
-          }
-          confirmLabel="Reject check-in"
-          cancelLabel="Go back"
-          onCancel={() => setConfirmingReject(false)}
-          onConfirm={() => {
-            setConfirmingReject(false);
-            void decide("rejected");
+      {student && confirming && (
+        <DecisionDialog
+          student={student}
+          decision={confirming}
+          eventName={event.event_name}
+          onCancel={() => setConfirming(null)}
+          onConfirm={(override) => {
+            setConfirming(null);
+            void decide(confirming, override);
           }}
-        >
-          <PersonChip
-            first={student.first_name}
-            last={student.last_name}
-            detail={[student.student_id, student.course, student.year_level].filter(Boolean).join(" · ")}
-            aside={student.status ? <AttendanceBadge status={student.status} /> : undefined}
-            mark={{ icon: "x", color: "bg-[#b3261e]" }}
-          />
-        </ConfirmDialog>
+        />
       )}
     </>
+  );
+}
+
+/**
+ * Confirms a reject, or a change to a status already on record (rejected → present or
+ * present → rejected). Confirming a change is what allows the save to override it.
+ */
+function DecisionDialog({
+  student,
+  decision,
+  eventName,
+  onCancel,
+  onConfirm,
+}: {
+  student: ScannedStudent;
+  decision: AttendanceStatus;
+  eventName: string;
+  onCancel: () => void;
+  onConfirm: (override: boolean) => void;
+}) {
+  const name = fullName(student) || "This student";
+  const previous = student.status;
+  const changing = previous !== null && previous !== decision;
+  const toPresent = decision === "present";
+  const when = student.recorded_at ? (
+    <>
+      {" "}
+      at <LocalTime value={student.recorded_at} format="time" />
+    </>
+  ) : null;
+
+  return (
+    <ConfirmDialog
+      tone={toPresent ? "warning" : "danger"}
+      eyebrow={changing ? "CHANGE STATUS · CHECK-IN" : "REJECT · CHECK-IN"}
+      icon={toPresent ? ICON_PATHS.userCheck : ICON_PATHS.userX}
+      title={changing ? `Change to ${toPresent ? "present" : "rejected"}?` : "Reject this check-in?"}
+      message={
+        changing ? (
+          <>
+            <strong>{name}</strong> was {previous === "present" ? "checked in" : "rejected"}
+            {when}. This will mark them <strong>{decision}</strong> for <strong>{eventName}</strong> instead.{" "}
+            {toPresent
+              ? "Only accept if they now match the photo or their school ID."
+              : "Only reject if they don’t match the photo or their school ID."}
+          </>
+        ) : (
+          <>
+            <strong>{name}</strong> will be marked rejected for <strong>{eventName}</strong>. Only reject if they
+            don&rsquo;t match the photo or their school ID.
+          </>
+        )
+      }
+      confirmLabel={changing ? `Change to ${decision}` : "Reject check-in"}
+      cancelLabel="Go back"
+      onCancel={onCancel}
+      onConfirm={() => onConfirm(changing)}
+    >
+      <PersonChip
+        first={student.first_name}
+        last={student.last_name}
+        detail={[student.student_id, student.course, student.year_level].filter(Boolean).join(" · ")}
+        aside={previous ? <AttendanceBadge status={previous} /> : undefined}
+        mark={toPresent ? { icon: "check", color: "bg-blue" } : { icon: "x", color: "bg-[#b3261e]" }}
+      />
+    </ConfirmDialog>
   );
 }
 
@@ -654,6 +714,31 @@ const NOTICE_TONES: Record<NoticeTone, { box: string; badge: string; bar: string
   warning: { box: "border-orange/40 bg-[#fcebdf] text-[#7a2e0f]", badge: "bg-orange", bar: "bg-orange/50", icon: "history" },
   error: { box: "border-[#b3261e]/30 bg-[#fbe9e7] text-[#8f1e18]", badge: "bg-[#b3261e]", bar: "bg-[#b3261e]/50", icon: "alert" },
 };
+
+/** A repeat visitor should stand out before the officer decides, not after. */
+function AlreadyRecorded({ status, recordedAt }: { status: AttendanceStatus; recordedAt: string }) {
+  const rejected = status === "rejected";
+  const tone = NOTICE_TONES[rejected ? "error" : "warning"];
+  return (
+    <div
+      role={rejected ? "alert" : "status"}
+      className={`animate-fade-in-up mx-5 mb-4 flex items-start gap-3 rounded-lg border px-3.5 py-3 text-[13px] [animation-delay:0.14s] ${tone.box}`}
+    >
+      <span className={`mt-px flex size-5 shrink-0 items-center justify-center rounded-full text-paper ${tone.badge}`}>
+        <Icon name={tone.icon} size={12} />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="mb-0.5 font-semibold">{rejected ? "Already rejected for this event" : "Already checked in"}</p>
+        <p className="mb-0">
+          {rejected ? "Rejected" : "Checked in"} at <LocalTime value={recordedAt} format="time" />.{" "}
+          {rejected
+            ? "Accepting will check them in; rejecting again replaces the earlier record."
+            : "Rejecting won't change this record."}
+        </p>
+      </div>
+    </div>
+  );
+}
 
 function NoticeBanner({ notice, onDismiss }: { notice: Notice; onDismiss: () => void }) {
   const tone = NOTICE_TONES[notice.tone];

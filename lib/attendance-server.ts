@@ -4,6 +4,7 @@ import {
   ATTENDANCE_EVENT_COLUMNS,
   checkInState,
   type AttendanceEvent,
+  type AttendanceHistoryEntry,
   type AttendanceMethod,
   type AttendanceReportRow,
   type AttendanceStatus,
@@ -111,12 +112,14 @@ export type EventAttendance = {
   event: AttendanceEvent;
   scanners: EventScanner[];
   report: AttendanceReportRow[];
+  /** Every student's history for the event, newest first. */
+  history: AttendanceHistoryEntry[];
 };
 
 export async function fetchEventAttendance(eventId: number): Promise<EventAttendance | null> {
   const supabase = await createClient();
 
-  const [eventResult, scannersResult, reportResult] = await Promise.all([
+  const [eventResult, scannersResult, reportResult, historyResult] = await Promise.all([
     supabase.from("events").select(ATTENDANCE_EVENT_COLUMNS).eq("event_id", eventId).maybeSingle(),
     supabase
       .from("event_scanners")
@@ -128,11 +131,18 @@ export async function fetchEventAttendance(eventId: number): Promise<EventAttend
       .eq("event_id", eventId)
       .order("last_name")
       .order("first_name"),
+    supabase
+      .from("attendance_history_report")
+      .select()
+      .eq("event_id", eventId)
+      .order("happened_at", { ascending: false })
+      .order("id", { ascending: false }),
   ]);
 
   if (eventResult.error) throw eventResult.error;
   if (scannersResult.error) throw scannersResult.error;
   if (reportResult.error) throw reportResult.error;
+  if (historyResult.error) throw historyResult.error;
   if (!eventResult.data) return null;
 
   const scanners = scannersResult.data.map(({ user_id, users }) => {
@@ -140,7 +150,12 @@ export async function fetchEventAttendance(eventId: number): Promise<EventAttend
     return { user_id, ...user };
   });
 
-  return { event: eventResult.data, scanners, report: reportResult.data as AttendanceReportRow[] };
+  return {
+    event: eventResult.data,
+    scanners,
+    report: reportResult.data as AttendanceReportRow[],
+    history: historyResult.data as AttendanceHistoryEntry[],
+  };
 }
 
 const CSV_COLUMNS = "student_id, last_name, first_name, course, year_level, status, method, recorded_at, recorded_by, note";

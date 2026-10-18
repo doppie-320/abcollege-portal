@@ -2,7 +2,7 @@ export const instant = false;
 
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
-import SiteNav, { ADMIN_MENU_LINKS } from "@/components/NavigationHeader";
+import SiteNav, { ADMIN_MENU_LINKS, HOME_ADMIN_NAV_LINKS } from "@/components/NavigationHeader";
 import { getProfile, isAdmin } from "@/lib/auth";
 import { fetchEventAttendance } from "@/lib/attendance-server";
 import EventAttendance from "./EventAttendance";
@@ -28,11 +28,7 @@ export default async function EventAttendancePage(props: PageProps<"/admin/atten
         name={profile.name}
         userId={profile.id}
         avatarUrl={profile.avatarUrl}
-        nameOverride="ADMIN"
-        links={[]}
-        brandHref="/admin"
-        profileHref="/admin/profile"
-        profileLabel="My profile"
+        links={HOME_ADMIN_NAV_LINKS}
         menuLinks={ADMIN_MENU_LINKS}
       />
 
@@ -41,6 +37,7 @@ export default async function EventAttendancePage(props: PageProps<"/admin/atten
           event={details.event}
           scanners={details.scanners}
           report={details.report}
+          history={details.history}
           recorderName={profile.name}
         />
       </div>
