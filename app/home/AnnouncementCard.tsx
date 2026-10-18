@@ -114,11 +114,15 @@ export default function AnnouncementCard({
           padding: 22px 24px 16px;
           animation: fadeInUp 0.4s ease backwards;
           animation-delay: 0.25s;
-          transition: box-shadow 0.2s ease;
+          position: relative;
+          transition: border-color 0.2s ease, box-shadow 0.2s ease;
         }
 
+        /* The post under the pointer gets a firmer edge and a soft shadow, raised over its neighbours. */
         .announceItem:hover {
-          box-shadow: inset 3px 0 0 var(--orange);
+          z-index: 1;
+          border-color: rgba(19, 42, 77, 0.35);
+          box-shadow: 0 4px 14px rgba(19, 42, 77, 0.08);
         }
 
         /* Shown at once while it's still being saved; nothing on it works until then. */
