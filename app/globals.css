@@ -285,6 +285,25 @@
     display: block;
   }
 
+  /* Page hero title, matching the home and calendar heroes. */
+  .page-eyebrow {
+    margin-bottom: 8px;
+    letter-spacing: 0.08em;
+  }
+
+  .page-title {
+    font-size: 44px;
+    line-height: 1;
+    margin-bottom: 0;
+    text-transform: uppercase;
+  }
+
+  @media (max-width: 640px) {
+    .page-title {
+      font-size: 36px;
+    }
+  }
+
   /* ---------- Layout shells ---------- */
   /* Sticky wrapper for the header + accent stripe; slides up out of view while scrolling down. */
   .site-nav-bar {
@@ -627,6 +646,27 @@
     padding-left: 1.4em;
   }
 
+  /* Tailwind's reset strips list markers; posts need them back. */
+  .richText ul {
+    list-style: disc;
+  }
+
+  .richText ul ul {
+    list-style: circle;
+  }
+
+  .richText ul ul ul {
+    list-style: square;
+  }
+
+  .richText ol {
+    list-style: decimal;
+  }
+
+  .richText ol ol {
+    list-style: lower-alpha;
+  }
+
   .richText li + li {
     margin-top: 0.25em;
   }
@@ -697,9 +737,97 @@
   .richText img {
     display: block;
     max-width: 100%;
+    max-height: 560px;
     height: auto;
     border-radius: 6px;
     border: 1px solid #c9bfa0;
+  }
+
+  /* Opens the image viewer; set by layoutBodyImages() in lib/richText.ts. */
+  .richText [data-lightbox-index] {
+    cursor: zoom-in;
+  }
+
+  .richText img[data-lightbox-index]:focus-visible {
+    outline: 2px solid var(--blue);
+    outline-offset: 2px;
+  }
+
+  /* Back-to-back images in a post, grouped Facebook-style by layoutBodyImages(). */
+  .richText .imageGallery {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-auto-rows: minmax(0, 1fr);
+    gap: 3px;
+    /* Explicit, so max-height trims the height instead of narrowing the grid through aspect-ratio. */
+    width: 100%;
+    max-height: 560px;
+    border: 1px solid #c9bfa0;
+    border-radius: 6px;
+    overflow: hidden;
+    background: #c9bfa0;
+  }
+
+  .richText .imageGallery.count2 {
+    aspect-ratio: 2 / 1;
+  }
+
+  /* One tall image on the left, two stacked on the right. */
+  .richText .imageGallery.count3 {
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+    aspect-ratio: 4 / 3;
+  }
+
+  .richText .imageGallery.count3 .galleryTile:first-child {
+    grid-row: 1 / 3;
+  }
+
+  .richText .imageGallery.count4 {
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+    aspect-ratio: 1 / 1;
+  }
+
+  .richText .galleryTile {
+    position: relative;
+    display: block;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    background: var(--vellum-2);
+  }
+
+  .richText .galleryTile img {
+    width: 100%;
+    height: 100%;
+    max-height: none;
+    object-fit: cover;
+    border: none;
+    border-radius: 0;
+    transition: transform 0.3s ease;
+  }
+
+  .richText .galleryTile:hover img {
+    transform: scale(1.04);
+  }
+
+  .richText .galleryTile:focus-visible {
+    outline: 3px solid var(--blue);
+    outline-offset: -3px;
+  }
+
+  /* "+3" over the last tile when more images are hidden behind it. */
+  .richText .galleryTile[data-more]::after {
+    content: attr(data-more);
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(13, 30, 56, 0.55);
+    color: var(--white);
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 600;
+    font-size: 30px;
   }
 
   .richText video {

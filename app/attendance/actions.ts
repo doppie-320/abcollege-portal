@@ -56,28 +56,33 @@ export async function lookupStudentId(eventId: number, studentId: string): Promi
     return { data: withAvatarUrl(supabase, data) };
 }
 
-/** Accept or reject the scanned student. Takes the token again, not a user id; see record_scan(). */
+/**
+ * Accept or reject the scanned student. Takes the token again, not a user id; see record_scan().
+ * A present record is kept unless `override` is set, i.e. the scanner confirmed changing it.
+ */
 export async function recordScan(
     eventId: number,
     token: string,
     decision: AttendanceStatus,
+    override = false,
 ): Promise<AttendanceResult<{ status: AttendanceStatus }>> {
     const supabase = await requireUser();
 
     const { data, error } = await supabase
-        .rpc("record_scan", { p_event_id: eventId, p_token: token.trim(), p_decision: decision })
+        .rpc("record_scan", { p_event_id: eventId, p_token: token.trim(), p_decision: decision, p_override: override })
         .single<{ status: AttendanceStatus }>();
     if (error) return toAttendanceError(error);
 
     return { data: { status: data.status } };
 }
 
-/** Accept or reject a student by school ID; saved as a manual record with an optional note. */
+/** Accept or reject a student by school ID; saved as a manual record with an optional note. See recordScan() for `override`. */
 export async function recordStudentId(
     eventId: number,
     studentId: string,
     decision: AttendanceStatus,
     note: string,
+    override = false,
 ): Promise<AttendanceResult<{ status: AttendanceStatus }>> {
     const supabase = await requireUser();
 
@@ -87,6 +92,7 @@ export async function recordStudentId(
             p_student_id: studentId.trim(),
             p_decision: decision,
             p_note: note.trim() || null,
+            p_override: override,
         })
         .single<{ status: AttendanceStatus }>();
     if (error) return toAttendanceError(error);

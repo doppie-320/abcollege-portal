@@ -47,6 +47,21 @@ export type AttendanceReportRow = {
   note: string | null;
 };
 
+/** One entry in a student's attendance history for an event; see attendance_history_report. */
+export type AttendanceHistoryEntry = {
+  id: number;
+  event_id: number;
+  user_id: string;
+  action: "recorded" | "changed" | "removed";
+  /** Null when the record was removed. */
+  status: AttendanceStatus | null;
+  previous_status: AttendanceStatus | null;
+  method: AttendanceMethod | null;
+  actor: string | null;
+  note: string | null;
+  happened_at: string;
+};
+
 /** `code` is the database's ATTENDANCE_* code when there is one, for UI branching. */
 export type AttendanceResult<T> =
   | { data: T; error?: undefined; code?: undefined }

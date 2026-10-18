@@ -26,24 +26,36 @@ export default function AnnouncementCard({
   canManage: boolean;
   onToggleReaction: (postId: string) => void;
   onAddComment: (postId: string, body: string) => Promise<void>;
+  // Applied at once; rejects (after rolling back) so the edit box can reopen.
   onUpdateComment: (postId: string, commentId: string, body: string) => Promise<void>;
+  // Applied at once; restores the comment and shows a toast itself on failure.
   onDeleteComment: (postId: string, commentId: string) => Promise<void>;
+  // Applied at once; rejects (after rolling back) so the editor can reopen with the draft.
   onUpdatePost: (postId: string, post: NewPost) => Promise<void>;
+  // Applied at once; restores the post and shows a toast itself on failure.
   onDeletePost: (postId: string) => Promise<void>;
 }) {
   const [showPostModal, setShowPostModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
+  // `draft` is set when a save failed and the editor reopens with the user's changes.
+  const [editing, setEditing] = useState<{ draft?: NewPost; error?: string } | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
+  function saveEdit(post: NewPost) {
+    onUpdatePost(announcement.id, post).catch(() =>
+      setEditing({ draft: post, error: "Couldn't save your changes. Please try again." }),
+    );
+  }
+
   return (
-    <div className="announceItem">
+    <div className={`announceItem${announcement.pending ? " isPending" : ""}`} aria-busy={announcement.pending || undefined}>
+      {announcement.pending && <span className="pendingTag mono">PUBLISHING…</span>}
       <PostContent
         announcement={announcement}
         currentUser={currentUser}
         onToggleReaction={onToggleReaction}
         onCommentClick={() => setShowPostModal(true)}
         collapsible
-        onEdit={canManage ? () => setShowEditModal(true) : undefined}
+        onEdit={canManage ? () => setEditing({}) : undefined}
         onDelete={canManage ? () => setShowDeleteDialog(true) : undefined}
       />
 
@@ -60,7 +72,7 @@ export default function AnnouncementCard({
         />
       )}
 
-      {showEditModal && (
+      {editing && (
         <CreatePostModal
           currentUser={currentUser}
           tags={tags}
@@ -70,8 +82,10 @@ export default function AnnouncementCard({
             content: announcement.body,
             postedAt: announcement.postedAt,
           }}
-          onClose={() => setShowEditModal(false)}
-          onSubmit={(post) => onUpdatePost(announcement.id, post)}
+          draft={editing.draft}
+          initialError={editing.error}
+          onClose={() => setEditing(null)}
+          onSubmit={saveEdit}
         />
       )}
 
@@ -86,10 +100,11 @@ export default function AnnouncementCard({
             </>
           }
           confirmLabel="Delete"
-          busyLabel="Deleting..."
-          errorMessage="Couldn't delete this post. Please try again."
           onCancel={() => setShowDeleteDialog(false)}
-          onConfirm={() => onDeletePost(announcement.id)}
+          onConfirm={() => {
+            setShowDeleteDialog(false);
+            void onDeletePost(announcement.id);
+          }}
         />
       )}
 
@@ -99,11 +114,29 @@ export default function AnnouncementCard({
           padding: 22px 24px 16px;
           animation: fadeInUp 0.4s ease backwards;
           animation-delay: 0.25s;
-          transition: box-shadow 0.2s ease;
+          position: relative;
+          transition: border-color 0.2s ease, box-shadow 0.2s ease;
         }
 
+        /* The post under the pointer gets a firmer edge and a soft shadow, raised over its neighbours. */
         .announceItem:hover {
-          box-shadow: inset 3px 0 0 var(--orange);
+          z-index: 1;
+          border-color: rgba(19, 42, 77, 0.35);
+          box-shadow: 0 4px 14px rgba(19, 42, 77, 0.08);
+        }
+
+        /* Shown at once while it's still being saved; nothing on it works until then. */
+        .announceItem.isPending {
+          opacity: 0.6;
+          pointer-events: none;
+        }
+
+        .pendingTag {
+          display: inline-block;
+          margin-bottom: 8px;
+          font-size: 10.5px;
+          letter-spacing: 0.08em;
+          color: var(--orange);
         }
 
         .announceItem:nth-of-type(1) {

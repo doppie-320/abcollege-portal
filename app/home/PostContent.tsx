@@ -69,6 +69,8 @@ export default function PostContent({
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [reactors, setReactors] = useState<Reactor[]>([]);
   const reactorsRef = useRef<HTMLDivElement>(null);
+  // Counts reactions made here, so the burst plays on a click but not when the page loads.
+  const [heartBursts, setHeartBursts] = useState(0);
 
   const [fetchedAuthor, setAuthor] = useState<User | null>(null);
   const author = authorOverride ?? fetchedAuthor;
@@ -181,11 +183,27 @@ export default function PostContent({
         <div className="actionGroup">
           <button
             type="button"
-            className={`actionBtn ${reacted ? "active" : ""}`}
-            onClick={() => onToggleReaction(announcement.id)}
+            className={`actionBtn heartBtn ${reacted ? "active" : ""}`}
+            onClick={() => {
+              if (!reacted) setHeartBursts((count) => count + 1);
+              onToggleReaction(announcement.id);
+            }}
             aria-label={reacted ? "Remove reaction" : "React"}
           >
-            <HeartIcon filled={reacted} />
+            {/* Keyed by burst count so each new reaction replays the pop. */}
+            <span key={heartBursts} className={`heartWrap${heartBursts > 0 && reacted ? " pop" : ""}`}>
+              <HeartIcon filled={reacted} />
+            </span>
+            {heartBursts > 0 && reacted && (
+              <span key={`burst-${heartBursts}`} className="heartBurst" aria-hidden="true">
+                <i />
+                <i />
+                <i />
+                <i />
+                <i />
+                <i />
+              </span>
+            )}
           </button>
           {reactors.length > 0 && (
             <div className="countWrap" ref={reactorsRef}>
@@ -585,8 +603,90 @@ export default function PostContent({
           color: var(--orange);
         }
 
-        .actionBtn.active svg {
-          animation: heartPop 0.4s ease;
+        /* ---------- Reaction burst (only when you react, not on load) ---------- */
+        .heartBtn {
+          position: relative;
+        }
+
+        .heartWrap {
+          display: flex;
+        }
+
+        .heartWrap.pop {
+          animation: heartPop 0.45s ease;
+        }
+
+        .heartBurst {
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+        }
+
+        /* A thin ring that swells out and fades. */
+        .heartBurst::before {
+          content: "";
+          position: absolute;
+          left: 50%;
+          top: 50%;
+          width: 22px;
+          height: 22px;
+          margin: -11px 0 0 -11px;
+          border-radius: 50%;
+          border: 2px solid var(--orange);
+          opacity: 0;
+          animation: heartRing 0.5s ease-out;
+        }
+
+        .heartBurst i {
+          position: absolute;
+          left: 50%;
+          top: 50%;
+          width: 4px;
+          height: 4px;
+          margin: -2px 0 0 -2px;
+          border-radius: 50%;
+          background: var(--orange);
+          opacity: 0;
+          animation: heartDot 0.5s ease-out;
+        }
+
+        .heartBurst i:nth-child(1) { --a: 0deg; }
+        .heartBurst i:nth-child(2) { --a: 60deg; background: var(--yellow); }
+        .heartBurst i:nth-child(3) { --a: 120deg; }
+        .heartBurst i:nth-child(4) { --a: 180deg; background: var(--yellow); }
+        .heartBurst i:nth-child(5) { --a: 240deg; }
+        .heartBurst i:nth-child(6) { --a: 300deg; background: var(--yellow); }
+
+        @keyframes heartRing {
+          0% {
+            transform: scale(0.3);
+            opacity: 0.7;
+          }
+          100% {
+            transform: scale(1.5);
+            opacity: 0;
+          }
+        }
+
+        @keyframes heartDot {
+          0% {
+            transform: rotate(var(--a)) translateY(0) scale(1);
+            opacity: 1;
+          }
+          100% {
+            transform: rotate(var(--a)) translateY(-15px) scale(0.4);
+            opacity: 0;
+          }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .heartWrap.pop {
+            animation: none;
+          }
+
+          .heartBurst {
+            display: none;
+          }
         }
       `}</style>
     </div>

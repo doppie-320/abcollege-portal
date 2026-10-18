@@ -23,8 +23,8 @@ type RejectDialogProps = {
   mode: RejectMode;
   applicant: Applicant;
   onCancel: () => void;
-  // Throws on failure so the dialog stays open and shows its error.
-  onConfirm: () => Promise<void>;
+  // Closes the dialog and applies the reject at once; the caller undoes it if the server refuses.
+  onConfirm: () => void;
 };
 
 /** Delayed rejects lean orange (the account lingers for a week); immediate ones go full red. */
@@ -58,8 +58,6 @@ export default function RejectDialog({ mode, applicant, onCancel, onConfirm }: R
         )
       }
       confirmLabel="Reject application"
-      busyLabel="Rejecting…"
-      errorMessage="Couldn't reject this application. Please try again."
       onCancel={onCancel}
       onConfirm={onConfirm}
     >

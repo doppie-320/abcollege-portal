@@ -2,13 +2,17 @@
 
 import Link from "next/link";
 import AnnouncementCard from "./AnnouncementCard";
+import BirthdaysCard from "./BirthdaysCard";
+import CountdownCard from "./CountdownCard";
 import CreatePostModal, { type NewPost } from "./CreatePostModal";
 import Select from "@/components/Select";
 import SiteNav, { ADMIN_MENU_LINKS, HOME_ADMIN_NAV_LINKS, PAGE_RESELECT_EVENT } from "@/components/NavigationHeader";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "../../lib/supabase/client"
 import { useRouter } from "next/navigation";
 import { richTextToPlain } from "@/lib/richText";
+import { toast } from "@/components/Toaster";
+import type { CalendarEvent, UpcomingBirthday } from "@/lib/calendar";
 
 export type User = {
   id: string;
@@ -51,6 +55,8 @@ export type Announcement = {
   media?: VideoMedia | ImageMedia;
   reactedBy: string[];
   comments: Comment[];
+  /** Shown optimistically while it's still being saved. */
+  pending?: boolean;
 };
 
 export type Comment = {
@@ -139,6 +145,10 @@ function formatDateLine(date: Date) {
 type HomeContentProps = {
   current_user: User;
   is_admin: boolean;
+  /** "YYYY-MM-DD" in school time, decided on the server. */
+  today: string;
+  birthdays: UpcomingBirthday[];
+  upcomingEvents: CalendarEvent[];
 }
 
 export function getRelativeTime(dateString: string): string {
@@ -200,7 +210,7 @@ export async function getPerson(user_id: string): Promise<User> {
   };
 }
 
-export default function HomeContent({ current_user, is_admin }: HomeContentProps) {
+export default function HomeContent({ current_user, is_admin, today, birthdays, upcomingEvents }: HomeContentProps) {
   const [dateLine, setDateLine] = useState("");
   var [announcements, setAnnouncements] = useState<Announcement[]>(ANNOUNCEMENTS);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -210,7 +220,10 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
   const [tags, setTags] = useState<Tag[]>(Tags);
   const [activeTag, setActiveTag] = useState<TagKey | "all">("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [showCreatePost, setShowCreatePost] = useState(false);
+  // Open composer; `draft` is set when publishing failed and it reopens with the post.
+  const [composer, setComposer] = useState<{ draft?: NewPost; error?: string } | null>(null);
+  // When a countdown runs out, the server sends the next events (and today's birthdays).
+  const refreshSidebar = useCallback(() => router.refresh(), [router]);
 
 
   useEffect(() => {
@@ -299,8 +312,39 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
     return matchesTag && matchesQuery;
   });
 
+  // Every change below shows at once and is rolled back if Supabase refuses it.
+
+  function patchAnnouncement(postId: string, patch: Partial<Announcement>) {
+    setAnnouncements((current) => current.map((item) => (item.id === postId ? { ...item, ...patch } : item)));
+  }
+
+  /** Puts a removed item back where it was, or as close as the list now allows. */
+  function reinsert<T>(list: T[], index: number, item: T): T[] {
+    const next = [...list];
+    next.splice(Math.min(Math.max(index, 0), next.length), 0, item);
+    return next;
+  }
+
+  // Rejects after removing the placeholder, so the composer can reopen with the draft.
   async function handleCreatePost(post: NewPost) {
     if (!currentUser) return;
+
+    const tempId = `temp-${Date.now()}`;
+    setAnnouncements((current) => [
+      {
+        id: tempId,
+        tag: post.tag,
+        title: post.title,
+        body: post.content,
+        postedAt: new Date().toISOString(),
+        authorId: currentUser.id,
+        reactedBy: [],
+        comments: [],
+        pending: true,
+      },
+      ...current,
+    ]);
+    addTagOption(post.tag);
 
     const { data, error } = await supabase
       .from("announcements")
@@ -310,14 +354,25 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
 
     if (error) {
       console.error("Error creating announcement:", error);
+      setAnnouncements((current) => current.filter((item) => item.id !== tempId));
       throw error;
     }
 
-    setAnnouncements((current) => [toAnnouncement(data), ...current]);
-    addTagOption(post.tag);
+    setAnnouncements((current) => current.map((item) => (item.id === tempId ? toAnnouncement(data) : item)));
   }
 
+  function publishPost(post: NewPost) {
+    handleCreatePost(post).catch(() =>
+      setComposer({ draft: post, error: "Couldn't publish your post. Please try again." })
+    );
+  }
+
+  // Rejects after restoring the old version, so the editor can reopen with the draft.
   async function handleUpdatePost(postId: string, post: NewPost) {
+    const previous = announcements.find((item) => item.id === postId);
+    patchAnnouncement(postId, { tag: post.tag, title: post.title, body: post.content });
+    addTagOption(post.tag);
+
     const { data, error } = await supabase
       .from("announcements")
       .update({ tag: post.tag, title: post.title, content: post.content })
@@ -327,28 +382,28 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
 
     if (error) {
       console.error("Error updating announcement:", error);
+      if (previous) patchAnnouncement(postId, { tag: previous.tag, title: previous.title, body: previous.body });
       throw error;
     }
 
     const updated = toAnnouncement(data);
-    setAnnouncements((current) =>
-      current.map((item) =>
-        item.id === postId ? { ...updated, reactedBy: item.reactedBy, comments: item.comments } : item
-      )
-    );
-    addTagOption(post.tag);
+    patchAnnouncement(postId, { tag: updated.tag, title: updated.title, body: updated.body, media: updated.media });
   }
 
   async function handleDeletePost(postId: string) {
+    const index = announcements.findIndex((item) => item.id === postId);
+    const removed = announcements[index];
+    if (!removed) return;
+    setAnnouncements((current) => current.filter((item) => item.id !== postId));
+
     // Select the deleted row back: a delete blocked by RLS returns no error, just no rows.
     const { data, error } = await supabase.from("announcements").delete().eq("id", postId).select("id");
 
     if (error || !data?.length) {
       console.error("Error deleting announcement:", error ?? "no rows deleted");
-      throw error ?? new Error("Announcement was not deleted.");
+      setAnnouncements((current) => reinsert(current, index, removed));
+      toast(`Couldn't delete "${removed.title}". It's back on the board.`);
     }
-
-    setAnnouncements((current) => current.filter((item) => item.id !== postId));
   }
 
   function addTagOption(tag: string) {
@@ -356,13 +411,25 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
   }
 
   async function handleToggleReaction(postId: string) {
-    if (!currentUser || pendingReactionIds.current.has(postId)) return;
+    // A post that's still publishing has no row to react to yet.
+    if (!currentUser || postId.startsWith("temp-") || pendingReactionIds.current.has(postId)) return;
 
     const announcement = announcements.find((item) => item.id === postId);
     if (!announcement) return;
 
     pendingReactionIds.current.add(postId);
-    const hasReacted = announcement.reactedBy.includes(currentUser.id);
+    const userId = currentUser.id;
+    const hasReacted = announcement.reactedBy.includes(userId);
+    const setReacted = (reacted: boolean) =>
+      setAnnouncements((current) =>
+        current.map((item) => {
+          if (item.id !== postId) return item;
+          const others = item.reactedBy.filter((id) => id !== userId);
+          return { ...item, reactedBy: reacted ? [...others, userId] : others };
+        })
+      );
+
+    setReacted(!hasReacted);
 
     try {
       const result = hasReacted
@@ -370,27 +437,16 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
           .from("announcement_reactions")
           .delete()
           .eq("announcement_id", postId)
-          .eq("user_id", currentUser.id)
+          .eq("user_id", userId)
         : await supabase
           .from("announcement_reactions")
-          .insert({ announcement_id: postId, user_id: currentUser.id });
+          .insert({ announcement_id: postId, user_id: userId });
 
       if (result.error) throw result.error;
-
-      setAnnouncements((current) =>
-        current.map((item) => {
-          if (item.id !== postId) return item;
-
-          return {
-            ...item,
-            reactedBy: hasReacted
-              ? item.reactedBy.filter((userId) => userId !== currentUser.id)
-              : [...item.reactedBy, currentUser.id],
-          };
-        })
-      );
     } catch (error) {
       console.error("Error toggling announcement reaction:", error);
+      setReacted(hasReacted);
+      toast("Couldn't update your reaction. Please try again.");
     } finally {
       pendingReactionIds.current.delete(postId);
     }
@@ -410,13 +466,8 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
       postedAt: new Date().toISOString(),
     };
 
-    const updateComments = (update: (comments: Comment[]) => Comment[]) =>
-      setAnnouncements((current) =>
-        current.map((item) => (item.id === postId ? { ...item, comments: update(item.comments) } : item))
-      );
-
     // Show the comment immediately, then swap in the saved row (or roll back on failure).
-    updateComments((comments) => [...comments, pending]);
+    updateCommentsOf(postId, (comments) => [...comments, pending]);
 
     const { data, error } = await supabase
       .from("announcement_comments")
@@ -426,11 +477,11 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
 
     if (error) {
       console.error("Error adding announcement comment:", error);
-      updateComments((comments) => comments.filter((comment) => comment.id !== tempId));
+      updateCommentsOf(postId, (comments) => comments.filter((comment) => comment.id !== tempId));
       throw error;
     }
 
-    updateComments((comments) =>
+    updateCommentsOf(postId, (comments) =>
       comments.map((comment) => (comment.id === tempId ? { ...pending, id: data.id, postedAt: data.created_at } : comment))
     );
   }
@@ -441,7 +492,21 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
     );
   }
 
+  function findComment(postId: string, commentId: string) {
+    const comments = announcements.find((item) => item.id === postId)?.comments ?? [];
+    const index = comments.findIndex((comment) => comment.id === commentId);
+    return { index, comment: comments[index] as Comment | undefined };
+  }
+
+  // Rejects after restoring the old text, so the edit box can reopen.
   async function handleUpdateComment(postId: string, commentId: string, body: string) {
+    const { comment: previous } = findComment(postId, commentId);
+    const setBody = (text: string) =>
+      updateCommentsOf(postId, (comments) =>
+        comments.map((comment) => (comment.id === commentId ? { ...comment, body: text } : comment))
+      );
+    setBody(body);
+
     // Select the row back: an update blocked by RLS returns no error, just no rows.
     const { data, error } = await supabase
       .from("announcement_comments")
@@ -452,24 +517,26 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
 
     if (error || !data) {
       console.error("Error updating announcement comment:", error ?? "no rows updated");
+      if (previous) setBody(previous.body);
       throw error ?? new Error("Comment was not updated.");
     }
 
-    updateCommentsOf(postId, (comments) =>
-      comments.map((comment) => (comment.id === commentId ? { ...comment, body: data.content } : comment))
-    );
+    setBody(data.content);
   }
 
   async function handleDeleteComment(postId: string, commentId: string) {
+    const { index, comment: removed } = findComment(postId, commentId);
+    if (!removed) return;
+    updateCommentsOf(postId, (comments) => comments.filter((comment) => comment.id !== commentId));
+
     // Same as posts: select the deleted row back so an RLS-blocked delete counts as a failure.
     const { data, error } = await supabase.from("announcement_comments").delete().eq("id", commentId).select("id");
 
     if (error || !data?.length) {
       console.error("Error deleting announcement comment:", error ?? "no rows deleted");
-      throw error ?? new Error("Comment was not deleted.");
+      updateCommentsOf(postId, (comments) => reinsert(comments, index, removed));
+      toast("Couldn't delete the comment. It's been put back.");
     }
-
-    updateCommentsOf(postId, (comments) => comments.filter((comment) => comment.id !== commentId));
   }
 
 
@@ -547,7 +614,7 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
                   {is_admin && <button
                     type="button"
                     className="btn createPostBtn"
-                    onClick={() => setShowCreatePost(true)}
+                    onClick={() => setComposer({})}
                     aria-label="Create post"
                   >
                     <PlusIcon />
@@ -603,39 +670,20 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
           </div>
 
           <aside className="sideColumn">
-            <div className="sideBlock tick-frame">
-              <span className="tick-bl"></span>
-              <span className="tick-br"></span>
-              <div className="sectionHead">
-                <span className="mono sectionLabel"><span className="sectionNum">01</span> Birthdays today</span>
-              </div>
-              <div className="comingSoon">
-                <span className="badge">COMING SOON</span>
-                <p>Today&apos;s celebrants, pulled from the SOE calendar.</p>
-              </div>
-            </div>
-
-            <div className="sideBlock tick-frame">
-              <span className="tick-bl"></span>
-              <span className="tick-br"></span>
-              <div className="sectionHead">
-                <span className="mono sectionLabel"><span className="sectionNum">02</span> Countdown</span>
-              </div>
-              <div className="comingSoon">
-                <span className="badge">COMING SOON</span>
-                <p>Events within 7 days will count down here.</p>
-              </div>
-            </div>
+            <BirthdaysCard birthdays={birthdays} today={today} currentUserId={current_user.id} />
+            <CountdownCard events={upcomingEvents} today={today} onExpire={refreshSidebar} />
           </aside>
         </div>
       </div>
 
-      {showCreatePost && currentUser && (
+      {composer && currentUser && (
         <CreatePostModal
           currentUser={currentUser}
           tags={POST_TAGS}
-          onClose={() => setShowCreatePost(false)}
-          onSubmit={handleCreatePost}
+          draft={composer.draft}
+          initialError={composer.error}
+          onClose={() => setComposer(null)}
+          onSubmit={publishPost}
         />
       )}
 
@@ -1051,29 +1099,6 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
 
         .sideBlock:last-child {
           margin-bottom: 0;
-        }
-
-        .comingSoon {
-          display: flex;
-          flex-direction: column;
-          align-items: flex-start;
-          gap: 4px;
-          padding: 16px 0 2px;
-          color: var(--ink-soft);
-        }
-
-        .comingSoon .badge {
-          font-family: "IBM Plex Mono", monospace;
-          font-size: 10.5px;
-          letter-spacing: 0.04em;
-          padding: 3px 7px;
-          border: 1px dashed #c9bfa0;
-          color: var(--ink-soft);
-        }
-
-        .comingSoon p {
-          font-size: 12.5px;
-          margin: 6px 0 0;
         }
 
         @media (max-width: 900px) {

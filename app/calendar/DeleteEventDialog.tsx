@@ -7,9 +7,9 @@ import { TAG_LABELS, formatEventDates, formatEventTime, type CalendarEvent } fro
 type Props = {
   event: CalendarEvent;
   onCancel: () => void;
-  /** Deletes the event; throws (with a message) if that fails. */
-  onConfirm: () => Promise<void>;
-  /** Called once the event is gone and the toss animation has played. */
+  /** Starts the delete. The event leaves the calendar at once; the calendar restores it if that fails. */
+  onConfirm: () => void;
+  /** Called once the toss animation has played. */
   onDeleted: () => void;
 };
 
@@ -18,13 +18,10 @@ const TOSS_MS = 450;
 const FADE_MS = 220;
 
 export default function DeleteEventDialog({ event, onCancel, onConfirm, onDeleted }: Props) {
-  const [busy, setBusy] = useState(false);
   const [phase, setPhase] = useState<"idle" | "tossing" | "closing">("idle");
-  const [error, setError] = useState("");
   const cancelRef = useRef<HTMLButtonElement>(null);
   const tossed = phase !== "idle";
-  const locked = busy || tossed;
-  const backdrop = useBackdropDismiss(onCancel, !locked);
+  const backdrop = useBackdropDismiss(onCancel, !tossed);
 
   useEffect(() => {
     cancelRef.current?.focus();
@@ -37,22 +34,14 @@ export default function DeleteEventDialog({ event, onCancel, onConfirm, onDelete
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape" && !locked) onCancel();
+      if (e.key === "Escape" && !tossed) onCancel();
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [locked, onCancel]);
+  }, [tossed, onCancel]);
 
-  async function confirm() {
-    setBusy(true);
-    setError("");
-    try {
-      await onConfirm();
-    } catch (err) {
-      setError(err instanceof Error && err.message ? err.message : "Couldn't delete the event. Please try again.");
-      setBusy(false);
-      return;
-    }
+  function confirm() {
+    onConfirm();
 
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       onDeleted();
@@ -95,20 +84,15 @@ export default function DeleteEventDialog({ event, onCancel, onConfirm, onDelete
             </span>
           </div>
 
-          {error && (
-            <p className="delError" role="alert">
-              {error}
-            </p>
-          )}
         </div>
 
         <div className="delActions">
-          <button ref={cancelRef} type="button" className="btn ghost" onClick={onCancel} disabled={locked}>
+          <button ref={cancelRef} type="button" className="btn ghost" onClick={onCancel} disabled={tossed}>
             Keep it
           </button>
-          <button type="button" className="btn delConfirm" onClick={confirm} disabled={locked}>
-            {busy && !tossed ? <span className="delSpinner" aria-hidden="true" /> : <TrashIcon size={15} />}
-            {tossed ? "Deleted" : busy ? "Deleting…" : "Delete event"}
+          <button type="button" className="btn delConfirm" onClick={confirm} disabled={tossed}>
+            <TrashIcon size={15} />
+            {tossed ? "Deleted" : "Delete event"}
           </button>
         </div>
       </div>
@@ -322,15 +306,6 @@ export default function DeleteEventDialog({ event, onCancel, onConfirm, onDelete
           }
         }
 
-        .delError {
-          margin: 12px 0 0;
-          padding: 8px 12px;
-          border-radius: 5px;
-          background: #fbe9e7;
-          font-size: 12.5px;
-          color: #b3261e;
-        }
-
         .delActions {
           display: flex;
           justify-content: flex-end;
@@ -379,21 +354,6 @@ export default function DeleteEventDialog({ event, onCancel, onConfirm, onDelete
 
         .delConfirm:hover:not(:disabled) :global(.lid) {
           transform: rotate(-14deg) translateY(-1px);
-        }
-
-        .delSpinner {
-          width: 14px;
-          height: 14px;
-          border-radius: 50%;
-          border: 2px solid rgba(255, 255, 255, 0.35);
-          border-top-color: var(--white);
-          animation: delSpin 0.7s linear infinite;
-        }
-
-        @keyframes delSpin {
-          to {
-            transform: rotate(360deg);
-          }
         }
 
         @media (prefers-reduced-motion: reduce) {

@@ -3,7 +3,7 @@ export const instant = false;
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import SiteNav, { ADMIN_MENU_LINKS } from "@/components/NavigationHeader";
+import SiteNav, { ADMIN_MENU_LINKS, HOME_ADMIN_NAV_LINKS } from "@/components/NavigationHeader";
 import { getProfile, isAdmin } from "@/lib/auth";
 import { checkInState } from "@/lib/attendance";
 import { fetchAttendanceEvents } from "@/lib/attendance-server";
@@ -28,11 +28,7 @@ export default async function AdminAttendancePage() {
         name={profile.name}
         userId={profile.id}
         avatarUrl={profile.avatarUrl}
-        nameOverride="ADMIN"
-        links={[]}
-        brandHref="/admin"
-        profileHref="/admin/profile"
-        profileLabel="My profile"
+        links={HOME_ADMIN_NAV_LINKS}
         menuLinks={ADMIN_MENU_LINKS}
       />
 

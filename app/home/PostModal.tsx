@@ -36,7 +36,6 @@ export default function PostModal({
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
-  const [savingEdit, setSavingEdit] = useState(false);
   const [editError, setEditError] = useState("");
   const [deletingComment, setDeletingComment] = useState<Comment | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -103,14 +102,14 @@ export default function PostModal({
       // then an open edit box, then the modal.
       if (deletingComment) return;
       if (editingId) {
-        if (!savingEdit) cancelEdit();
+        cancelEdit();
         return;
       }
       requestClose();
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [onClose, deletingComment, editingId, savingEdit]);
+  }, [onClose, deletingComment, editingId]);
 
   function startEdit(comment: Comment) {
     setEditingId(comment.id);
@@ -124,23 +123,17 @@ export default function PostModal({
     setEditError("");
   }
 
-  async function saveEdit(comment: Comment) {
+  // The new text shows at once; if saving fails the edit box reopens with it.
+  function saveEdit(comment: Comment) {
     const trimmed = editDraft.trim();
-    if (!trimmed || savingEdit) return;
-    if (trimmed === comment.body) {
-      cancelEdit();
-      return;
-    }
-    setSavingEdit(true);
-    setEditError("");
-    try {
-      await onUpdateComment(announcement.id, comment.id, trimmed);
-      cancelEdit();
-    } catch {
+    if (!trimmed) return;
+    cancelEdit();
+    if (trimmed === comment.body) return;
+    onUpdateComment(announcement.id, comment.id, trimmed).catch(() => {
+      setEditingId(comment.id);
+      setEditDraft(trimmed);
       setEditError("Couldn't save your changes. Please try again.");
-    } finally {
-      setSavingEdit(false);
-    }
+    });
   }
 
   async function submitComment(event: FormEvent) {
@@ -257,7 +250,7 @@ export default function PostModal({
                               className="commentEdit"
                               onSubmit={(e) => {
                                 e.preventDefault();
-                                void saveEdit(comment);
+                                saveEdit(comment);
                               }}
                             >
                               <textarea
@@ -265,7 +258,6 @@ export default function PostModal({
                                 value={editDraft}
                                 rows={2}
                                 autoFocus
-                                disabled={savingEdit}
                                 aria-label="Edit comment"
                                 onChange={(e) => {
                                   setEditDraft(e.target.value);
@@ -274,11 +266,11 @@ export default function PostModal({
                               />
                               {editError && <p className="commentEditError" role="alert">{editError}</p>}
                               <div className="commentEditActions">
-                                <button type="button" className="commentCancelBtn" onClick={cancelEdit} disabled={savingEdit}>
+                                <button type="button" className="commentCancelBtn" onClick={cancelEdit}>
                                   Cancel
                                 </button>
-                                <button type="submit" className="commentPostBtn" disabled={!editDraft.trim() || savingEdit}>
-                                  {savingEdit ? "Saving..." : "Save"}
+                                <button type="submit" className="commentPostBtn" disabled={!editDraft.trim()}>
+                                  Save
                                 </button>
                               </div>
                             </form>
@@ -335,12 +327,11 @@ export default function PostModal({
               : `${deletingComment.authorName}'s comment will be removed from this post. This can't be undone.`
           }
           confirmLabel="Delete"
-          busyLabel="Deleting..."
-          errorMessage="Couldn't delete this comment. Please try again."
           onCancel={() => setDeletingComment(null)}
-          onConfirm={async () => {
-            await onDeleteComment(announcement.id, deletingComment.id);
+          onConfirm={() => {
+            // Removed from the list at once; HomeContent puts it back if the delete fails.
             setDeletingComment(null);
+            void onDeleteComment(announcement.id, deletingComment.id);
           }}
         />
       )}

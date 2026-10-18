@@ -13,13 +13,32 @@ function toLocalInput(iso: string | null): string {
   return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
 }
 
-export default function EventSettings({ event }: { event: AttendanceEvent }) {
+export type AttendanceSettings = Pick<AttendanceEvent, "takes_attendance" | "check_in_opens_at" | "check_in_closes_at">;
+
+/** `onSave` shows the new settings at once (see ActionForm's `optimistic`). */
+export default function EventSettings({
+  event,
+  onSave,
+}: {
+  event: AttendanceEvent;
+  onSave: (settings: AttendanceSettings) => void;
+}) {
   const { opens, closes } = checkInWindow(event);
   // The server renders in its own time zone; remount the inputs once the browser's is known.
   const hydrated = useHydrated();
 
   return (
-    <ActionForm action={updateEventAttendance} className="flex flex-col gap-4">
+    <ActionForm
+      action={updateEventAttendance}
+      optimistic={(formData) =>
+        onSave({
+          takes_attendance: formData.get("takesAttendance") === "on",
+          check_in_opens_at: (formData.get("checkInOpensAt") as string) || null,
+          check_in_closes_at: (formData.get("checkInClosesAt") as string) || null,
+        })
+      }
+      className="flex flex-col gap-4"
+    >
       <input type="hidden" name="eventId" value={event.event_id} />
 
       <label className="m-0 flex cursor-pointer items-center justify-between gap-4 rounded-lg border border-rule bg-vellum/40 px-3.5 py-3">

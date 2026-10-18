@@ -1,6 +1,18 @@
 "use client";
 
-import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type CSSProperties,
+  type FormEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+  type ReactNode,
+  type Ref,
+} from "react";
 import { useBackdropDismiss } from "@/lib/useBackdropDismiss";
 import { createPortal } from "react-dom";
 import { EditorContent, useEditor, useEditorState, type Editor } from "@tiptap/react";
@@ -11,6 +23,7 @@ import Image from "@tiptap/extension-image";
 import NextImage from "next/image";
 import { CharacterCount, Placeholder } from "@tiptap/extensions";
 import FileHandler from "@tiptap/extension-file-handler";
+import { NodeSelection } from "@tiptap/pm/state";
 import Select from "@/components/Select";
 import PostContent from "./PostContent";
 import ConfirmDialog from "./ConfirmDialog";
@@ -36,10 +49,37 @@ function mediaNode(media: UploadedMedia, kind?: MediaKind) {
   return { type: "fileAttachment", attrs: { href: media.downloadUrl, name: media.name, size: media.size } };
 }
 
+// The part of the screen an on-screen keyboard leaves visible, or null while no keyboard is up.
+// Phones overlay the keyboard on fixed elements instead of shrinking them, so the modal fits itself into this.
+function useKeyboardViewport() {
+  const [view, setView] = useState<{ top: number; height: number } | null>(null);
+
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const viewport = vv;
+    function update() {
+      // Pinch-zoom also shrinks the visual viewport; only a big drop at normal scale is a keyboard.
+      const keyboardUp = viewport.scale < 1.05 && window.innerHeight - viewport.height > 120;
+      setView(keyboardUp ? { top: viewport.offsetTop, height: viewport.height } : null);
+    }
+    viewport.addEventListener("resize", update);
+    viewport.addEventListener("scroll", update);
+    return () => {
+      viewport.removeEventListener("resize", update);
+      viewport.removeEventListener("scroll", update);
+    };
+  }, []);
+
+  return view;
+}
+
 export default function CreatePostModal({
   currentUser,
   tags,
   initialPost,
+  draft,
+  initialError,
   onClose,
   onSubmit,
 }: {
@@ -47,44 +87,65 @@ export default function CreatePostModal({
   tags: string[];
   // When set, the modal edits this post instead of creating a new one.
   initialPost?: NewPost & { postedAt: string };
+  // Reopens the modal with what the user had written, e.g. after a failed publish.
+  draft?: NewPost;
+  initialError?: string;
   onClose: () => void;
-  onSubmit: (post: NewPost) => Promise<void>;
+  // Called once and the modal closes straight away; the post shows optimistically.
+  onSubmit: (post: NewPost) => void;
 }) {
   const isEdit = !!initialPost;
-  const [title, setTitle] = useState(initialPost?.title ?? "");
-  const [tag, setTag] = useState(initialPost?.tag ?? tags[0] ?? "");
-  const [bodyChanged, setBodyChanged] = useState(false);
+  const [title, setTitle] = useState(draft?.title ?? initialPost?.title ?? "");
+  const [tag, setTag] = useState(draft?.tag ?? initialPost?.tag ?? tags[0] ?? "");
+  // A restored draft counts as unsaved work, so closing it asks first.
+  const [bodyChanged, setBodyChanged] = useState(!!draft);
   const [showDiscard, setShowDiscard] = useState(false);
   const backdrop = useBackdropDismiss(requestClose);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(initialError ?? "");
   const [uploading, setUploading] = useState(0);
   // Snapshot of the editor body while previewing; null while editing.
   const [preview, setPreview] = useState<{ html: string; at: string } | null>(null);
   const [supabase] = useState(() => createClient());
   const titleRef = useRef<HTMLInputElement>(null);
+  const keyboardView = useKeyboardViewport();
 
-  // Uploads each file to Storage, then inserts it at `pos` (drop target) or the cursor.
+  // Uploads the files to Storage together, then inserts them in their original order at `pos`
+  // (drop target) or the cursor. Inserting them as one batch keeps them back to back, which is
+  // what groups them into a gallery in the post.
   async function insertFiles(target: Editor, files: File[], kind?: MediaKind, pos?: number) {
     setError("");
     setUploading((n) => n + files.length);
-    if (pos !== undefined) target.commands.setTextSelection(pos);
-    for (const file of files) {
-      try {
-        const media = await uploadMedia(supabase, currentUser.id, file);
-        target.chain().focus().insertContent(mediaNode(media, kind)).run();
-      } catch (err) {
-        console.error("Error uploading announcement media:", err);
-        setError(err instanceof Error && err.message ? err.message : `Couldn't upload "${file.name}".`);
-      } finally {
-        setUploading((n) => n - 1);
+    const results = await Promise.allSettled(
+      files.map((file) => uploadMedia(supabase, currentUser.id, file).finally(() => setUploading((n) => n - 1)))
+    );
+
+    const nodes = [];
+    for (const [i, result] of results.entries()) {
+      if (result.status === "fulfilled") {
+        nodes.push(mediaNode(result.value, kind));
+      } else {
+        console.error("Error uploading announcement media:", result.reason);
+        const reason = result.reason;
+        setError(reason instanceof Error && reason.message ? reason.message : `Couldn't upload "${files[i].name}".`);
       }
     }
+    if (!nodes.length) return;
+
+    // With an image selected, inserting would replace it; put the new ones after it instead.
+    const { selection } = target.state;
+    const at = pos ?? (selection instanceof NodeSelection ? selection.to : undefined);
+    const chain = target.chain().focus();
+    (at === undefined ? chain.insertContent(nodes) : chain.insertContentAt(at, nodes)).run();
+
+    // Leave the cursor on the line below, not on the last image, where the next keystroke would replace it.
+    const end = target.state.selection.to;
+    if (target.state.doc.resolve(end).nodeAfter?.isTextblock) target.commands.setTextSelection(end + 1);
+    else target.chain().insertContentAt(end, { type: "paragraph" }).setTextSelection(end + 1).run();
   }
 
   const editor = useEditor({
     immediatelyRender: false,
-    content: initialPost ? toEditorHtml(initialPost.content) : "",
+    content: draft ? toEditorHtml(draft.content) : initialPost ? toEditorHtml(initialPost.content) : "",
     onUpdate: () => setBodyChanged(true),
     extensions: [
       StarterKit.configure({
@@ -131,11 +192,10 @@ export default function CreatePostModal({
 
   const isDirty = title !== (initialPost?.title ?? "") || tag !== (initialPost?.tag ?? tags[0] ?? "") || bodyChanged;
   const canPublish =
-    title.trim() !== "" && tag !== "" && !(counts?.isEmpty ?? true) && !submitting && uploading === 0;
+    title.trim() !== "" && tag !== "" && !(counts?.isEmpty ?? true) && uploading === 0;
 
   // Asks via the discard panel first when there's something to lose.
   function requestClose() {
-    if (submitting) return;
     if (isDirty) setShowDiscard(true);
     else onClose();
   }
@@ -152,13 +212,24 @@ export default function CreatePostModal({
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       // While the discard panel is open, Esc belongs to it (it cancels the discard).
-      if (e.key !== "Escape" || e.defaultPrevented || submitting || showDiscard) return;
+      if (e.key !== "Escape" || e.defaultPrevented || showDiscard) return;
       if (isDirty) setShowDiscard(true);
       else onClose();
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [isDirty, showDiscard, submitting, onClose]);
+  }, [isDirty, showDiscard, onClose]);
+
+  // The keyboard just took (or gave back) space; keep the caret in view.
+  useEffect(() => {
+    if (!editor?.isFocused) return;
+    const frame = requestAnimationFrame(() => editor.commands.scrollIntoView());
+    return () => cancelAnimationFrame(frame);
+  }, [editor, keyboardView?.height]);
+
+  function hideKeyboard() {
+    (document.activeElement as HTMLElement | null)?.blur();
+  }
 
   function togglePreview() {
     if (preview) {
@@ -180,24 +251,21 @@ export default function CreatePostModal({
     comments: [],
   };
 
-  async function publish(event: FormEvent) {
+  function publish(event: FormEvent) {
     event.preventDefault();
     if (!editor || !canPublish) return;
-    setSubmitting(true);
-    setError("");
-    try {
-      await onSubmit({ title: title.trim(), tag, content: editor.getHTML() });
-      onClose();
-    } catch {
-      setError(isEdit ? "Couldn't save your changes. Please try again." : "Couldn't publish your post. Please try again.");
-      setSubmitting(false);
-    }
+    onSubmit({ title: title.trim(), tag, content: editor.getHTML() });
+    onClose();
   }
 
   return (
-    <div className="modalBackdrop" {...backdrop}>
+    <div
+      className="modalBackdrop"
+      {...backdrop}
+      style={keyboardView ? { top: keyboardView.top, bottom: "auto", height: keyboardView.height } : undefined}
+    >
       <form
-        className="modalPanel"
+        className={`modalPanel${keyboardView ? " keyboardUp" : ""}`}
         onClick={(e) => e.stopPropagation()}
         onSubmit={publish}
         role="dialog"
@@ -225,6 +293,14 @@ export default function CreatePostModal({
               value={title}
               maxLength={160}
               onChange={(e) => setTitle(e.target.value)}
+              onKeyDown={(e) => {
+                // Enter moves on to the body instead of submitting a half-written post.
+                if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+                  e.preventDefault();
+                  editor?.commands.focus();
+                }
+              }}
+              enterKeyHint="next"
               aria-label="Announcement title"
             />
 
@@ -300,7 +376,7 @@ export default function CreatePostModal({
             <div className="sideSection tipSection">
               <span className="sideLabel mono">Tip</span>
               <p className="tipText">
-                Hover over a toolbar button for 2 seconds to see what it does, its shortcut, and a preview of the
+                Hover over a toolbar button for 2 seconds, or over a menu option, to see what it does, its shortcut, and a preview of the
                 result.
               </p>
               <p className="tipText">
@@ -319,11 +395,16 @@ export default function CreatePostModal({
             <span className="footerHint uploadingHint mono" role="status">
               UPLOADING {uploading} FILE{uploading === 1 ? "" : "S"}...
             </span>
+          ) : keyboardView ? (
+            <button type="button" className="doneBtn" onClick={hideKeyboard} aria-label="Hide keyboard">
+              <Icon d="M3 5h18v10H3zM7 9h.01M11 9h.01M15 9h.01M8 12h8M9 19l3 2 3-2" />
+              Done
+            </button>
           ) : (
             <span className="footerHint mono">ESC TO CLOSE</span>
           )}
           <div className="footerActions">
-            <button type="button" className="btn ghost" onClick={requestClose} disabled={submitting}>
+            <button type="button" className="btn ghost cancelBtn" onClick={requestClose}>
               Cancel
             </button>
             <button
@@ -337,7 +418,7 @@ export default function CreatePostModal({
               {previewPost ? "Keep editing" : "Preview"}
             </button>
             <button type="submit" className="btn primary publishBtn" disabled={!canPublish}>
-              {isEdit ? (submitting ? "Saving..." : "Save changes") : submitting ? "Publishing..." : "Publish"}
+              {isEdit ? "Save changes" : "Publish"}
             </button>
           </div>
         </div>
@@ -519,6 +600,11 @@ export default function CreatePostModal({
           cursor: default;
         }
 
+        /* Uploads stack one per line while editing; keep them small. Preview shows the real gallery layout. */
+        .editorScroll :global(.editorContent img) {
+          max-height: 240px;
+        }
+
         .composeColumn[hidden] {
           display: none;
         }
@@ -687,6 +773,60 @@ export default function CreatePostModal({
           font-size: 13.5px;
         }
 
+        .doneBtn {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          padding: 7px 10px;
+          background: none;
+          border: 1px solid #c9bfa0;
+          border-radius: 5px;
+          font-size: 13px;
+          font-weight: 600;
+          color: var(--navy);
+          cursor: pointer;
+        }
+
+        /* Touch screens: iOS zooms into any field typed in below 16px. */
+        @media (pointer: coarse) {
+          .editorScroll :global(.editorContent) {
+            font-size: 16px;
+          }
+        }
+
+        /* On-screen keyboard is up: give the space to the text being typed. */
+        .modalPanel.keyboardUp {
+          height: 100%;
+        }
+
+        .keyboardUp .modalAccent,
+        .keyboardUp .sidePanel,
+        .keyboardUp .cancelBtn {
+          display: none;
+        }
+
+        .keyboardUp .composeColumn {
+          padding: 10px 12px;
+          gap: 8px;
+        }
+
+        .keyboardUp .titleInput {
+          font-size: 18px !important;
+          padding-bottom: 6px !important;
+        }
+
+        .keyboardUp .editorScroll :global(.editorContent) {
+          padding: 12px 14px 24px;
+        }
+
+        .keyboardUp .modalFooter {
+          padding: 6px 12px;
+        }
+
+        .keyboardUp .footerActions .btn {
+          padding: 7px 14px;
+        }
+
         @media (max-width: 820px) {
           .modalBackdrop {
             padding: 0;
@@ -706,6 +846,10 @@ export default function CreatePostModal({
 
           .composeColumn {
             padding: 16px;
+          }
+
+          .modalFooter {
+            padding: 10px 16px;
           }
 
           .sidePanel {
@@ -735,6 +879,12 @@ export default function CreatePostModal({
             padding: 16px;
           }
         }
+
+        @media (max-width: 520px) {
+          .composeColumn {
+            padding: 12px;
+          }
+        }
       `}</style>
     </div>
   );
@@ -756,8 +906,10 @@ const URL_LABELS: Record<Exclude<UrlMode, null>, { label: string; placeholder: s
 function Toolbar({ editor, onUpload }: { editor: Editor; onUpload: (files: File[], kind: MediaKind) => void }) {
   const [urlMode, setUrlMode] = useState<UrlMode>(null);
   const [url, setUrl] = useState("");
+  const [moreToRight, setMoreToRight] = useState(false);
   const urlInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   const state = useEditorState({
     editor,
@@ -786,8 +938,20 @@ function Toolbar({ editor, onUpload }: { editor: Editor; onUpload: (files: File[
   });
 
   useEffect(() => {
-    if (urlMode) urlInputRef.current?.focus();
+    // On touch screens a media URL is the rarer path; don't pop the keyboard over the Upload button.
+    if (urlMode && (urlMode === "link" || !window.matchMedia("(pointer: coarse)").matches)) {
+      urlInputRef.current?.focus();
+    }
   }, [urlMode]);
+
+  // The toolbar scrolls sideways on narrow screens; fade its edge while tools are hidden past it.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(() => setMoreToRight(hasMoreToRight(el)));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   function openUrl(mode: Exclude<UrlMode, null>) {
     if (urlMode === mode) {
@@ -825,105 +989,221 @@ function Toolbar({ editor, onUpload }: { editor: Editor; onUpload: (files: File[
   }
 
   const chain = () => editor.chain().focus();
+  const headingLabel = state.h1 ? "H1" : state.h2 ? "H2" : state.h3 ? "H3" : null;
 
   return (
     <div className="toolbarWrap">
-      <div className="toolbar" role="toolbar" aria-label="Formatting">
-        <ToolGroup>
-          <ToolBtn label="Undo" onClick={() => chain().undo().run()} disabled={!state.canUndo}>
-            <Icon d="M9 14 4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3" />
-          </ToolBtn>
-          <ToolBtn label="Redo" onClick={() => chain().redo().run()} disabled={!state.canRedo}>
-            <Icon d="m15 14 5-5-5-5M20 9H9a5 5 0 0 0 0 10h3" />
-          </ToolBtn>
-        </ToolGroup>
+      <div
+        ref={scrollRef}
+        className={`toolbarScroll${moreToRight ? " moreToRight" : ""}`}
+        onScroll={(e) => setMoreToRight(hasMoreToRight(e.currentTarget))}
+      >
+        <div className="editorToolbar" role="toolbar" aria-label="Formatting">
+          <ToolGroup>
+            <ToolMenu
+              label="Text style"
+              active={!!headingLabel}
+              trigger={<span className="textIcon styleIcon">{headingLabel ?? "Text"}</span>}
+              sections={[
+                {
+                  items: [
+                    {
+                      label: "Normal text",
+                      icon: <span className="textIcon">P</span>,
+                      active: !headingLabel,
+                      onSelect: () => chain().setParagraph().run(),
+                    },
+                    {
+                      label: "Heading 1",
+                      icon: <span className="textIcon">H1</span>,
+                      active: state.h1,
+                      onSelect: () => chain().setHeading({ level: 1 }).run(),
+                    },
+                    {
+                      label: "Heading 2",
+                      icon: <span className="textIcon">H2</span>,
+                      active: state.h2,
+                      onSelect: () => chain().setHeading({ level: 2 }).run(),
+                    },
+                    {
+                      label: "Heading 3",
+                      icon: <span className="textIcon">H3</span>,
+                      active: state.h3,
+                      onSelect: () => chain().setHeading({ level: 3 }).run(),
+                    },
+                  ],
+                },
+              ]}
+            />
+          </ToolGroup>
 
-        <ToolGroup>
-          <ToolBtn label="Heading 1" active={state.h1} onClick={() => chain().toggleHeading({ level: 1 }).run()}>
-            <span className="textIcon">H1</span>
-          </ToolBtn>
-          <ToolBtn label="Heading 2" active={state.h2} onClick={() => chain().toggleHeading({ level: 2 }).run()}>
-            <span className="textIcon">H2</span>
-          </ToolBtn>
-          <ToolBtn label="Heading 3" active={state.h3} onClick={() => chain().toggleHeading({ level: 3 }).run()}>
-            <span className="textIcon">H3</span>
-          </ToolBtn>
-        </ToolGroup>
+          <ToolGroup>
+            <ToolBtn label="Bold" active={state.bold} onClick={() => chain().toggleBold().run()}>
+              <Icon d={ICONS.bold} strokeWidth={2.6} />
+            </ToolBtn>
+            <ToolBtn label="Italic" active={state.italic} onClick={() => chain().toggleItalic().run()}>
+              <Icon d={ICONS.italic} />
+            </ToolBtn>
+            <ToolBtn label="Underline" active={state.underline} onClick={() => chain().toggleUnderline().run()}>
+              <Icon d={ICONS.underline} />
+            </ToolBtn>
+            <ToolMenu
+              label="More formatting"
+              active={state.strike || state.highlight || state.code}
+              chevron={false}
+              trigger={<Icon d="M5 12h.01M12 12h.01M19 12h.01" strokeWidth={3} />}
+              sections={[
+                {
+                  items: [
+                    {
+                      label: "Strikethrough",
+                      icon: <Icon d={ICONS.strike} />,
+                      active: state.strike,
+                      onSelect: () => chain().toggleStrike().run(),
+                    },
+                    {
+                      label: "Highlight",
+                      icon: <Icon d={ICONS.highlight} />,
+                      active: state.highlight,
+                      onSelect: () => chain().toggleHighlight().run(),
+                    },
+                    {
+                      label: "Inline code",
+                      icon: <Icon d={ICONS.code} />,
+                      active: state.code,
+                      onSelect: () => chain().toggleCode().run(),
+                    },
+                  ],
+                },
+                {
+                  items: [
+                    {
+                      label: "Clear formatting",
+                      icon: <Icon d={ICONS.clear} />,
+                      onSelect: () => chain().unsetAllMarks().clearNodes().run(),
+                    },
+                  ],
+                },
+              ]}
+            />
+          </ToolGroup>
 
-        <ToolGroup>
-          <ToolBtn label="Bold" active={state.bold} onClick={() => chain().toggleBold().run()}>
-            <Icon d="M7 5h6a3.5 3.5 0 0 1 0 7H7zM7 12h7a3.5 3.5 0 0 1 0 7H7z" strokeWidth={2.6} />
-          </ToolBtn>
-          <ToolBtn label="Italic" active={state.italic} onClick={() => chain().toggleItalic().run()}>
-            <Icon d="M19 4h-9M14 20H5M15 4 9 20" />
-          </ToolBtn>
-          <ToolBtn label="Underline" active={state.underline} onClick={() => chain().toggleUnderline().run()}>
-            <Icon d="M7 4v6a5 5 0 0 0 10 0V4M5 20h14" />
-          </ToolBtn>
-          <ToolBtn label="Strikethrough" active={state.strike} onClick={() => chain().toggleStrike().run()}>
-            <Icon d="M4 12h16M16 6.5A4 3 0 0 0 12 5c-2.5 0-4 1.3-4 3 0 1.2.8 2.2 2.5 3M8 17.5A4 3 0 0 0 12 19c2.5 0 4-1.3 4-3" />
-          </ToolBtn>
-          <ToolBtn label="Highlight" active={state.highlight} onClick={() => chain().toggleHighlight().run()}>
-            <Icon d="m9 11-6 6v3h9l3-3M22 12l-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4" />
-          </ToolBtn>
-          <ToolBtn label="Inline code" active={state.code} onClick={() => chain().toggleCode().run()}>
-            <Icon d="m16 18 6-6-6-6M8 6l-6 6 6 6" />
-          </ToolBtn>
-        </ToolGroup>
+          <ToolGroup>
+            <ToolMenu
+              label="Paragraph"
+              active={state.bulletList || state.orderedList || state.blockquote || state.codeBlock}
+              trigger={<Icon d={ICONS.bulletList} strokeWidth={2.4} />}
+              sections={[
+                {
+                  items: [
+                    {
+                      label: "Bullet list",
+                      icon: <Icon d={ICONS.bulletList} strokeWidth={2.4} />,
+                      active: state.bulletList,
+                      onSelect: () => chain().toggleBulletList().run(),
+                    },
+                    {
+                      label: "Numbered list",
+                      icon: <Icon d={ICONS.orderedList} />,
+                      active: state.orderedList,
+                      onSelect: () => chain().toggleOrderedList().run(),
+                    },
+                    {
+                      label: "Quote",
+                      icon: <Icon d={ICONS.quote} />,
+                      active: state.blockquote,
+                      onSelect: () => chain().toggleBlockquote().run(),
+                    },
+                    {
+                      label: "Code block",
+                      icon: <Icon d={ICONS.codeBlock} />,
+                      active: state.codeBlock,
+                      onSelect: () => chain().toggleCodeBlock().run(),
+                    },
+                    {
+                      label: "Divider",
+                      icon: <Icon d="M3 12h18" />,
+                      onSelect: () => chain().setHorizontalRule().run(),
+                    },
+                  ],
+                },
+                {
+                  title: "Align",
+                  inline: true,
+                  items: [
+                    {
+                      label: "Align left",
+                      icon: <Icon d="M3 6h18M3 12h12M3 18h16" />,
+                      active: state.alignLeft,
+                      onSelect: () => chain().setTextAlign("left").run(),
+                    },
+                    {
+                      label: "Align center",
+                      icon: <Icon d="M3 6h18M6 12h12M4 18h16" />,
+                      active: state.alignCenter,
+                      onSelect: () => chain().setTextAlign("center").run(),
+                    },
+                    {
+                      label: "Align right",
+                      icon: <Icon d="M3 6h18M9 12h12M5 18h16" />,
+                      active: state.alignRight,
+                      onSelect: () => chain().setTextAlign("right").run(),
+                    },
+                    {
+                      label: "Justify",
+                      icon: <Icon d="M3 6h18M3 12h18M3 18h18" />,
+                      active: state.alignJustify,
+                      onSelect: () => chain().setTextAlign("justify").run(),
+                    },
+                  ],
+                },
+              ]}
+            />
+          </ToolGroup>
 
-        <ToolGroup>
-          <ToolBtn label="Bullet list" active={state.bulletList} onClick={() => chain().toggleBulletList().run()}>
-            <Icon d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01" strokeWidth={2.4} />
-          </ToolBtn>
-          <ToolBtn label="Numbered list" active={state.orderedList} onClick={() => chain().toggleOrderedList().run()}>
-            <Icon d="M10 6h11M10 12h11M10 18h11M4 6h1v4M4 10h2M6 18H4c0-1 2-2 2-3s-1-1.5-2-1" />
-          </ToolBtn>
-          <ToolBtn label="Quote" active={state.blockquote} onClick={() => chain().toggleBlockquote().run()}>
-            <Icon d="M3 21c3 0 7-1 7-8V5H3v7h4c0 3.5-1.5 5-4 5zM14 21c3 0 7-1 7-8V5h-7v7h4c0 3.5-1.5 5-4 5z" />
-          </ToolBtn>
-          <ToolBtn label="Code block" active={state.codeBlock} onClick={() => chain().toggleCodeBlock().run()}>
-            <Icon d="M4 4h16v16H4zM9 9l-2 3 2 3M15 9l2 3-2 3" />
-          </ToolBtn>
-          <ToolBtn label="Divider" onClick={() => chain().setHorizontalRule().run()}>
-            <Icon d="M3 12h18" />
-          </ToolBtn>
-        </ToolGroup>
+          <ToolGroup>
+            <ToolBtn label="Link" active={state.link || urlMode === "link"} onClick={() => openUrl("link")}>
+              <Icon d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" />
+            </ToolBtn>
+            <ToolMenu
+              label="Insert"
+              active={urlMode !== null && urlMode !== "link"}
+              trigger={<Icon d="M12 5v14M5 12h14" strokeWidth={2.4} />}
+              sections={[
+                {
+                  items: [
+                    {
+                      label: "Image",
+                      icon: <Icon d="M3 5h18v14H3zM3 16l5-5 4 4 3-3 6 6M15.5 9.5h.01" />,
+                      onSelect: () => openUrl("image"),
+                    },
+                    {
+                      label: "Video",
+                      icon: <Icon d="M3 6h13v12H3zM16 10l5-3v10l-5-3" />,
+                      onSelect: () => openUrl("video"),
+                    },
+                    {
+                      label: "File",
+                      icon: (
+                        <Icon d="m21 11-8.6 8.6a5 5 0 0 1-7-7l8.5-8.6a3.3 3.3 0 0 1 4.7 4.7l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l8-7.9" />
+                      ),
+                      onSelect: () => openUrl("file"),
+                    },
+                  ],
+                },
+              ]}
+            />
+          </ToolGroup>
 
-        <ToolGroup>
-          <ToolBtn label="Align left" active={state.alignLeft} onClick={() => chain().setTextAlign("left").run()}>
-            <Icon d="M3 6h18M3 12h12M3 18h16" />
-          </ToolBtn>
-          <ToolBtn label="Align center" active={state.alignCenter} onClick={() => chain().setTextAlign("center").run()}>
-            <Icon d="M3 6h18M6 12h12M4 18h16" />
-          </ToolBtn>
-          <ToolBtn label="Align right" active={state.alignRight} onClick={() => chain().setTextAlign("right").run()}>
-            <Icon d="M3 6h18M9 12h12M5 18h16" />
-          </ToolBtn>
-          <ToolBtn label="Justify" active={state.alignJustify} onClick={() => chain().setTextAlign("justify").run()}>
-            <Icon d="M3 6h18M3 12h18M3 18h18" />
-          </ToolBtn>
-        </ToolGroup>
-
-        <ToolGroup>
-          <ToolBtn label="Link" active={state.link || urlMode === "link"} onClick={() => openUrl("link")}>
-            <Icon d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" />
-          </ToolBtn>
-          <ToolBtn label="Clear formatting" onClick={() => chain().unsetAllMarks().clearNodes().run()}>
-            <Icon d="M4 7V4h16v3M9 20h6M12 4 8 20M3 3l18 18" />
-          </ToolBtn>
-        </ToolGroup>
-
-        <ToolGroup>
-          <ToolBtn label="Image" active={urlMode === "image"} onClick={() => openUrl("image")}>
-            <Icon d="M3 5h18v14H3zM3 16l5-5 4 4 3-3 6 6M15.5 9.5h.01" />
-          </ToolBtn>
-          <ToolBtn label="Video" active={urlMode === "video"} onClick={() => openUrl("video")}>
-            <Icon d="M3 6h13v12H3zM16 10l5-3v10l-5-3" />
-          </ToolBtn>
-          <ToolBtn label="File" active={urlMode === "file"} onClick={() => openUrl("file")}>
-            <Icon d="m21 11-8.6 8.6a5 5 0 0 1-7-7l8.5-8.6a3.3 3.3 0 0 1 4.7 4.7l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l8-7.9" />
-          </ToolBtn>
-        </ToolGroup>
+          <ToolGroup end>
+            <ToolBtn label="Undo" onClick={() => chain().undo().run()} disabled={!state.canUndo}>
+              <Icon d="M9 14 4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3" />
+            </ToolBtn>
+            <ToolBtn label="Redo" onClick={() => chain().redo().run()} disabled={!state.canRedo}>
+              <Icon d="m15 14 5-5-5-5M20 9H9a5 5 0 0 0 0 10h3" />
+            </ToolBtn>
+          </ToolGroup>
+        </div>
       </div>
 
       {urlMode && (
@@ -932,6 +1212,11 @@ function Toolbar({ editor, onUpload }: { editor: Editor; onUpload: (files: File[
           <input
             ref={urlInputRef}
             type="text"
+            inputMode="url"
+            enterKeyHint="done"
+            autoCapitalize="off"
+            autoCorrect="off"
+            spellCheck={false}
             className="urlInput"
             placeholder={URL_LABELS[urlMode].placeholder}
             value={url}
@@ -947,29 +1232,31 @@ function Toolbar({ editor, onUpload }: { editor: Editor; onUpload: (files: File[
               }
             }}
           />
-          <button type="button" className="urlBtn" onClick={applyUrl}>
-            {urlMode === "link" && !url.trim() && state.link ? "Remove" : urlMode === "link" ? "Apply" : "Insert"}
-          </button>
-          {urlMode !== "link" && (
-            <>
-              <span className="urlOr mono">OR</span>
-              <button type="button" className="urlBtn upload" onClick={() => fileInputRef.current?.click()}>
-                <Icon d="M12 16V4M7 9l5-5 5 5M4 16v4h16v-4" />
-                Upload
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                hidden
-                multiple
-                accept={MEDIA_ACCEPT[urlMode]}
-                onChange={pickFiles}
-              />
-            </>
-          )}
-          <button type="button" className="urlBtn ghost" onClick={() => setUrlMode(null)}>
-            Cancel
-          </button>
+          <div className="urlActions">
+            <button type="button" className="urlBtn" onClick={applyUrl}>
+              {urlMode === "link" && !url.trim() && state.link ? "Remove" : urlMode === "link" ? "Apply" : "Insert"}
+            </button>
+            {urlMode !== "link" && (
+              <>
+                <span className="urlOr mono">OR</span>
+                <button type="button" className="urlBtn upload" onClick={() => fileInputRef.current?.click()}>
+                  <Icon d="M12 16V4M7 9l5-5 5 5M4 16v4h16v-4" />
+                  Upload
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  hidden
+                  multiple
+                  accept={MEDIA_ACCEPT[urlMode]}
+                  onChange={pickFiles}
+                />
+              </>
+            )}
+            <button type="button" className="urlBtn ghost" onClick={() => setUrlMode(null)}>
+              Cancel
+            </button>
+          </div>
         </div>
       )}
 
@@ -980,12 +1267,28 @@ function Toolbar({ editor, onUpload }: { editor: Editor; onUpload: (files: File[
           background: var(--vellum);
         }
 
-        .toolbar {
+        /* One row everywhere; narrow screens swipe it sideways instead of wrapping onto a second row. */
+        .toolbarScroll {
+          overflow-x: auto;
+          overscroll-behavior-x: contain;
+          scrollbar-width: none;
+        }
+
+        .toolbarScroll::-webkit-scrollbar {
+          display: none;
+        }
+
+        .toolbarScroll.moreToRight {
+          -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent);
+          mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent);
+        }
+
+        .editorToolbar {
           display: flex;
-          flex-wrap: wrap;
           align-items: center;
-          gap: 4px;
-          padding: 6px 8px;
+          width: max-content;
+          min-width: 100%;
+          padding: 5px 8px;
         }
 
         .textIcon {
@@ -995,8 +1298,15 @@ function Toolbar({ editor, onUpload }: { editor: Editor; onUpload: (files: File[
           line-height: 1;
         }
 
+        /* Fixed width so the toolbar doesn't shift as it flips between "Text" and "H1". */
+        .styleIcon {
+          min-width: 26px;
+          text-align: center;
+        }
+
         .urlBar {
           display: flex;
+          flex-wrap: wrap;
           align-items: center;
           gap: 8px;
           padding: 8px 10px;
@@ -1012,11 +1322,18 @@ function Toolbar({ editor, onUpload }: { editor: Editor; onUpload: (files: File[
         }
 
         .urlInput {
-          flex: 1;
+          flex: 1 1 180px;
+          min-width: 0;
           margin-bottom: 0 !important;
           padding: 6px 10px !important;
           font-size: 13px !important;
           box-shadow: none !important;
+        }
+
+        .urlActions {
+          display: flex;
+          align-items: center;
+          gap: 8px;
         }
 
         .urlBtn {
@@ -1056,29 +1373,446 @@ function Toolbar({ editor, onUpload }: { editor: Editor; onUpload: (files: File[
           color: var(--navy);
           border-color: #c9bfa0;
         }
+
+        @media (max-width: 520px) {
+          .editorToolbar {
+            padding: 4px;
+          }
+
+          .urlInput {
+            flex-basis: 100%;
+            order: 1;
+          }
+
+          .urlActions {
+            order: 2;
+            width: 100%;
+          }
+
+          .urlActions .urlBtn {
+            flex: 1;
+            justify-content: center;
+            padding: 8px 12px;
+          }
+        }
+
+        /* iOS zooms into any field typed in below 16px. */
+        @media (pointer: coarse) {
+          .urlInput {
+            font-size: 16px !important;
+          }
+        }
       `}</style>
     </div>
   );
 }
 
-function ToolGroup({ children }: { children: ReactNode }) {
+function hasMoreToRight(el: HTMLElement) {
+  return el.scrollLeft + el.clientWidth < el.scrollWidth - 2;
+}
+
+const ICONS = {
+  bold: "M7 5h6a3.5 3.5 0 0 1 0 7H7zM7 12h7a3.5 3.5 0 0 1 0 7H7z",
+  italic: "M19 4h-9M14 20H5M15 4 9 20",
+  underline: "M7 4v6a5 5 0 0 0 10 0V4M5 20h14",
+  strike: "M4 12h16M16 6.5A4 3 0 0 0 12 5c-2.5 0-4 1.3-4 3 0 1.2.8 2.2 2.5 3M8 17.5A4 3 0 0 0 12 19c2.5 0 4-1.3 4-3",
+  highlight: "m9 11-6 6v3h9l3-3M22 12l-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4",
+  code: "m16 18 6-6-6-6M8 6l-6 6 6 6",
+  clear: "M4 7V4h16v3M9 20h6M12 4 8 20M3 3l18 18",
+  bulletList: "M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01",
+  orderedList: "M10 6h11M10 12h11M10 18h11M4 6h1v4M4 10h2M6 18H4c0-1 2-2 2-3s-1-1.5-2-1",
+  quote: "M3 21c3 0 7-1 7-8V5H3v7h4c0 3.5-1.5 5-4 5zM14 21c3 0 7-1 7-8V5h-7v7h4c0 3.5-1.5 5-4 5z",
+  codeBlock: "M4 4h16v16H4zM9 9l-2 3 2 3M15 9l2 3-2 3",
+};
+
+function ToolGroup({ end = false, children }: { end?: boolean; children: ReactNode }) {
   return (
-    <div className="toolGroup">
+    <div className={`toolGroup${end ? " end" : ""}`}>
       {children}
       <style jsx>{`
         .toolGroup {
           display: flex;
+          align-items: center;
           gap: 2px;
-          padding-right: 6px;
-          margin-right: 2px;
-          border-right: 1px solid #d8cfb4;
+          padding: 0 6px;
+        }
+
+        .toolGroup:first-child {
+          padding-left: 0;
         }
 
         .toolGroup:last-child {
-          border-right: none;
+          padding-right: 0;
+        }
+
+        .toolGroup + .toolGroup {
+          border-left: 1px solid #d8cfb4;
+        }
+
+        /* Pinned to the far end; on narrow screens it's the part that scrolls out of view. */
+        .toolGroup.end {
+          margin-left: auto;
+        }
+
+        @media (max-width: 520px) {
+          .toolGroup {
+            padding: 0 4px;
+          }
         }
       `}</style>
     </div>
+  );
+}
+
+type MenuItem = {
+  // Also the TOOL_INFO key its shortcut comes from.
+  label: string;
+  icon: ReactNode;
+  // Left undefined for one-off actions (insert, clear); set for formats that can be on or off.
+  active?: boolean;
+  onSelect: () => void;
+};
+
+// `inline` lays the items out as one row of icon buttons, e.g. the alignment options.
+type MenuSection = { title?: string; inline?: boolean; items: MenuItem[] };
+
+const MENU_WIDTH = 244;
+// Someone who opened a menu is already looking for something, so options explain themselves sooner than buttons.
+const MENU_HOVER_DELAY_MS = 500;
+
+function ToolMenu({
+  label,
+  trigger,
+  active = false,
+  chevron = true,
+  sections,
+}: {
+  label: string;
+  trigger: ReactNode;
+  active?: boolean;
+  chevron?: boolean;
+  sections: MenuSection[];
+}) {
+  const [place, setPlace] = useState<{ left: number; top: number; above: boolean; maxHeight: number } | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const focusFirstItem = useRef(false);
+  const [hint, setHint] = useState<{ label: string; anchor: DOMRect; menu: DOMRect } | null>(null);
+  const hintTimer = useRef<number | undefined>(undefined);
+  const open = place !== null;
+
+  // The same info card as the toolbar buttons, shown next to the menu for the option under the mouse or keyboard.
+  function showHint(item: HTMLElement, label: string, delay: number) {
+    window.clearTimeout(hintTimer.current);
+    hintTimer.current = window.setTimeout(() => {
+      const menu = menuRef.current?.getBoundingClientRect();
+      if (menu && item.isConnected) setHint({ label, anchor: item.getBoundingClientRect(), menu });
+    }, delay);
+  }
+
+  function hideHint() {
+    window.clearTimeout(hintTimer.current);
+    setHint(null);
+  }
+
+  function openMenu(byKeyboard: boolean) {
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    // Measure against what's actually visible, which excludes an on-screen keyboard.
+    const vv = window.visualViewport;
+    const viewTop = vv?.offsetTop ?? 0;
+    const viewBottom = viewTop + (vv?.height ?? window.innerHeight);
+    const viewRight = (vv?.offsetLeft ?? 0) + (vv?.width ?? window.innerWidth);
+    const spaceBelow = viewBottom - rect.bottom - 12;
+    const spaceAbove = rect.top - viewTop - 12;
+    const above = spaceBelow < 200 && spaceAbove > spaceBelow;
+    focusFirstItem.current = byKeyboard;
+    setPlace({
+      left: Math.max(8, Math.min(rect.left, viewRight - MENU_WIDTH - 8)),
+      top: above ? rect.top - 4 : rect.bottom + 4,
+      above,
+      maxHeight: above ? spaceAbove : spaceBelow,
+    });
+  }
+
+  function menuItems() {
+    return Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>("[role^='menuitem']") ?? []);
+  }
+
+  useEffect(() => {
+    if (!open) return;
+    if (focusFirstItem.current) menuItems()[0]?.focus();
+
+    function onPointerDown(e: PointerEvent) {
+      const target = e.target as Node;
+      if (!menuRef.current?.contains(target) && !triggerRef.current?.contains(target)) setPlace(null);
+    }
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key !== "Escape") return;
+      // Esc closes just the menu; the modal skips Esc presses that were already handled.
+      e.preventDefault();
+      const focusInMenu = menuRef.current?.contains(document.activeElement);
+      setPlace(null);
+      if (focusInMenu) triggerRef.current?.focus();
+    }
+    // The menu is pinned where the trigger was, so anything that moves the trigger closes it.
+    function onMove(e: Event) {
+      if (!(e.target instanceof Node && menuRef.current?.contains(e.target))) setPlace(null);
+    }
+
+    document.addEventListener("pointerdown", onPointerDown, true);
+    document.addEventListener("keydown", onKeyDown, true);
+    document.addEventListener("scroll", onMove, true);
+    window.addEventListener("resize", onMove);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown, true);
+      document.removeEventListener("keydown", onKeyDown, true);
+      document.removeEventListener("scroll", onMove, true);
+      window.removeEventListener("resize", onMove);
+      window.clearTimeout(hintTimer.current);
+      setHint(null);
+    };
+  }, [open]);
+
+  function choose(item: MenuItem) {
+    setPlace(null);
+    item.onSelect();
+  }
+
+  function onMenuKeyDown(e: ReactKeyboardEvent<HTMLDivElement>) {
+    const items = menuItems();
+    const index = items.indexOf(document.activeElement as HTMLButtonElement);
+    let next = -1;
+    if (e.key === "ArrowDown" || e.key === "ArrowRight") next = (index + 1) % items.length;
+    else if (e.key === "ArrowUp" || e.key === "ArrowLeft") next = (index - 1 + items.length) % items.length;
+    else if (e.key === "Home") next = 0;
+    else if (e.key === "End") next = items.length - 1;
+    else if (e.key === "Tab") {
+      e.preventDefault();
+      setPlace(null);
+      triggerRef.current?.focus();
+      return;
+    }
+    if (next >= 0) {
+      e.preventDefault();
+      items[next].focus();
+    }
+  }
+
+  return (
+    <>
+      <ToolBtn
+        label={label}
+        active={active}
+        expanded={open}
+        wide={chevron}
+        buttonRef={triggerRef}
+        // detail is 0 when Enter or Space "clicked" it; then focus moves into the menu.
+        onClick={(e) => (open ? setPlace(null) : openMenu(e.detail === 0))}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowDown" && !open) {
+            e.preventDefault();
+            openMenu(true);
+          }
+        }}
+      >
+        {trigger}
+        {chevron && (
+          <svg className="chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="m6 9 6 6 6-6" />
+          </svg>
+        )}
+      </ToolBtn>
+
+      {place &&
+        createPortal(
+          <div
+            className="menuPlace"
+            style={{ left: place.left, top: place.top, width: MENU_WIDTH, transform: place.above ? "translateY(-100%)" : undefined }}
+          >
+            <div
+              ref={menuRef}
+              className={`toolMenu${place.above ? " above" : ""}`}
+              role="menu"
+              aria-label={label}
+              style={{ maxHeight: place.maxHeight }}
+              onKeyDown={onMenuKeyDown}
+            >
+              {sections.map((section, s) => (
+                <div key={s} className="menuSection" role="group" aria-label={section.title}>
+                  {section.title && <span className="menuTitle mono">{section.title}</span>}
+                  <div className={section.inline ? "inlineItems" : "listItems"}>
+                    {section.items.map((item) => {
+                      const keys = TOOL_INFO[item.label]?.keys;
+                      return (
+                        <button
+                          key={item.label}
+                          type="button"
+                          role={item.active === undefined ? "menuitem" : "menuitemcheckbox"}
+                          aria-checked={item.active}
+                          aria-label={section.inline ? item.label : undefined}
+                          title={section.inline ? item.label : undefined}
+                          tabIndex={-1}
+                          className={`menuItem${item.active ? " active" : ""}`}
+                          // Keep the editor's selection (and the phone keyboard) while picking.
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => choose(item)}
+                          onPointerEnter={(e) => {
+                            if (e.pointerType === "mouse") showHint(e.currentTarget, item.label, MENU_HOVER_DELAY_MS);
+                          }}
+                          onPointerLeave={hideHint}
+                          onFocus={(e) => {
+                            if (e.currentTarget.matches(":focus-visible")) showHint(e.currentTarget, item.label, 0);
+                          }}
+                          onBlur={hideHint}
+                        >
+                          <span className="itemIcon">{item.icon}</span>
+                          {!section.inline && <span className="itemLabel">{item.label}</span>}
+                          {!section.inline && keys && <span className="itemKeys mono">{formatKeys(keys).join("+")}</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>,
+          document.body
+        )}
+
+      {place && hint && TOOL_INFO[hint.label] && (
+        <ToolInfoCard label={hint.label} info={TOOL_INFO[hint.label]} anchor={hint.anchor} beside={hint.menu} />
+      )}
+
+      <style jsx>{`
+        .chevron {
+          flex-shrink: 0;
+          opacity: 0.7;
+        }
+
+        .menuPlace {
+          position: fixed;
+          z-index: 150;
+        }
+
+        .toolMenu {
+          overflow-y: auto;
+          padding: 4px;
+          background: var(--white);
+          border: 1px solid #c9bfa0;
+          border-radius: 6px;
+          box-shadow: 0 10px 24px rgba(13, 30, 56, 0.16);
+          transform-origin: top left;
+          animation: popIn 0.12s ease backwards;
+        }
+
+        .toolMenu.above {
+          transform-origin: bottom left;
+        }
+
+        .menuSection + .menuSection {
+          margin-top: 4px;
+          padding-top: 4px;
+          border-top: 1px solid #e4dcc9;
+        }
+
+        .menuTitle {
+          display: block;
+          padding: 4px 10px 2px;
+          font-size: 10px;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          color: var(--ink-soft);
+        }
+
+        .inlineItems {
+          display: flex;
+          gap: 2px;
+          padding: 2px 4px 2px;
+        }
+
+        .menuItem {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          width: 100%;
+          padding: 7px 10px;
+          background: none;
+          border: none;
+          border-radius: 4px;
+          font-family: "Inter", sans-serif;
+          font-size: 13px;
+          color: var(--ink);
+          text-align: left;
+          cursor: pointer;
+        }
+
+        .inlineItems .menuItem {
+          flex: 1;
+          justify-content: center;
+          padding: 7px 0;
+        }
+
+        .menuItem:hover,
+        .menuItem:focus-visible {
+          background: var(--vellum);
+          outline: none;
+        }
+
+        .menuItem.active {
+          background: var(--vellum-2);
+          color: var(--navy);
+          font-weight: 600;
+        }
+
+        .inlineItems .menuItem.active {
+          background: var(--navy);
+          color: var(--white);
+        }
+
+        .itemIcon {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 20px;
+          flex-shrink: 0;
+          color: var(--navy);
+        }
+
+        .inlineItems .menuItem.active .itemIcon {
+          color: inherit;
+        }
+
+        .itemLabel {
+          flex: 1;
+          white-space: nowrap;
+        }
+
+        .itemKeys {
+          font-size: 10px;
+          font-weight: 400;
+          color: var(--ink-soft);
+        }
+
+        /* Shortcuts are noise on touch screens, and fingers need bigger rows. */
+        @media (hover: none) {
+          .itemKeys {
+            display: none;
+          }
+        }
+
+        @media (pointer: coarse) {
+          .menuItem {
+            padding: 10px 12px;
+            font-size: 14px;
+          }
+
+          .inlineItems .menuItem {
+            padding: 10px 0;
+          }
+        }
+      `}</style>
+    </>
   );
 }
 
@@ -1095,6 +1829,19 @@ type ToolInfo = {
 const TOOL_INFO: Record<string, ToolInfo> = {
   Undo: { description: "Revert your last change.", keys: ["Mod", "Z"] },
   Redo: { description: "Bring back a change you undid.", keys: ["Mod", "Shift", "Z"] },
+  "Text style": { description: "Switch between normal text and headings." },
+  "More formatting": { description: "Strikethrough, highlight, inline code, and clearing formatting." },
+  Paragraph: {
+    description: "Lists, quotes, code blocks, dividers and alignment.",
+    preview: (
+      <ul>
+        <li>Valid school ID</li>
+        <li>Registration form</li>
+      </ul>
+    ),
+  },
+  Insert: { description: "Add an image, video or file. You can also drop or paste them into the post." },
+  "Normal text": { description: "Regular paragraph text.", keys: ["Mod", "Alt", "0"] },
   "Heading 1": { description: "Large section title.", keys: ["Mod", "Alt", "1"], preview: <h1>Engineering Days</h1> },
   "Heading 2": { description: "Medium subheading.", keys: ["Mod", "Alt", "2"], preview: <h2>Registration</h2> },
   "Heading 3": { description: "Small subheading.", keys: ["Mod", "Alt", "3"], preview: <h3>What to bring</h3> },
@@ -1231,13 +1978,23 @@ function ToolBtn({
   label,
   active = false,
   disabled = false,
+  expanded,
+  wide = false,
+  buttonRef,
   onClick,
+  onKeyDown,
   children,
 }: {
   label: string;
   active?: boolean;
   disabled?: boolean;
-  onClick: () => void;
+  // Set only on a button that opens a menu: whether that menu is open.
+  expanded?: boolean;
+  // Sized to its content instead of square, e.g. an icon plus a dropdown chevron.
+  wide?: boolean;
+  buttonRef?: Ref<HTMLButtonElement>;
+  onClick: (e: ReactMouseEvent<HTMLButtonElement>) => void;
+  onKeyDown?: (e: ReactKeyboardEvent<HTMLButtonElement>) => void;
   children: ReactNode;
 }) {
   const [anchor, setAnchor] = useState<DOMRect | null>(null);
@@ -1263,23 +2020,32 @@ function ToolBtn({
     <span
       ref={wrapRef}
       className="toolBtnWrap"
-      onMouseEnter={() => show(HOVER_DELAY_MS)}
-      onMouseLeave={hide}
-      onFocus={() => show(0)}
+      // Mouse only: a tap on a phone also "enters" the button and would leave the card stuck open.
+      onPointerEnter={(e) => {
+        if (e.pointerType === "mouse") show(HOVER_DELAY_MS);
+      }}
+      onPointerLeave={hide}
+      onFocus={(e) => {
+        if ((e.target as HTMLElement).matches(":focus-visible")) show(0);
+      }}
       onBlur={hide}
     >
       <button
+        ref={buttonRef}
         type="button"
-        className={`toolBtn${active ? " active" : ""}`}
+        className={`toolBtn${wide ? " wide" : ""}${expanded ? " open" : ""}${active ? " active" : ""}`}
         onMouseDown={(e) => e.preventDefault()}
         onClick={onClick}
+        onKeyDown={onKeyDown}
         disabled={disabled}
         aria-label={label}
-        aria-pressed={active}
+        aria-pressed={expanded === undefined ? active : undefined}
+        aria-haspopup={expanded === undefined ? undefined : "menu"}
+        aria-expanded={expanded}
       >
         {children}
       </button>
-      {anchor && info && <ToolInfoCard label={label} info={info} anchor={anchor} />}
+      {anchor && info && !expanded && <ToolInfoCard label={label} info={info} anchor={anchor} />}
       <style jsx>{`
         .toolBtnWrap {
           display: flex;
@@ -1291,6 +2057,7 @@ function ToolBtn({
           display: flex;
           align-items: center;
           justify-content: center;
+          gap: 2px;
           background: none;
           border: 1px solid transparent;
           border-radius: 4px;
@@ -1299,9 +2066,19 @@ function ToolBtn({
           transition: background 0.12s ease, color 0.12s ease;
         }
 
-        .toolBtn:hover:not(:disabled) {
+        .toolBtn.wide {
+          width: auto;
+          padding: 0 3px 0 5px;
+        }
+
+        .toolBtn:hover:not(:disabled),
+        .toolBtn.open {
           background: var(--vellum-2);
           color: var(--navy);
+        }
+
+        .toolBtn.open {
+          border-color: #c9bfa0;
         }
 
         .toolBtn.active {
@@ -1323,27 +2100,73 @@ function ToolBtn({
           outline: 2px solid var(--blue);
           outline-offset: 1px;
         }
+
+        /* Bigger targets for fingers, kept small enough that everything but undo/redo fits a 360px phone. */
+        @media (pointer: coarse) {
+          .toolBtn {
+            width: 32px;
+            height: 32px;
+          }
+
+          .toolBtn.wide {
+            width: auto;
+          }
+        }
       `}</style>
     </span>
   );
 }
 
+function formatKeys(keys: string[]) {
+  const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
+  return keys.map((key) => (key === "Mod" ? (isMac ? "⌘" : "Ctrl") : key === "Alt" && isMac ? "⌥" : key));
+}
+
 const CARD_WIDTH = 240;
 
-function ToolInfoCard({ label, info, anchor }: { label: string; info: ToolInfo; anchor: DOMRect }) {
-  const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
-  const keys = info.keys?.map((key) => (key === "Mod" ? (isMac ? "⌘" : "Ctrl") : key === "Alt" && isMac ? "⌥" : key));
+function ToolInfoCard({
+  label,
+  info,
+  anchor,
+  beside,
+}: {
+  label: string;
+  info: ToolInfo;
+  anchor: DOMRect;
+  // For a menu option: the open menu, so the card sits next to it instead of covering it.
+  beside?: DOMRect;
+}) {
+  const keys = info.keys && formatKeys(info.keys);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [height, setHeight] = useState(0);
 
-  // Center under the button, but keep the card inside the viewport.
-  const left = Math.min(
-    Math.max(8, anchor.left + anchor.width / 2 - CARD_WIDTH / 2),
-    window.innerWidth - CARD_WIDTH - 8
-  );
-  const arrowLeft = anchor.left + anchor.width / 2 - left;
+  // Measured once shown, so a card beside the menu can be kept above the bottom of the screen.
+  useLayoutEffect(() => {
+    setHeight(cardRef.current?.offsetHeight ?? 0);
+  }, [label]);
+
+  let position: CSSProperties;
+  let arrow: CSSProperties;
+  if (beside) {
+    const toRight = beside.right + 10 + CARD_WIDTH <= window.innerWidth - 8;
+    const left = toRight ? beside.right + 10 : Math.max(8, beside.left - 10 - CARD_WIDTH);
+    const middle = anchor.top + anchor.height / 2;
+    const top = Math.max(8, Math.min(middle - 18, window.innerHeight - height - 8));
+    position = { top, left, width: CARD_WIDTH };
+    arrow = { top: middle - top - 5, left: toRight ? 0 : "100%" };
+  } else {
+    // Center under the button, but keep the card inside the viewport.
+    const left = Math.min(
+      Math.max(8, anchor.left + anchor.width / 2 - CARD_WIDTH / 2),
+      window.innerWidth - CARD_WIDTH - 8
+    );
+    position = { top: anchor.bottom + 8, left, width: CARD_WIDTH };
+    arrow = { left: anchor.left + anchor.width / 2 - left };
+  }
 
   return createPortal(
-    <div className="toolInfo" role="tooltip" style={{ top: anchor.bottom + 8, left, width: CARD_WIDTH }}>
-      <span className="arrow" style={{ left: arrowLeft }} />
+    <div ref={cardRef} className="toolInfo" role="tooltip" style={position}>
+      <span className="arrow" style={arrow} />
       <div className="infoHead">
         <span className="infoTitle">{label}</span>
         {keys && (

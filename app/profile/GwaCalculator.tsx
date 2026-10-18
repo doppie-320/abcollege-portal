@@ -133,6 +133,7 @@ export default function GwaCalculator() {
   }
 
   const { gwa, units, subjects: countedSubjects } = computeGwa(subjects);
+  const display = gwa === null ? "—" : gwa.toFixed(2);
   const [only] = subjects;
   const isBlank =
     subjects.length === 1 && !only.code && !only.units && !only.grade;
@@ -144,11 +145,18 @@ export default function GwaCalculator() {
           <span className="eyebrow mb-1.5">GWA CALCULATOR</span>
           <h2 className="mb-0 text-lg">Running general weighted average</h2>
         </div>
-        <div className="flex flex-col items-end gap-0.5 @max-[380px]:items-start">
-          <span className="font-mono text-[34px] font-bold leading-none text-orange">
-            {gwa === null ? "—" : gwa.toFixed(2)}
+        {/* The number pops each time it changes. */}
+        <div className="flex flex-col items-end gap-1 @max-[380px]:items-start">
+          <span className="font-mono text-[9.5px] tracking-[0.12em] text-ink-soft uppercase">
+            Your GWA
           </span>
-         
+          <span
+            key={display}
+            aria-live="polite"
+            className="animate-pop-in font-mono text-[34px] leading-none font-bold text-orange tabular-nums motion-reduce:animate-none"
+          >
+            {display}
+          </span>
         </div>
       </div>
 

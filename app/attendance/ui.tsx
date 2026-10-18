@@ -173,6 +173,42 @@ export function EmptyState({ icon, title, children }: { icon: IconName; title: s
   );
 }
 
+/** Full-page notice over a giant faint word, laid out like the 404 page. Replaces the page header and cards. */
+export function IdleNotice({
+  backdrop,
+  title,
+  children,
+  actions,
+}: {
+  backdrop: string;
+  title: string;
+  children: ReactNode;
+  actions: ReactNode;
+}) {
+  return (
+    <main className="relative flex min-h-[calc(100vh-64px)] items-center justify-center overflow-hidden px-4 py-6">
+      <div
+        aria-hidden="true"
+        className="font-display pointer-events-none absolute inset-0 flex items-center justify-center leading-none font-bold tracking-tighter text-navy-deep/[0.08] select-none"
+      >
+        <span
+          className={`whitespace-nowrap ${
+            backdrop.length > 4 ? "text-[28vw] sm:text-[21vw] lg:text-[18rem]" : "text-[36vw] sm:text-[26vw] lg:text-[22rem]"
+          }`}
+        >
+          {backdrop}
+        </span>
+      </div>
+
+      <div className="animate-fade-in-up relative z-10 w-full max-w-md text-center">
+        <h1 className="font-display mb-3 text-5xl font-medium tracking-tight text-ink">{title}</h1>
+        <p className="mx-auto mb-8 max-w-sm text-sm text-ink-soft">{children}</p>
+        <div className="flex items-center justify-center gap-3 max-sm:flex-col">{actions}</div>
+      </div>
+    </main>
+  );
+}
+
 /** Tear-off calendar chip for an event's date. */
 export function DateChip({ value }: { value: string }) {
   return (
@@ -191,7 +227,48 @@ export function Initials({ first, last }: { first: string | null; last: string |
   return <>{`${first?.charAt(0) ?? ""}${last?.charAt(0) ?? ""}`.toUpperCase() || "?"}</>;
 }
 
-const ICON_PATHS = {
+/**
+ * Who a confirmation dialog is about, drawn like the applicant card on User Account Review.
+ * `mark` puts a small badge on the avatar, e.g. a red trash can for a delete.
+ */
+export function PersonChip({
+  first,
+  last,
+  detail,
+  aside,
+  mark,
+}: {
+  first: string | null;
+  last: string | null;
+  detail: ReactNode;
+  aside?: ReactNode;
+  mark?: { icon: IconName; color: string };
+}) {
+  return (
+    <div className="mt-4 flex items-center gap-3 rounded-lg border border-rule-soft bg-vellum/40 px-3 py-2.5">
+      <span className="mono relative flex size-10 shrink-0 items-center justify-center rounded-full border border-navy bg-vellum text-[12px] font-semibold text-navy-deep">
+        <Initials first={first} last={last} />
+        {mark && (
+          <span
+            className={`absolute -right-1 -bottom-1 flex size-[18px] items-center justify-center rounded-full border-2 border-paper text-paper ${mark.color}`}
+          >
+            <Icon name={mark.icon} size={9} />
+          </span>
+        )}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="mb-0 truncate text-[14px] font-semibold text-navy-deep">
+          {`${first ?? ""} ${last ?? ""}`.trim() || "Unnamed student"}
+        </p>
+        <p className="mono mb-0 truncate text-[11px] text-ink-soft">{detail}</p>
+      </div>
+      {aside}
+    </div>
+  );
+}
+
+/** SVG paths (24×24) by name; also passed to ConfirmDialog's `icon`. */
+export const ICON_PATHS = {
   qr: (
     <>
       <rect width="5" height="5" x="3" y="3" rx="1" />
@@ -265,6 +342,20 @@ const ICON_PATHS = {
     </>
   ),
   pen: <path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />,
+  userX: (
+    <>
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="m17 8 5 5M22 8l-5 5" />
+    </>
+  ),
+  userCheck: (
+    <>
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="m16 11 2 2 4-4" />
+    </>
+  ),
   id: (
     <>
       <rect width="20" height="14" x="2" y="5" rx="2" />

@@ -1,11 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { AttendanceReportRow, AttendanceStatus } from "@/lib/attendance";
+import type { AttendanceHistoryEntry, AttendanceReportRow, AttendanceStatus } from "@/lib/attendance";
 import LocalTime from "@/app/attendance/LocalTime";
 import { AttendanceBadge, EmptyState, Frame, Icon, Initials, MethodTag, PanelHeader } from "@/app/attendance/ui";
-import { removeAttendance } from "../actions";
-import ActionForm from "../ActionForm";
+import HistoryDialog from "./HistoryDialog";
+
+/** A roster row; `pending` while a manual record is still being saved. */
+export type RosterRow = AttendanceReportRow & { pending?: boolean };
 
 type Filter = "all" | AttendanceStatus;
 type SortKey = "name" | "status" | "recorded";
@@ -26,7 +28,7 @@ const COLUMNS: { label: string; sort?: SortKey }[] = [
   { label: "" },
 ];
 
-const COMPARE: Record<SortKey, (a: AttendanceReportRow, b: AttendanceReportRow) => number> = {
+const COMPARE: Record<SortKey, (a: RosterRow, b: RosterRow) => number> = {
   name: (a, b) => `${a.last_name ?? ""} ${a.first_name ?? ""}`.localeCompare(`${b.last_name ?? ""} ${b.first_name ?? ""}`),
   status: (a, b) => a.status.localeCompare(b.status),
   recorded: (a, b) => a.recorded_at.localeCompare(b.recorded_at),
@@ -35,18 +37,48 @@ const COMPARE: Record<SortKey, (a: AttendanceReportRow, b: AttendanceReportRow) 
 const ICON_BUTTON =
   "flex size-8 cursor-pointer items-center justify-center rounded-md border border-transparent bg-transparent text-ink-soft transition-[color,background-color,border-color,opacity] duration-150 hover:border-[#b3261e]/30 hover:bg-[rgba(205,79,60,0.08)] hover:text-[#b3261e] focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-blue disabled:cursor-not-allowed disabled:opacity-50 pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100";
 
+const HISTORY_BUTTON =
+  "flex size-8 cursor-pointer items-center justify-center rounded-md border border-transparent bg-transparent text-ink-soft transition-[color,background-color,border-color] duration-150 hover:border-navy/20 hover:bg-[#e6f3ff] hover:text-navy focus-visible:outline-2 focus-visible:outline-blue";
+
+const NO_HISTORY: AttendanceHistoryEntry[] = [];
+
+/** "Last, First", or a placeholder for a manual record whose student hasn't been looked up yet. */
+export function rosterName(row: RosterRow): string {
+  if (row.last_name || row.first_name) return [row.last_name, row.first_name].filter(Boolean).join(", ");
+  return row.pending ? "Looking up student…" : "Unnamed student";
+}
+
 export default function RosterTable({
-  eventId,
   report,
+  history,
+  eventName,
   exportHref,
+  onRemove,
 }: {
-  eventId: number;
-  report: AttendanceReportRow[];
+  report: RosterRow[];
+  /** Every student's history for the event, newest first. */
+  history: AttendanceHistoryEntry[];
+  eventName: string;
   exportHref: string;
+  /** Asks before deleting; the row disappears as soon as it's confirmed. */
+  onRemove: (row: RosterRow) => void;
 }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [sort, setSort] = useState<Sort>({ key: "name", dir: "asc" });
+  // By id so the dialog follows the row when the page refreshes with saved data.
+  const [historyFor, setHistoryFor] = useState<string | null>(null);
+
+  const historyByUser = useMemo(() => {
+    const groups = new Map<string, AttendanceHistoryEntry[]>();
+    for (const entry of history) {
+      const group = groups.get(entry.user_id);
+      if (group) group.push(entry);
+      else groups.set(entry.user_id, [entry]);
+    }
+    return groups;
+  }, [history]);
+  const historyRow = historyFor ? report.find((row) => row.user_id === historyFor) : undefined;
 
   const counts = useMemo(() => {
     const present = report.filter((row) => row.status === "present").length;
@@ -204,78 +236,106 @@ export default function RosterTable({
                     </td>
                   </tr>
                 ) : (
-                  visible.map((row, index) => (
-                    <tr
-                      key={row.user_id}
-                      className={`group animate-fade-in transition-colors duration-150 hover:bg-vellum/40 ${
-                        row.status === "rejected" ? "bg-[#b3261e]/[0.025]" : ""
-                      }`}
-                      style={{ animationDelay: `${Math.min(index, 12) * 25}ms` }}
-                    >
-                      <td className="px-5 py-4 shadow-[inset_3px_0_0_transparent] transition-shadow duration-150 group-hover:shadow-[inset_3px_0_0_var(--orange)]">
-                        <span className="flex items-center gap-3">
-                          <span className="mono flex size-9 shrink-0 items-center justify-center rounded-full border border-navy bg-vellum text-[11.5px] font-semibold text-navy-deep transition-colors duration-150 group-hover:bg-navy group-hover:text-paper">
-                            <Initials first={row.first_name} last={row.last_name} />
-                          </span>
-                          <span className="min-w-0">
-                            <span className="block font-semibold whitespace-nowrap text-navy-deep">
-                              {row.last_name}, {row.first_name}
+                  visible.map((row, index) => {
+                    const changes = (historyByUser.get(row.user_id) ?? NO_HISTORY).filter(
+                      (entry) => entry.action === "changed",
+                    ).length;
+                    return (
+                      <tr
+                        key={row.user_id}
+                        aria-busy={row.pending || undefined}
+                        className={`group animate-fade-in transition-[background-color,opacity] duration-150 hover:bg-vellum/40 ${
+                          row.status === "rejected" ? "bg-[#b3261e]/[0.025]" : ""
+                        } ${row.pending ? "opacity-60" : ""}`}
+                        style={{ animationDelay: `${Math.min(index, 12) * 25}ms` }}
+                      >
+                        <td className="px-5 py-4 shadow-[inset_3px_0_0_transparent] transition-shadow duration-150 group-hover:shadow-[inset_3px_0_0_var(--orange)]">
+                          <span className="flex items-center gap-3">
+                            <span className="mono flex size-9 shrink-0 items-center justify-center rounded-full border border-navy bg-vellum text-[11.5px] font-semibold text-navy-deep transition-colors duration-150 group-hover:bg-navy group-hover:text-paper">
+                              <Initials first={row.first_name} last={row.last_name} />
                             </span>
-                            <span className="mono block text-[11px] text-ink-soft">{row.student_id ?? "—"}</span>
+                            <span className="min-w-0">
+                              <span className="block font-semibold whitespace-nowrap text-navy-deep">{rosterName(row)}</span>
+                              <span className="mono block text-[11px] text-ink-soft">{row.student_id ?? "—"}</span>
+                            </span>
                           </span>
-                        </span>
-                      </td>
-                      <td className="px-5 py-4 whitespace-nowrap text-ink-soft">
-                        <span className="block text-ink">{row.course ?? "—"}</span>
-                        <span className="mono block text-[11px]">{row.year_level ?? "—"}</span>
-                      </td>
-                      <td className="px-5 py-4">
-                        <AttendanceBadge status={row.status} />
-                      </td>
-                      <td className="px-5 py-4">
-                        <span className="mono mb-1.5 block text-[11px] whitespace-nowrap text-ink">
-                          <LocalTime value={row.recorded_at} format="short" />
-                        </span>
-                        <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                          <MethodTag method={row.method} />
-                          {row.recorded_by && (
-                            <span className="text-[11.5px] whitespace-nowrap text-ink-soft">by {row.recorded_by}</span>
+                        </td>
+                        <td className="px-5 py-4 whitespace-nowrap text-ink-soft">
+                          <span className="block text-ink">{row.course ?? "—"}</span>
+                          <span className="mono block text-[11px]">{row.year_level ?? "—"}</span>
+                        </td>
+                        <td className="px-5 py-4">
+                          <span className="flex flex-col items-start gap-1.5">
+                            <AttendanceBadge status={row.status} />
+                            {changes > 0 && !row.pending && (
+                              <button
+                                type="button"
+                                onClick={() => setHistoryFor(row.user_id)}
+                                title="See what changed"
+                                className="mono inline-flex cursor-pointer items-center gap-1 rounded border border-orange/40 bg-orange/10 px-1.5 py-px text-[10px] whitespace-nowrap text-[#7a2e0f] transition-colors duration-150 hover:bg-orange/20"
+                              >
+                                <Icon name="history" size={10} />
+                                Changed {changes === 1 ? "once" : `${changes}×`}
+                              </button>
+                            )}
+                          </span>
+                        </td>
+                        <td className="px-5 py-4">
+                          <span className="mono mb-1.5 block text-[11px] whitespace-nowrap text-ink">
+                            {row.pending ? "Saving…" : <LocalTime value={row.recorded_at} format="short" />}
+                          </span>
+                          <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <MethodTag method={row.method} />
+                            {row.recorded_by && (
+                              <span className="text-[11.5px] whitespace-nowrap text-ink-soft">by {row.recorded_by}</span>
+                            )}
+                          </span>
+                        </td>
+                        <td className="max-w-[260px] px-5 py-4 text-[12.5px] text-ink-soft italic [overflow-wrap:anywhere]">
+                          {row.note || <span className="text-rule not-italic">—</span>}
+                        </td>
+                        <td className="py-3 pr-4 pl-2 text-right">
+                          {!row.pending && (
+                            <span className="flex justify-end gap-1">
+                              <button
+                                type="button"
+                                onClick={() => setHistoryFor(row.user_id)}
+                                className={HISTORY_BUTTON}
+                                aria-label={`See ${rosterName(row)}'s history`}
+                                title="History"
+                              >
+                                <Icon name="history" size={14} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => onRemove(row)}
+                                className={ICON_BUTTON}
+                                aria-label={`Remove ${rosterName(row)}'s record`}
+                                title="Remove record"
+                              >
+                                <Icon name="trash" size={14} />
+                              </button>
+                            </span>
                           )}
-                        </span>
-                      </td>
-                      <td className="max-w-[260px] px-5 py-4 text-[12.5px] text-ink-soft italic [overflow-wrap:anywhere]">
-                        {row.note || <span className="text-rule not-italic">—</span>}
-                      </td>
-                      <td className="py-3 pr-4 pl-2 text-right">
-                        <ActionForm
-                          action={removeAttendance}
-                          successMessage="Removed."
-                          confirm={{
-                            title: "Remove this record?",
-                            message: `${row.first_name} ${row.last_name}'s attendance for this event will be deleted.`,
-                            confirmLabel: "Remove record",
-                          }}
-                          className="flex justify-end"
-                        >
-                          <input type="hidden" name="eventId" value={eventId} />
-                          <input type="hidden" name="userId" value={row.user_id} />
-                          <button
-                            type="submit"
-                            className={ICON_BUTTON}
-                            aria-label={`Remove ${row.first_name} ${row.last_name}'s record`}
-                            title="Remove record"
-                          >
-                            <Icon name="trash" size={14} />
-                          </button>
-                        </ActionForm>
-                      </td>
-                    </tr>
-                  ))
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
           </div>
         </>
+      )}
+
+      {historyRow && (
+        <HistoryDialog
+          row={historyRow}
+          name={rosterName(historyRow)}
+          entries={historyByUser.get(historyRow.user_id) ?? NO_HISTORY}
+          eventName={eventName}
+          onClose={() => setHistoryFor(null)}
+        />
       )}
     </Frame>
   );

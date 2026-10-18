@@ -1,27 +1,11 @@
 'use server'
 
 import { ActionResult } from "@/lib/actionResult";
-import { EVENT_TAGS, instantAt, isDayKey, isTime, type EventTag } from "@/lib/calendar";
+import { validateEvent, type EventInput } from "@/lib/calendar";
 import { createClient } from "@/lib/supabase/server";
 import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 
-export type EventInput = {
-    /** Set when editing an existing event. */
-    id?: number;
-    name: string;
-    description: string;
-    tag: EventTag;
-    allDay: boolean;
-    /** "YYYY-MM-DD" and "HH:mm", in school time. Times are ignored for all-day events. */
-    startDate: string;
-    startTime: string;
-    endDate: string;
-    endTime: string;
-};
-
-const MAX_NAME_LENGTH = 120;
-const MAX_DESCRIPTION_LENGTH = 1000;
 const GENERIC_ERROR = "Couldn't save the event. Please try again.";
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
@@ -40,58 +24,29 @@ async function requireAdmin(supabase: SupabaseServerClient): Promise<string | nu
     return adminRow ? null : "Only admins can manage calendar events.";
 }
 
-function validate(input: EventInput): { fieldErrors: Record<string, string> } | { row: Record<string, unknown> } {
-    const fieldErrors: Record<string, string> = {};
-    const name = String(input.name ?? "").trim();
-    const description = String(input.description ?? "").trim();
-
-    if (!name) fieldErrors.name = "Give the event a title.";
-    else if (name.length > MAX_NAME_LENGTH) fieldErrors.name = `Keep the title under ${MAX_NAME_LENGTH} characters.`;
-
-    if (description.length > MAX_DESCRIPTION_LENGTH) {
-        fieldErrors.description = `Keep the details under ${MAX_DESCRIPTION_LENGTH} characters.`;
-    }
-
-    if (!EVENT_TAGS.includes(input.tag)) fieldErrors.tag = "Pick a tag.";
-
-    if (!isDayKey(input.startDate)) fieldErrors.start = "Pick a start date.";
-    else if (!input.allDay && !isTime(input.startTime)) fieldErrors.start = "Pick a start time.";
-
-    if (!isDayKey(input.endDate)) fieldErrors.end = "Pick an end date.";
-    else if (!input.allDay && !isTime(input.endTime)) fieldErrors.end = "Pick an end time.";
-
-    if (Object.keys(fieldErrors).length) return { fieldErrors };
-
-    const start = input.allDay ? instantAt(input.startDate) : instantAt(input.startDate, input.startTime);
-    const end = input.allDay ? instantAt(input.endDate, "23:59") : instantAt(input.endDate, input.endTime);
-
-    if (new Date(end) < new Date(start)) return { fieldErrors: { end: "The event can't end before it starts." } };
-
-    return {
-        row: {
-            event_name: name,
-            event_description: description || null,
-            tag: input.tag,
-            all_day: input.allDay,
-            event_start: start,
-            event_end: end,
-        },
-    };
-}
-
 export async function saveEvent(input: EventInput): Promise<ActionResult> {
     const supabase = await createClient();
 
     const denied = await requireAdmin(supabase);
     if (denied) return { error: denied };
 
-    const checked = validate(input);
+    const checked = validateEvent(input);
     if ("fieldErrors" in checked) return { error: "Check the highlighted fields.", fieldErrors: checked.fieldErrors };
+
+    const { event } = checked;
+    const row = {
+        event_name: event.name,
+        event_description: event.description || null,
+        tag: event.tag,
+        all_day: event.allDay,
+        event_start: event.start,
+        event_end: event.end,
+    };
 
     // Select the row back: a write blocked by RLS returns no error, just no rows.
     const { data, error } = input.id
-        ? await supabase.from("events").update(checked.row).eq("event_id", input.id).select("event_id")
-        : await supabase.from("events").insert(checked.row).select("event_id");
+        ? await supabase.from("events").update(row).eq("event_id", input.id).select("event_id")
+        : await supabase.from("events").insert(row).select("event_id");
 
     if (error || !data?.length) {
         console.error("[calendar] saving event failed:", error ?? "no rows written");
