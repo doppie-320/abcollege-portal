@@ -11,8 +11,8 @@ type AvatarEditorProps = {
   name: string;
   /** Rendered beside the picture, so callers control the side column layout. */
   children?: ReactNode;
-  /** Card caption above the picture. Defaults to the student-facing wording. */
-  eyebrow?: string;
+  /** Card caption above the picture. Defaults to the student-facing wording; null hides it. */
+  eyebrow?: string | null;
   avatarUrl: string;
 };
 
@@ -90,12 +90,13 @@ export default function AvatarEditor({
 
   return (
     <div className="flex w-full flex-col gap-2.5">
-      <span className="eyebrow">{eyebrow}</span>
+      {eyebrow && <span className="eyebrow">{eyebrow}</span>}
 
       <div className="flex w-full items-start gap-6">
         <div className="flex w-32 shrink-0 flex-col items-center gap-2.5">
           <div className="relative size-32 shrink-0">
-            <div className="size-full rounded-full border-2 border-navy shadow-md">
+            {/* Paper ring keeps the edge visible when the picture overlaps a navy banner. */}
+            <div className="size-full rounded-full border-2 border-navy shadow-md ring-4 ring-paper">
               <div className="relative size-full overflow-hidden rounded-full border border-navy-tint bg-blue">
                 {avatarUrl ? (
                   <Image
