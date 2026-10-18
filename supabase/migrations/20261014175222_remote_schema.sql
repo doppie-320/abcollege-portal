@@ -1,6 +1,9 @@
 SET local check_function_bodies = off;
 
-CREATE TABLE "public"."hidden_birthdays" (
+-- Pulled from the remote after 20261013150000 and 20261013160000 had been applied there by hand,
+-- so it repeats their objects. Guarded so a fresh replay (db reset / db diff) doesn't fail on them.
+
+CREATE TABLE IF NOT EXISTS "public"."hidden_birthdays" (
   "user_id"   uuid                     NOT NULL,
   "hidden_at" timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT "hidden_birthdays_pkey" PRIMARY KEY (user_id),
@@ -11,7 +14,7 @@ ALTER TABLE "public"."hidden_birthdays"
   ENABLE ROW LEVEL SECURITY;
 
 ALTER TABLE "public"."events"
-  ADD COLUMN "all_day" boolean NOT NULL DEFAULT false;
+  ADD COLUMN IF NOT EXISTS "all_day" boolean NOT NULL DEFAULT false;
 
 CREATE OR REPLACE FUNCTION public.birthday_celebrants (
   target_month integer
@@ -117,44 +120,57 @@ BEGIN
 END;$function$;
 
 ALTER TABLE "public"."events"
+  DROP CONSTRAINT IF EXISTS "events_end_after_start";
+
+ALTER TABLE "public"."events"
   ADD CONSTRAINT "events_end_after_start" CHECK ((event_end >= event_start));
+
+ALTER TABLE "public"."hidden_birthdays"
+  DROP CONSTRAINT IF EXISTS "hidden_birthdays_user_id_fkey";
 
 ALTER TABLE "public"."hidden_birthdays"
   ADD CONSTRAINT "hidden_birthdays_user_id_fkey" FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
 
-CREATE INDEX events_event_start_idx ON public.events USING btree (event_start);
+CREATE INDEX IF NOT EXISTS events_event_start_idx ON public.events USING btree (event_start);
 
+DROP POLICY IF EXISTS "Admins can create events" ON "public"."events";
 CREATE POLICY "Admins can create events" ON "public"."events"
   FOR INSERT
   TO "authenticated"
   WITH CHECK (( SELECT public.is_admin() AS is_admin));
 
+DROP POLICY IF EXISTS "Admins can delete events" ON "public"."events";
 CREATE POLICY "Admins can delete events" ON "public"."events"
   FOR DELETE
   TO "authenticated"
   USING (( SELECT public.is_admin() AS is_admin));
 
+DROP POLICY IF EXISTS "Admins can update events" ON "public"."events";
 CREATE POLICY "Admins can update events" ON "public"."events"
   FOR UPDATE
   TO "authenticated"
   USING (( SELECT public.is_admin() AS is_admin))
   WITH CHECK (( SELECT public.is_admin() AS is_admin));
 
+DROP POLICY IF EXISTS "Authenticated can read events" ON "public"."events";
 CREATE POLICY "Authenticated can read events" ON "public"."events"
   FOR SELECT
   TO "authenticated"
   USING (true);
 
+DROP POLICY IF EXISTS "Admins can hide birthdays" ON "public"."hidden_birthdays";
 CREATE POLICY "Admins can hide birthdays" ON "public"."hidden_birthdays"
   FOR INSERT
   TO "authenticated"
   WITH CHECK (( SELECT public.is_admin() AS is_admin));
 
+DROP POLICY IF EXISTS "Admins can read hidden birthdays" ON "public"."hidden_birthdays";
 CREATE POLICY "Admins can read hidden birthdays" ON "public"."hidden_birthdays"
   FOR SELECT
   TO "authenticated"
   USING (( SELECT public.is_admin() AS is_admin));
 
+DROP POLICY IF EXISTS "Admins can unhide birthdays" ON "public"."hidden_birthdays";
 CREATE POLICY "Admins can unhide birthdays" ON "public"."hidden_birthdays"
   FOR DELETE
   TO "authenticated"
@@ -175,6 +191,9 @@ REVOKE ALL ON TABLE "public"."hidden_birthdays" FROM "postgres";
 GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."hidden_birthdays" TO "postgres";
 
 GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."hidden_birthdays" TO "service_role";
+
+ALTER TABLE "public"."hidden_birthdays"
+  DROP CONSTRAINT IF EXISTS "hidden_birthdays_hidden_by_fkey";
 
 ALTER TABLE "public"."hidden_birthdays"
   ADD CONSTRAINT "hidden_birthdays_hidden_by_fkey" FOREIGN KEY (hidden_by) REFERENCES public.users(id) ON DELETE SET NULL;

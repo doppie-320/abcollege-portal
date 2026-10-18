@@ -102,7 +102,7 @@ BEGIN
       NEW.id,
       NEW.raw_user_meta_data ->> 'student_id',
       NEW.raw_user_meta_data ->> 'student_id_char',
-      NEW.raw_user_meta_data ->> 'student_id_num',
+      NULLIF(NEW.raw_user_meta_data ->> 'student_id_num', '')::bigint,
       NULLIF(NEW.raw_user_meta_data ->> 'year_level', '')::bigint,
       NULLIF(NEW.raw_user_meta_data ->> 'course_id', '')::bigint
     );
