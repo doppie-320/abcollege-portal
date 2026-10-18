@@ -1,44 +1,63 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useBackdropDismiss } from "@/lib/useBackdropDismiss";
 import DatePicker from "@/components/DatePicker";
 import Select from "@/components/Select";
 import TimePicker, { minutesOf, timeFromMinutes } from "@/components/TimePicker";
-import { saveEvent } from "./actions";
 import {
   EVENT_TAGS,
+  MAX_EVENT_DESCRIPTION_LENGTH,
+  MAX_EVENT_NAME_LENGTH,
   TAG_LABELS,
   toDayKey,
   toTimeValue,
+  validateEvent,
   type CalendarEvent,
+  type EventInput,
   type EventTag,
 } from "@/lib/calendar";
 
 type Props = {
   /** The event being edited; omit to create one. */
   event?: CalendarEvent;
+  /** What the admin had typed, when the modal reopens after a failed save. */
+  draft?: EventInput;
+  initialError?: string;
+  initialFieldErrors?: Record<string, string>;
   /** Pre-filled date for a new event, e.g. the selected day. */
   defaultDay: string;
   onClose: () => void;
+  /**
+   * Called with checked input, then the modal closes. The calendar shows `preview` at once
+   * and reopens the modal with the draft if the server refuses it.
+   */
+  onSave: (input: EventInput, preview: Omit<CalendarEvent, "id">) => void;
 };
 
-export default function EventModal({ event, defaultDay, onClose }: Props) {
+export default function EventModal({
+  event,
+  draft,
+  initialError = "",
+  initialFieldErrors = {},
+  defaultDay,
+  onClose,
+  onSave,
+}: Props) {
   const isEdit = Boolean(event);
   const timed = event && !event.allDay;
 
-  const [name, setName] = useState(event?.name ?? "");
-  const [tag, setTag] = useState<EventTag>(event?.tag ?? "EVENT");
-  const [allDay, setAllDay] = useState(event?.allDay ?? false);
-  const [startDate, setStartDate] = useState(event ? toDayKey(event.start) : defaultDay);
-  const [startTime, setStartTime] = useState(timed ? toTimeValue(event.start) : "08:00");
-  const [endDate, setEndDate] = useState(event ? toDayKey(event.end) : defaultDay);
-  const [endTime, setEndTime] = useState(timed ? toTimeValue(event.end) : "09:00");
-  const [description, setDescription] = useState(event?.description ?? "");
-  const [error, setError] = useState("");
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [pending, startTransition] = useTransition();
-  const backdrop = useBackdropDismiss(onClose, !pending);
+  const [name, setName] = useState(draft?.name ?? event?.name ?? "");
+  const [tag, setTag] = useState<EventTag>(draft?.tag ?? event?.tag ?? "EVENT");
+  const [allDay, setAllDay] = useState(draft?.allDay ?? event?.allDay ?? false);
+  const [startDate, setStartDate] = useState(draft?.startDate ?? (event ? toDayKey(event.start) : defaultDay));
+  const [startTime, setStartTime] = useState(draft?.startTime ?? (timed ? toTimeValue(event.start) : "08:00"));
+  const [endDate, setEndDate] = useState(draft?.endDate ?? (event ? toDayKey(event.end) : defaultDay));
+  const [endTime, setEndTime] = useState(draft?.endTime ?? (timed ? toTimeValue(event.end) : "09:00"));
+  const [description, setDescription] = useState(draft?.description ?? event?.description ?? "");
+  const [error, setError] = useState(initialError);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>(initialFieldErrors);
+  const backdrop = useBackdropDismiss(onClose);
   const nameRef = useRef<HTMLInputElement>(null);
 
   // Keeps the picker's year list around the event rather than capping it at this year.
@@ -55,11 +74,11 @@ export default function EventModal({ event, defaultDay, onClose }: Props) {
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape" && !pending) onClose();
+      if (e.key === "Escape") onClose();
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [pending, onClose]);
+  }, [onClose]);
 
   function changeTag(value: string) {
     const next = value as EventTag;
@@ -84,29 +103,15 @@ export default function EventModal({ event, defaultDay, onClose }: Props) {
 
   function submit(e: FormEvent) {
     e.preventDefault();
-    setError("");
-    setFieldErrors({});
-
-    startTransition(async () => {
-      const result = await saveEvent({
-        id: event?.id,
-        name,
-        description,
-        tag,
-        allDay,
-        startDate,
-        startTime,
-        endDate,
-        endTime,
-      });
-
-      if (result.success) {
-        onClose();
-        return;
-      }
-      setError(result.error ?? "Couldn't save the event. Please try again.");
-      setFieldErrors(result.fieldErrors ?? {});
-    });
+    const input: EventInput = { id: event?.id, name, description, tag, allDay, startDate, startTime, endDate, endTime };
+    const checked = validateEvent(input);
+    if ("fieldErrors" in checked) {
+      setError("Check the highlighted fields.");
+      setFieldErrors(checked.fieldErrors);
+      return;
+    }
+    onSave(input, checked.event);
+    onClose();
   }
 
   return (
@@ -124,7 +129,7 @@ export default function EventModal({ event, defaultDay, onClose }: Props) {
           <span className="evTopBarTitle mono" id="eventModalHeading">
             {isEdit ? "EDIT EVENT" : "NEW EVENT"} / {TAG_LABELS[tag].toUpperCase()}
           </span>
-          <button type="button" className="evClose" onClick={onClose} disabled={pending} aria-label="Close">
+          <button type="button" className="evClose" onClick={onClose} aria-label="Close">
             <CloseIcon />
           </button>
         </div>
@@ -140,7 +145,7 @@ export default function EventModal({ event, defaultDay, onClose }: Props) {
               className={fieldErrors.name ? "evInvalid" : undefined}
               placeholder="e.g. Engineering Week opening"
               value={name}
-              maxLength={120}
+              maxLength={MAX_EVENT_NAME_LENGTH}
               onChange={(e) => setName(e.target.value)}
             />
             {fieldErrors.name && <p className="evError">{fieldErrors.name}</p>}
@@ -212,7 +217,7 @@ export default function EventModal({ event, defaultDay, onClose }: Props) {
               id="eventDescription"
               className={fieldErrors.description ? "evInvalid" : undefined}
               rows={3}
-              maxLength={1000}
+              maxLength={MAX_EVENT_DESCRIPTION_LENGTH}
               placeholder="Venue, dress code, what to bring…"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -230,11 +235,11 @@ export default function EventModal({ event, defaultDay, onClose }: Props) {
         <div className="evFooter">
           <span className="evHint mono">TIMES IN PHILIPPINE TIME</span>
           <div className="evActions">
-            <button type="button" className="btn ghost" onClick={onClose} disabled={pending}>
+            <button type="button" className="btn ghost" onClick={onClose}>
               Cancel
             </button>
-            <button type="submit" className="btn primary" disabled={pending}>
-              {pending ? "Saving…" : isEdit ? "Save changes" : "Add event"}
+            <button type="submit" className="btn primary">
+              {isEdit ? "Save changes" : "Add event"}
             </button>
           </div>
         </div>

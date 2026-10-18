@@ -17,14 +17,14 @@ type AvatarEditorProps = {
 };
 
 export default function AvatarEditor({
-  userId,
   initials,
   name,
   children,
   eyebrow = "STUDENT CARD",
-  avatarUrl
+  avatarUrl: savedUrl
 }: AvatarEditorProps) {
-  const { isSaving, error, save, reset } = useAvatarEditor(avatarUrl, userId);
+  // Shows a picked photo (or its removal) at once, before the upload finishes.
+  const { avatarUrl, isSaving, error, save, reset } = useAvatarEditor(savedUrl);
   const inputRef = useRef<HTMLInputElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -39,7 +39,7 @@ export default function AvatarEditor({
 
   function handleRemove() {
     setMenuOpen(false);
-    void reset();
+    reset();
   }
 
   function handleView() {

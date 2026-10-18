@@ -6,7 +6,9 @@ import BirthdayPanel, { CakeIcon } from "./BirthdayPanel";
 import DeleteEventDialog from "./DeleteEventDialog";
 import EventModal from "./EventModal";
 import UpNext from "./UpNext";
-import { deleteEvent, setBirthdayVisibility } from "./actions";
+import { deleteEvent, saveEvent, setBirthdayVisibility } from "./actions";
+import { toast } from "@/components/Toaster";
+import { settle } from "@/lib/actionResult";
 import type { Profile } from "@/lib/auth";
 import { fetchCalendarMonth, type MonthData } from "@/lib/calendar-data";
 import { createClient } from "@/lib/supabase/client";
@@ -34,6 +36,7 @@ import {
   weekdayOf,
   type CalendarEvent,
   type Celebrant,
+  type EventInput,
   type MonthView,
 } from "@/lib/calendar";
 
@@ -52,6 +55,18 @@ type CalendarContentProps = {
 const MAX_PILLS = 3;
 
 type VisibilityChange = { userIds: string[]; hidden: boolean };
+
+type EventChange = { type: "save"; event: CalendarEvent } | { type: "delete"; id: number };
+
+/** The event modal: a blank one, an event to edit, or either reopened after its save failed. */
+type Editing = {
+  event?: CalendarEvent;
+  draft?: EventInput;
+  error?: string;
+  fieldErrors?: Record<string, string>;
+};
+
+const SAVE_ERROR = "Couldn't save the event. Please try again.";
 
 // Stable empties for a month that's still loading, so memoised children don't re-render.
 const NO_EVENTS: CalendarEvent[] = [];
@@ -75,6 +90,7 @@ export default function CalendarContent({
 }: CalendarContentProps) {
   const [supabase] = useState(createClient);
   const [visibilityPending, startVisibility] = useTransition();
+  const [, startEventChange] = useTransition();
   const [view, setView] = useState(serverView);
   /** Months loaded so far, by "YYYY-MM", starting with the one the server rendered. */
   const [months, setMonths] = useState<Record<string, MonthData>>(() => ({
@@ -84,7 +100,7 @@ export default function CalendarContent({
   const requested = useRef(new Set<string>());
   const [serverData, setServerData] = useState({ serverEvents, serverCelebrants });
   const [picked, setPicked] = useState<string | null>(null);
-  const [editing, setEditing] = useState<CalendarEvent | "new" | null>(null);
+  const [editing, setEditing] = useState<Editing | null>(null);
   const [deleting, setDeleting] = useState<CalendarEvent | null>(null);
   /** Which way the grid slides in after a month change. */
   const [slide, setSlide] = useState<"prev" | "next" | null>(null);
@@ -101,8 +117,18 @@ export default function CalendarContent({
   const currentMonth = monthKey(view);
   const monthData = months[currentMonth];
   const loading = !monthData && failedMonth !== currentMonth;
-  const events = monthData?.events ?? NO_EVENTS;
   const celebrants = monthData?.celebrants ?? NO_CELEBRANTS;
+
+  // Saved and deleted events show at once; the refreshed page data then takes over.
+  const [events, applyEventChange] = useOptimistic(
+    monthData?.events ?? NO_EVENTS,
+    (state: CalendarEvent[], change: EventChange) =>
+      change.type === "delete"
+        ? state.filter((event) => event.id !== change.id)
+        : state.some((event) => event.id === change.event.id)
+          ? state.map((event) => (event.id === change.event.id ? change.event : event))
+          : [...state, change.event],
+  );
 
   // Fetch the month on screen if needed, and its neighbours ahead of time so the arrows feel instant.
   useEffect(() => {
@@ -238,10 +264,31 @@ export default function CalendarContent({
     return () => document.removeEventListener("keydown", onKeyDown);
   });
 
-  async function confirmDelete() {
+  function saveEventOptimistic(input: EventInput, preview: Omit<CalendarEvent, "id">, original?: CalendarEvent) {
+    startEventChange(async () => {
+      // New events get a placeholder id until the refresh brings the real row.
+      applyEventChange({ type: "save", event: { ...preview, id: input.id ?? -Date.now() } });
+      const result = await settle(saveEvent(input));
+      if (result.error === undefined) return;
+      // Reopen the modal with what they typed, so nothing is lost.
+      setEditing({
+        event: original,
+        draft: input,
+        error: result.error || SAVE_ERROR,
+        fieldErrors: "fieldErrors" in result ? result.fieldErrors : undefined,
+      });
+    });
+  }
+
+  function confirmDelete() {
     if (!deleting) return;
-    const result = await deleteEvent(deleting.id);
-    if (!result.success) throw new Error(result.error);
+    const target = deleting;
+    startEventChange(async () => {
+      applyEventChange({ type: "delete", id: target.id });
+      const result = await settle(deleteEvent(target.id));
+      // The optimistic removal ends with the transition, so the event comes back on its own.
+      if (result.error !== undefined) toast(`Couldn't delete "${target.name}". It's back on the calendar.`);
+    });
   }
 
   return (
@@ -310,7 +357,7 @@ export default function CalendarContent({
 
                 <div className="calToolbarActions">
                   {isAdmin && (
-                    <button type="button" className="btn calAddBtn" onClick={() => setEditing("new")}>
+                    <button type="button" className="btn calAddBtn" onClick={() => setEditing({})}>
                       <PlusIcon />
                       Add event
                     </button>
@@ -403,7 +450,7 @@ export default function CalendarContent({
                       type="button"
                       className={classes.join(" ")}
                       onClick={() => selectDay(day)}
-                      onDoubleClick={isAdmin && inMonth ? () => setEditing("new") : undefined}
+                      onDoubleClick={isAdmin && inMonth ? () => setEditing({}) : undefined}
                       aria-pressed={day === selected}
                       aria-current={day === today ? "date" : undefined}
                       aria-label={`${formatLongDay(day)}${day === today ? ", today" : ""}${
@@ -469,7 +516,7 @@ export default function CalendarContent({
                     <h3>{formatLongDay(selected)}</h3>
                   </div>
                   {isAdmin && (
-                    <button type="button" className="btn ghost calAgendaAdd" onClick={() => setEditing("new")}>
+                    <button type="button" className="btn ghost calAgendaAdd" onClick={() => setEditing({})}>
                       <PlusIcon />
                       Add on this day
                     </button>
@@ -504,7 +551,7 @@ export default function CalendarContent({
                             <button
                               type="button"
                               className="calIconBtn"
-                              onClick={() => setEditing(event)}
+                              onClick={() => setEditing({ event })}
                               aria-label={`Edit ${event.name}`}
                             >
                               <PencilIcon />
@@ -601,9 +648,13 @@ export default function CalendarContent({
 
       {editing && (
         <EventModal
-          event={editing === "new" ? undefined : editing}
+          event={editing.event}
+          draft={editing.draft}
+          initialError={editing.error}
+          initialFieldErrors={editing.fieldErrors}
           defaultDay={selected}
           onClose={() => setEditing(null)}
+          onSave={(input, preview) => saveEventOptimistic(input, preview, editing.event)}
         />
       )}
 

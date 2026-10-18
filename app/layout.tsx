@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import StyledJsxRegistry from "./registry";
+import Toaster from "@/components/Toaster";
 
 export const metadata: Metadata = {
   title: "SOE Hub",
@@ -13,6 +14,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="en">
       <body suppressHydrationWarning>
         <StyledJsxRegistry>{children}</StyledJsxRegistry>
+        <Toaster />
       </body>
     </html>
   );

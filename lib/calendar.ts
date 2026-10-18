@@ -245,3 +245,56 @@ export function formatLongDay(key: string): string {
     MONTH_NAMES[Number(key.slice(5, 7)) - 1]
   } ${dayOf(key)}`;
 }
+
+export type EventInput = {
+  /** Set when editing an existing event. */
+  id?: number;
+  name: string;
+  description: string;
+  tag: EventTag;
+  allDay: boolean;
+  /** "YYYY-MM-DD" and "HH:mm", in school time. Times are ignored for all-day events. */
+  startDate: string;
+  startTime: string;
+  endDate: string;
+  endTime: string;
+};
+
+export const MAX_EVENT_NAME_LENGTH = 120;
+export const MAX_EVENT_DESCRIPTION_LENGTH = 1000;
+
+/**
+ * Checks an event form. Runs in the modal, so it can close the moment the input is good,
+ * and again in saveEvent, since the browser's check can be bypassed.
+ */
+export function validateEvent(
+  input: EventInput,
+): { fieldErrors: Record<string, string> } | { event: Omit<CalendarEvent, "id"> } {
+  const fieldErrors: Record<string, string> = {};
+  const name = String(input.name ?? "").trim();
+  const description = String(input.description ?? "").trim();
+
+  if (!name) fieldErrors.name = "Give the event a title.";
+  else if (name.length > MAX_EVENT_NAME_LENGTH) fieldErrors.name = `Keep the title under ${MAX_EVENT_NAME_LENGTH} characters.`;
+
+  if (description.length > MAX_EVENT_DESCRIPTION_LENGTH) {
+    fieldErrors.description = `Keep the details under ${MAX_EVENT_DESCRIPTION_LENGTH} characters.`;
+  }
+
+  if (!EVENT_TAGS.includes(input.tag)) fieldErrors.tag = "Pick a tag.";
+
+  if (!isDayKey(input.startDate)) fieldErrors.start = "Pick a start date.";
+  else if (!input.allDay && !isTime(input.startTime)) fieldErrors.start = "Pick a start time.";
+
+  if (!isDayKey(input.endDate)) fieldErrors.end = "Pick an end date.";
+  else if (!input.allDay && !isTime(input.endTime)) fieldErrors.end = "Pick an end time.";
+
+  if (Object.keys(fieldErrors).length) return { fieldErrors };
+
+  const start = input.allDay ? instantAt(input.startDate) : instantAt(input.startDate, input.startTime);
+  const end = input.allDay ? instantAt(input.endDate, "23:59") : instantAt(input.endDate, input.endTime);
+
+  if (new Date(end) < new Date(start)) return { fieldErrors: { end: "The event can't end before it starts." } };
+
+  return { event: { name, description, tag: input.tag, allDay: input.allDay, start, end } };
+}

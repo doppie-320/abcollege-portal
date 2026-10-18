@@ -4,8 +4,9 @@ import { useMemo, useState } from "react";
 import type { AttendanceReportRow, AttendanceStatus } from "@/lib/attendance";
 import LocalTime from "@/app/attendance/LocalTime";
 import { AttendanceBadge, EmptyState, Frame, Icon, Initials, MethodTag, PanelHeader } from "@/app/attendance/ui";
-import { removeAttendance } from "../actions";
-import ActionForm from "../ActionForm";
+
+/** A roster row; `pending` while a manual record is still being saved. */
+export type RosterRow = AttendanceReportRow & { pending?: boolean };
 
 type Filter = "all" | AttendanceStatus;
 type SortKey = "name" | "status" | "recorded";
@@ -26,7 +27,7 @@ const COLUMNS: { label: string; sort?: SortKey }[] = [
   { label: "" },
 ];
 
-const COMPARE: Record<SortKey, (a: AttendanceReportRow, b: AttendanceReportRow) => number> = {
+const COMPARE: Record<SortKey, (a: RosterRow, b: RosterRow) => number> = {
   name: (a, b) => `${a.last_name ?? ""} ${a.first_name ?? ""}`.localeCompare(`${b.last_name ?? ""} ${b.first_name ?? ""}`),
   status: (a, b) => a.status.localeCompare(b.status),
   recorded: (a, b) => a.recorded_at.localeCompare(b.recorded_at),
@@ -35,14 +36,21 @@ const COMPARE: Record<SortKey, (a: AttendanceReportRow, b: AttendanceReportRow) 
 const ICON_BUTTON =
   "flex size-8 cursor-pointer items-center justify-center rounded-md border border-transparent bg-transparent text-ink-soft transition-[color,background-color,border-color,opacity] duration-150 hover:border-[#b3261e]/30 hover:bg-[rgba(205,79,60,0.08)] hover:text-[#b3261e] focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-blue disabled:cursor-not-allowed disabled:opacity-50 pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100";
 
+/** "Last, First", or a placeholder for a manual record whose student hasn't been looked up yet. */
+export function rosterName(row: RosterRow): string {
+  if (row.last_name || row.first_name) return [row.last_name, row.first_name].filter(Boolean).join(", ");
+  return row.pending ? "Looking up student…" : "Unnamed student";
+}
+
 export default function RosterTable({
-  eventId,
   report,
   exportHref,
+  onRemove,
 }: {
-  eventId: number;
-  report: AttendanceReportRow[];
+  report: RosterRow[];
   exportHref: string;
+  /** Asks before deleting; the row disappears as soon as it's confirmed. */
+  onRemove: (row: RosterRow) => void;
 }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
@@ -207,9 +215,10 @@ export default function RosterTable({
                   visible.map((row, index) => (
                     <tr
                       key={row.user_id}
-                      className={`group animate-fade-in transition-colors duration-150 hover:bg-vellum/40 ${
+                      aria-busy={row.pending || undefined}
+                      className={`group animate-fade-in transition-[background-color,opacity] duration-150 hover:bg-vellum/40 ${
                         row.status === "rejected" ? "bg-[#b3261e]/[0.025]" : ""
-                      }`}
+                      } ${row.pending ? "opacity-60" : ""}`}
                       style={{ animationDelay: `${Math.min(index, 12) * 25}ms` }}
                     >
                       <td className="px-5 py-4 shadow-[inset_3px_0_0_transparent] transition-shadow duration-150 group-hover:shadow-[inset_3px_0_0_var(--orange)]">
@@ -218,9 +227,7 @@ export default function RosterTable({
                             <Initials first={row.first_name} last={row.last_name} />
                           </span>
                           <span className="min-w-0">
-                            <span className="block font-semibold whitespace-nowrap text-navy-deep">
-                              {row.last_name}, {row.first_name}
-                            </span>
+                            <span className="block font-semibold whitespace-nowrap text-navy-deep">{rosterName(row)}</span>
                             <span className="mono block text-[11px] text-ink-soft">{row.student_id ?? "—"}</span>
                           </span>
                         </span>
@@ -234,7 +241,7 @@ export default function RosterTable({
                       </td>
                       <td className="px-5 py-4">
                         <span className="mono mb-1.5 block text-[11px] whitespace-nowrap text-ink">
-                          <LocalTime value={row.recorded_at} format="short" />
+                          {row.pending ? "Saving…" : <LocalTime value={row.recorded_at} format="short" />}
                         </span>
                         <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
                           <MethodTag method={row.method} />
@@ -247,27 +254,19 @@ export default function RosterTable({
                         {row.note || <span className="text-rule not-italic">—</span>}
                       </td>
                       <td className="py-3 pr-4 pl-2 text-right">
-                        <ActionForm
-                          action={removeAttendance}
-                          successMessage="Removed."
-                          confirm={{
-                            title: "Remove this record?",
-                            message: `${row.first_name} ${row.last_name}'s attendance for this event will be deleted.`,
-                            confirmLabel: "Remove record",
-                          }}
-                          className="flex justify-end"
-                        >
-                          <input type="hidden" name="eventId" value={eventId} />
-                          <input type="hidden" name="userId" value={row.user_id} />
-                          <button
-                            type="submit"
-                            className={ICON_BUTTON}
-                            aria-label={`Remove ${row.first_name} ${row.last_name}'s record`}
-                            title="Remove record"
-                          >
-                            <Icon name="trash" size={14} />
-                          </button>
-                        </ActionForm>
+                        {!row.pending && (
+                          <span className="flex justify-end">
+                            <button
+                              type="button"
+                              onClick={() => onRemove(row)}
+                              className={ICON_BUTTON}
+                              aria-label={`Remove ${rosterName(row)}'s record`}
+                              title="Remove record"
+                            >
+                              <Icon name="trash" size={14} />
+                            </button>
+                          </span>
+                        )}
                       </td>
                     </tr>
                   ))

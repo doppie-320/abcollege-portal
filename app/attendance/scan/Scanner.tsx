@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState, useTransition, type FormEvent, type ReactNode } from "react";
 import ConfirmDialog from "@/app/home/ConfirmDialog";
 import Select from "@/components/Select";
+import { settle } from "@/lib/actionResult";
+import { useBackdropDismiss } from "@/lib/useBackdropDismiss";
 import {
   checkInState,
   checkInWindow,
@@ -22,10 +24,12 @@ import {
   FIELD,
   FIELD_LABEL,
   Frame,
+  ICON_PATHS,
   Icon,
   Initials,
   MethodTag,
   PanelHeader,
+  PersonChip,
   StatStrip,
   type IconName,
 } from "../ui";
@@ -50,6 +54,8 @@ type LogEntry = {
   status: AttendanceStatus;
   method: AttendanceMethod;
   at: string;
+  /** Shown at once; true until the server has saved it. */
+  saving?: boolean;
 };
 
 function fullName(student: Pick<ScannedStudent, "first_name" | "last_name">): string {
@@ -86,6 +92,7 @@ export default function Scanner({ events }: { events: AttendanceEvent[] }) {
   const noticeIdRef = useRef(0);
 
   const event = events.find((e) => e.event_id === eventId) ?? events[0];
+  const verifyBackdrop = useBackdropDismiss(reset, !pending);
   const { opens, closes } = checkInWindow(event);
   const hasStudent = student !== null;
   const presentCount = log.filter((entry) => entry.status === "present").length;
@@ -202,47 +209,47 @@ export default function Scanner({ events }: { events: AttendanceEvent[] }) {
     setNotice(null);
   }
 
-  function decide(decision: AttendanceStatus) {
-    if (!source) return;
-    busyRef.current = true;
-    startTransition(async () => {
-      try {
-        const result =
-          source.kind === "qr"
-            ? await recordScan(eventId, source.token, decision)
-            : await recordStudentId(eventId, source.studentId, decision, note);
-        if (result.error !== undefined) {
-          showNotice(result.error, "error");
-          return;
-        }
-        const name = (student && fullName(student)) || "Student";
-        if (decision === "rejected" && result.data.status === "present") {
-          showNotice(`${name} was already marked present, so the record was kept.`, "warning");
-        } else {
-          showNotice(
-            `${name} ${result.data.status === "present" ? "checked in" : "rejected"}. Ready for the next student.`,
-            "success",
-          );
-        }
-        if (student) {
-          const entry: LogEntry = {
-            id: ++logIdRef.current,
-            firstName: student.first_name,
-            lastName: student.last_name,
-            studentId: student.student_id,
-            eventName: event.event_name,
-            status: result.data.status,
-            method: source.kind === "qr" ? "scan" : "manual",
-            at: new Date().toISOString(),
-          };
-          setLog((prev) => [entry, ...prev].slice(0, 50));
-          setFlash({ id: entry.id, status: entry.status, name });
-        }
-        reset();
-      } finally {
-        busyRef.current = false;
-      }
-    });
+  // The decision shows at once (flash, session log, next student) and saves in the background,
+  // so the line keeps moving. If saving fails the log entry comes off and the scanner is told.
+  async function decide(decision: AttendanceStatus) {
+    if (!source || !student) return;
+    const decided = { eventId, source, note };
+    const name = fullName(student) || "Student";
+    const entry: LogEntry = {
+      id: ++logIdRef.current,
+      firstName: student.first_name,
+      lastName: student.last_name,
+      studentId: student.student_id,
+      eventName: event.event_name,
+      status: decision,
+      method: source.kind === "qr" ? "scan" : "manual",
+      at: new Date().toISOString(),
+      saving: true,
+    };
+    setLog((prev) => [entry, ...prev].slice(0, 50));
+    setFlash({ id: entry.id, status: decision, name });
+    showNotice(`${name} ${decision === "present" ? "checked in" : "rejected"}. Ready for the next student.`, "success");
+    reset();
+
+    const result = await settle(
+      decided.source.kind === "qr"
+        ? recordScan(decided.eventId, decided.source.token, decision)
+        : recordStudentId(decided.eventId, decided.source.studentId, decision, decided.note),
+    );
+
+    if (result.error !== undefined) {
+      setLog((prev) => prev.filter((item) => item.id !== entry.id));
+      // Let the same pass be read again for the retry.
+      if (decided.source.kind === "qr" && handledRef.current === decided.source.token) handledRef.current = "";
+      showNotice(`Couldn't save ${name}'s ${decision === "present" ? "check-in" : "rejection"}. ${result.error}`, "error");
+      return;
+    }
+
+    const status = result.data.status;
+    setLog((prev) => prev.map((item) => (item.id === entry.id ? { ...item, status, saving: false } : item)));
+    if (decision === "rejected" && status === "present") {
+      showNotice(`${name} was already marked present, so the record was kept.`, "warning");
+    }
   }
 
   return (
@@ -427,6 +434,7 @@ export default function Scanner({ events }: { events: AttendanceEvent[] }) {
                       </span>
                     </span>
                     {entry.method === "manual" && <MethodTag method="manual" />}
+                    {entry.saving && <Spinner />}
                     <AttendanceBadge status={entry.status} />
                   </li>
                 ))}
@@ -451,29 +459,43 @@ export default function Scanner({ events }: { events: AttendanceEvent[] }) {
       </div>
 
       {/* ───────── Verification modal ───────── */}
+      {/* Same shell as the site's other modals: navy top bar with a close button, yellow accent, vellum footer. */}
       {student && (
-        <div className="animate-fade-in fixed inset-0 z-[110] flex items-end justify-center bg-navy-deep/55 sm:items-center sm:p-6">
+        <div
+          className="animate-fade-in fixed inset-0 z-[100] flex items-end justify-center bg-[rgba(13,30,56,0.55)] backdrop-blur-[2px] sm:items-center sm:p-6"
+          {...verifyBackdrop}
+        >
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby="verify-heading"
-            className="animate-pop-in max-h-full w-full max-w-[480px] overflow-y-auto rounded-t-xl border border-rule bg-paper shadow-[0_24px_60px_rgba(13,30,56,0.35)] sm:rounded-xl"
+            onClick={(e) => e.stopPropagation()}
+            className="animate-pop-in max-h-full w-full max-w-[480px] overflow-y-auto rounded-t-lg border border-rule bg-paper shadow-[0_24px_60px_rgba(13,30,56,0.35)] sm:rounded-lg"
           >
-            <div className={`border-b-[3px] border-orange bg-navy px-5 py-4 ${BLUEPRINT_GRID}`}>
-              <div className="flex items-center justify-between gap-3">
-                <span className="mono text-[10px] tracking-[0.12em] text-navy-tint uppercase">
-                  Verify identity &middot; {event.event_name}
-                </span>
+            <div className="flex items-center justify-between gap-3 border-b-[3px] border-orange bg-navy py-2.5 pr-3 pl-[18px]">
+              <span className="mono flex min-w-0 items-center gap-2 text-[11.5px] tracking-[0.08em] text-navy-tint">
+                <span className="truncate">VERIFY IDENTITY / {event.event_name.toUpperCase()}</span>
                 {source?.kind === "id" && (
-                  <span className="mono shrink-0 rounded border border-orange/60 bg-orange/20 px-1.5 py-px text-[9.5px] tracking-[0.08em] text-paper">
+                  <span className="shrink-0 rounded border border-orange/60 bg-orange/20 px-1.5 py-px text-[9.5px] text-paper">
                     MANUAL
                   </span>
                 )}
-              </div>
-              <h2 id="verify-heading" className="mt-1 mb-0 text-[19px] text-paper">
-                Is this the person in front of you?
-              </h2>
+              </span>
+              <button
+                type="button"
+                onClick={reset}
+                disabled={pending}
+                aria-label="Close"
+                className="flex shrink-0 cursor-pointer rounded border-none bg-white/[0.12] p-[5px] text-paper transition-colors duration-150 hover:bg-white/[0.24] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-grid"
+              >
+                <Icon name="x" size={16} />
+              </button>
             </div>
+            <div className="h-[3px] bg-yellow" aria-hidden="true" />
+
+            <h2 id="verify-heading" className="mx-5 mt-5 mb-0 text-[19px] leading-tight">
+              Is this the person in front of you?
+            </h2>
 
             <div className="flex gap-4 p-5 max-[440px]:flex-col max-[440px]:items-center">
               {student.avatarUrl ? (
@@ -551,7 +573,7 @@ export default function Scanner({ events }: { events: AttendanceEvent[] }) {
               </div>
             )}
 
-            <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-rule-soft bg-vellum/40 px-5 py-3.5">
+            <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-rule bg-vellum px-5 py-3">
               <button type="button" className="btn ghost rounded-lg px-3 py-2 text-[13px]" disabled={pending} onClick={reset}>
                 Cancel
                 <Kbd>Esc</Kbd>
@@ -572,9 +594,9 @@ export default function Scanner({ events }: { events: AttendanceEvent[] }) {
                 disabled={pending}
                 onClick={() => decide("present")}
               >
-                {pending ? <Spinner light /> : <Icon name="check" size={13} />}
-                {pending ? "Saving…" : "Accept"}
-                {!pending && <Kbd light>A</Kbd>}
+                <Icon name="check" size={13} />
+                Accept
+                <Kbd light>A</Kbd>
               </button>
             </div>
           </div>
@@ -583,11 +605,13 @@ export default function Scanner({ events }: { events: AttendanceEvent[] }) {
 
       {student && confirmingReject && (
         <ConfirmDialog
+          eyebrow="REJECT · CHECK-IN"
+          icon={ICON_PATHS.userX}
           title="Reject this check-in?"
           message={
             <>
-              <strong>{fullName(student) || "This student"}</strong> ({student.student_id}) will be marked rejected for{" "}
-              {event.event_name}. Only reject if they don&rsquo;t match the photo or their school ID.
+              <strong>{fullName(student) || "This student"}</strong> will be marked rejected for{" "}
+              <strong>{event.event_name}</strong>. Only reject if they don&rsquo;t match the photo or their school ID.
             </>
           }
           confirmLabel="Reject check-in"
@@ -595,9 +619,17 @@ export default function Scanner({ events }: { events: AttendanceEvent[] }) {
           onCancel={() => setConfirmingReject(false)}
           onConfirm={() => {
             setConfirmingReject(false);
-            decide("rejected");
+            void decide("rejected");
           }}
-        />
+        >
+          <PersonChip
+            first={student.first_name}
+            last={student.last_name}
+            detail={[student.student_id, student.course, student.year_level].filter(Boolean).join(" · ")}
+            aside={student.status ? <AttendanceBadge status={student.status} /> : undefined}
+            mark={{ icon: "x", color: "bg-[#b3261e]" }}
+          />
+        </ConfirmDialog>
       )}
     </>
   );
@@ -688,13 +720,11 @@ function ViewfinderCorners() {
   );
 }
 
-function Spinner({ light = false }: { light?: boolean }) {
+function Spinner() {
   return (
     <span
       aria-hidden="true"
-      className={`inline-block size-3 animate-spin rounded-full border-2 ${
-        light ? "border-white/30 border-t-white" : "border-navy/20 border-t-navy"
-      }`}
+      className="inline-block size-3 shrink-0 animate-spin rounded-full border-2 border-navy/20 border-t-navy"
     />
   );
 }

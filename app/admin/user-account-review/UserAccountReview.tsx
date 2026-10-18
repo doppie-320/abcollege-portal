@@ -14,6 +14,7 @@ import {
   type ApplicantStatus,
 } from "@/lib/applicants-db";
 import type { Profile } from "@/lib/auth";
+import { toast } from "@/components/Toaster";
 
 type UserAccountReviewProps = {
   profile: Profile;
@@ -140,33 +141,54 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
     setPageIndex(0);
   }
 
+  // Decisions show at once and are undone (with a toast) if Supabase refuses them.
   async function decide(status: ApplicantStatus, rejectDate?: string) {
     const supabase = createClient();
-    if (!selected) return;
+    const target = selected;
+    if (!target) return;
+    const name = applicantName(target);
 
     if (status === "reject" && !rejectDate) {
-      const { error: rejectError } = await supabase.rpc("reject_user", {
-        target_user: selected.id,
-      });
-
-      if (rejectError) throw rejectError;
-
-      const remainingVisible = visible.filter((applicant) => applicant.id !== selected.id);
-      const selectedIndex = visible.findIndex((applicant) => applicant.id === selected.id);
+      const index = reviewApplicants.findIndex((applicant) => applicant.id === target.id);
+      const previousDecision = decisions[target.id];
+      const remainingVisible = visible.filter((applicant) => applicant.id !== target.id);
+      const selectedIndex = visible.findIndex((applicant) => applicant.id === target.id);
       const nextSelected =
         remainingVisible[Math.min(selectedIndex, remainingVisible.length - 1)] ?? null;
       const nextPageCount = Math.max(1, Math.ceil(remainingVisible.length / PAGE_SIZE));
 
-      setReviewApplicants((prev) => prev.filter((applicant) => applicant.id !== selected.id));
+      setReviewApplicants((prev) => prev.filter((applicant) => applicant.id !== target.id));
       setDecisions((prev) => {
         const next = { ...prev };
-        delete next[selected.id];
+        delete next[target.id];
         return next;
       });
       setSelectedId(nextSelected?.id ?? null);
       setPageIndex((prev) => Math.min(prev, nextPageCount - 1));
+
+      const { error: rejectError } = await supabase.rpc("reject_user", {
+        target_user: target.id,
+      });
+
+      if (rejectError) {
+        console.error("Error rejecting applicant:", rejectError);
+        setReviewApplicants((prev) => {
+          const next = [...prev];
+          next.splice(Math.min(index, next.length), 0, target);
+          return next;
+        });
+        if (previousDecision) setDecisions((prev) => ({ ...prev, [target.id]: previousDecision }));
+        setSelectedId(target.id);
+        toast(`Couldn't reject ${name}'s application. Please try again.`);
+      }
       return;
     }
+
+    const previousDecision = decisions[target.id];
+    setDecisions((prev) => ({
+      ...prev,
+      [target.id]: { status, rejectDate },
+    }));
 
     const { error: decisionError } = await supabase
       .from("user_requests")
@@ -174,14 +196,22 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
         request_status: status,
         reject_date: rejectDate || null,
       })
-      .eq("user_id", selected.id);
+      .eq("user_id", target.id);
 
-    if(decisionError) throw decisionError;
-
-    setDecisions((prev) => ({
-      ...prev,
-      [selected.id]: { status, rejectDate },
-    }));
+    if (decisionError) {
+      console.error("Error saving applicant decision:", decisionError);
+      setDecisions((prev) => {
+        const next = { ...prev };
+        if (previousDecision) next[target.id] = previousDecision;
+        else delete next[target.id];
+        return next;
+      });
+      toast(
+        status === "accept"
+          ? `Couldn't accept ${name}'s application. Please try again.`
+          : `Couldn't reject ${name}'s application. Please try again.`,
+      );
+    }
   }
 
   function requestReject(mode: RejectMode) {
@@ -189,11 +219,12 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
     setPendingReject(mode);
   }
 
-  // Throws on failure so ConfirmDialog keeps the modal open and shows its error.
-  async function confirmReject() {
-    if (pendingReject === "delayed") await decide("reject", new Date().toISOString());
-    else await decide("reject");
+  // The dialog closes at once; decide() undoes the change if the server refuses it.
+  function confirmReject() {
+    const mode = pendingReject;
     setPendingReject(null);
+    if (mode === "delayed") void decide("reject", new Date().toISOString());
+    else void decide("reject");
   }
 
   return (
@@ -505,7 +536,7 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
                   <button
                     type="button"
                     className="ml-auto btn rounded-lg primary px-2.5 py-1 text-sm font-normal"
-                    onClick={() => decide("accept")}
+                    onClick={() => void decide("accept")}
                   >
                     <Icon name="check" />
                     Accept application
