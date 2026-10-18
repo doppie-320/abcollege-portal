@@ -285,6 +285,25 @@
     display: block;
   }
 
+  /* Page hero title, matching the home and calendar heroes. */
+  .page-eyebrow {
+    margin-bottom: 8px;
+    letter-spacing: 0.08em;
+  }
+
+  .page-title {
+    font-size: 44px;
+    line-height: 1;
+    margin-bottom: 0;
+    text-transform: uppercase;
+  }
+
+  @media (max-width: 640px) {
+    .page-title {
+      font-size: 36px;
+    }
+  }
+
   /* ---------- Layout shells ---------- */
   /* Sticky wrapper for the header + accent stripe; slides up out of view while scrolling down. */
   .site-nav-bar {

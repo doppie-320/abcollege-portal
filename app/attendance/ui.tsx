@@ -173,6 +173,42 @@ export function EmptyState({ icon, title, children }: { icon: IconName; title: s
   );
 }
 
+/** Full-page notice over a giant faint word, laid out like the 404 page. Replaces the page header and cards. */
+export function IdleNotice({
+  backdrop,
+  title,
+  children,
+  actions,
+}: {
+  backdrop: string;
+  title: string;
+  children: ReactNode;
+  actions: ReactNode;
+}) {
+  return (
+    <main className="relative flex min-h-[calc(100vh-64px)] items-center justify-center overflow-hidden px-4 py-6">
+      <div
+        aria-hidden="true"
+        className="font-display pointer-events-none absolute inset-0 flex items-center justify-center leading-none font-bold tracking-tighter text-navy-deep/[0.08] select-none"
+      >
+        <span
+          className={`whitespace-nowrap ${
+            backdrop.length > 4 ? "text-[28vw] sm:text-[21vw] lg:text-[18rem]" : "text-[36vw] sm:text-[26vw] lg:text-[22rem]"
+          }`}
+        >
+          {backdrop}
+        </span>
+      </div>
+
+      <div className="animate-fade-in-up relative z-10 w-full max-w-md text-center">
+        <h1 className="font-display mb-3 text-5xl font-medium tracking-tight text-ink">{title}</h1>
+        <p className="mx-auto mb-8 max-w-sm text-sm text-ink-soft">{children}</p>
+        <div className="flex items-center justify-center gap-3 max-sm:flex-col">{actions}</div>
+      </div>
+    </main>
+  );
+}
+
 /** Tear-off calendar chip for an event's date. */
 export function DateChip({ value }: { value: string }) {
   return (

@@ -52,9 +52,9 @@ export default function AdminContent({ profile }: AdminContentProps) {
 
       <div className="page-wrap">
         <div className="mb-8">
-          <span className="eyebrow">SOE HUB / ADMIN PANEL</span>
-          <h1 className="mb-1 text-[30px] leading-none">Admin Console</h1>
-          <p className="mb-0 text-xs text-ink-soft">
+          <span className="eyebrow page-eyebrow">SOE HUB / ADMIN PANEL</span>
+          <h1 className="page-title">Admin Console</h1>
+          <p className="mt-3.5 mb-0 text-xs text-ink-soft">
             Council tools for managing the SOE Hub portal.
           </p>
         </div>

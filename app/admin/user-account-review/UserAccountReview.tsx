@@ -239,10 +239,13 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
       />
 
       <div className="page-wrap">
-        <div className="mb-6 flex flex-wrap items-end justify-between gap-x-8 gap-y-5">
-          <div>
-            <h1 className="mb-1 text-[30px] leading-none">User Account Review</h1>
-            <p className="mb-0 text-xs text-ink-soft">
+        <div className="mb-6 flex flex-wrap items-stretch justify-between gap-x-8 gap-y-5">
+          <div className="flex flex-col justify-between">
+            <div>
+              <span className="eyebrow page-eyebrow">SOE HUB / ADMIN PANEL</span>
+              <h1 className="page-title">User Account Review</h1>
+            </div>
+            <p className="mt-3.5 mb-0 text-xs text-ink-soft">
               {reviewApplicants.length} registration
               {reviewApplicants.length === 1 ? "" : "s"} on file. Select an applicant to review the
               details they applied with.
