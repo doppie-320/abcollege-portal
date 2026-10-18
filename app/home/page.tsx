@@ -6,6 +6,8 @@ import HomeContent from "./HomeContent";
 import { createClient } from "@/lib/supabase/server";
 import { isApproved } from "@/lib/auth";
 import { redirect } from "next/navigation";
+import { toDayKey } from "@/lib/calendar";
+import { fetchUpcomingBirthdays, fetchUpcomingEvents } from "@/lib/calendar-data";
 
 export const metadata: Metadata = {
   title: "Home — SOE Hub",
@@ -45,6 +47,14 @@ export default async function HomePage() {
     ? supabase.storage.from("avatars").getPublicUrl(userData.avatar_path).data.publicUrl
     : "";
 
+  // Decided on the server so the page and the browser agree on "today" (school time).
+  const now = new Date();
+  const today = toDayKey(now);
+  const [birthdays, upcomingEvents] = await Promise.all([
+    fetchUpcomingBirthdays(supabase, today),
+    fetchUpcomingEvents(supabase, now, 8),
+  ]);
+
   return (
     <HomeContent
       current_user={{
@@ -54,6 +64,9 @@ export default async function HomePage() {
         avatar_path: avatarUrl,
       }}
       is_admin={adminRow !== null}
+      today={today}
+      birthdays={birthdays}
+      upcomingEvents={upcomingEvents}
     />
   );
   

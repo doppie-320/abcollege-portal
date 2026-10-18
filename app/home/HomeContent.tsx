@@ -2,14 +2,17 @@
 
 import Link from "next/link";
 import AnnouncementCard from "./AnnouncementCard";
+import BirthdaysCard from "./BirthdaysCard";
+import CountdownCard from "./CountdownCard";
 import CreatePostModal, { type NewPost } from "./CreatePostModal";
 import Select from "@/components/Select";
 import SiteNav, { ADMIN_MENU_LINKS, HOME_ADMIN_NAV_LINKS, PAGE_RESELECT_EVENT } from "@/components/NavigationHeader";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "../../lib/supabase/client"
 import { useRouter } from "next/navigation";
 import { richTextToPlain } from "@/lib/richText";
 import { toast } from "@/components/Toaster";
+import type { CalendarEvent, UpcomingBirthday } from "@/lib/calendar";
 
 export type User = {
   id: string;
@@ -142,6 +145,10 @@ function formatDateLine(date: Date) {
 type HomeContentProps = {
   current_user: User;
   is_admin: boolean;
+  /** "YYYY-MM-DD" in school time, decided on the server. */
+  today: string;
+  birthdays: UpcomingBirthday[];
+  upcomingEvents: CalendarEvent[];
 }
 
 export function getRelativeTime(dateString: string): string {
@@ -203,7 +210,7 @@ export async function getPerson(user_id: string): Promise<User> {
   };
 }
 
-export default function HomeContent({ current_user, is_admin }: HomeContentProps) {
+export default function HomeContent({ current_user, is_admin, today, birthdays, upcomingEvents }: HomeContentProps) {
   const [dateLine, setDateLine] = useState("");
   var [announcements, setAnnouncements] = useState<Announcement[]>(ANNOUNCEMENTS);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -215,6 +222,8 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
   const [searchQuery, setSearchQuery] = useState("");
   // Open composer; `draft` is set when publishing failed and it reopens with the post.
   const [composer, setComposer] = useState<{ draft?: NewPost; error?: string } | null>(null);
+  // When a countdown runs out, the server sends the next events (and today's birthdays).
+  const refreshSidebar = useCallback(() => router.refresh(), [router]);
 
 
   useEffect(() => {
@@ -661,29 +670,8 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
           </div>
 
           <aside className="sideColumn">
-            <div className="sideBlock tick-frame">
-              <span className="tick-bl"></span>
-              <span className="tick-br"></span>
-              <div className="sectionHead">
-                <span className="mono sectionLabel"><span className="sectionNum">01</span> Birthdays today</span>
-              </div>
-              <div className="comingSoon">
-                <span className="badge">COMING SOON</span>
-                <p>Today&apos;s celebrants, pulled from the SOE calendar.</p>
-              </div>
-            </div>
-
-            <div className="sideBlock tick-frame">
-              <span className="tick-bl"></span>
-              <span className="tick-br"></span>
-              <div className="sectionHead">
-                <span className="mono sectionLabel"><span className="sectionNum">02</span> Countdown</span>
-              </div>
-              <div className="comingSoon">
-                <span className="badge">COMING SOON</span>
-                <p>Events within 7 days will count down here.</p>
-              </div>
-            </div>
+            <BirthdaysCard birthdays={birthdays} today={today} currentUserId={current_user.id} />
+            <CountdownCard events={upcomingEvents} today={today} onExpire={refreshSidebar} />
           </aside>
         </div>
       </div>
@@ -1111,29 +1099,6 @@ export default function HomeContent({ current_user, is_admin }: HomeContentProps
 
         .sideBlock:last-child {
           margin-bottom: 0;
-        }
-
-        .comingSoon {
-          display: flex;
-          flex-direction: column;
-          align-items: flex-start;
-          gap: 4px;
-          padding: 16px 0 2px;
-          color: var(--ink-soft);
-        }
-
-        .comingSoon .badge {
-          font-family: "IBM Plex Mono", monospace;
-          font-size: 10.5px;
-          letter-spacing: 0.04em;
-          padding: 3px 7px;
-          border: 1px dashed #c9bfa0;
-          color: var(--ink-soft);
-        }
-
-        .comingSoon p {
-          font-size: 12.5px;
-          margin: 6px 0 0;
         }
 
         @media (max-width: 900px) {

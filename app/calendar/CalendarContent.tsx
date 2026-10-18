@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useOptimistic, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useOptimistic, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import SiteNav, { ADMIN_MENU_LINKS, HOME_ADMIN_NAV_LINKS } from "@/components/NavigationHeader";
 import BirthdayPanel, { CakeIcon } from "./BirthdayPanel";
 import DeleteEventDialog from "./DeleteEventDialog";
@@ -89,6 +90,9 @@ export default function CalendarContent({
   nextEvent,
 }: CalendarContentProps) {
   const [supabase] = useState(createClient);
+  const router = useRouter();
+  // When the countdown runs out, the server picks the next event.
+  const refreshNextEvent = useCallback(() => router.refresh(), [router]);
   const [visibilityPending, startVisibility] = useTransition();
   const [, startEventChange] = useTransition();
   const [view, setView] = useState(serverView);
@@ -336,7 +340,7 @@ export default function CalendarContent({
           </div>
 
           <div className="calHeroSide">
-            <UpNext event={nextEvent} onSelectDay={selectDay} />
+            <UpNext event={nextEvent} today={today} onSelectDay={selectDay} onEnded={refreshNextEvent} />
           </div>
         </div>
 
@@ -695,11 +699,13 @@ export default function CalendarContent({
         }
 
         /* ---------- Hero ---------- */
+        /* Same columns as .calLayout, so the countdown lines up with the sidebar below it;
+           tops aligned so it starts level with the eyebrow. */
         .calHero {
           display: grid;
-          grid-template-columns: minmax(0, 1fr) 340px;
+          grid-template-columns: minmax(0, 1fr) 320px;
           gap: 28px;
-          align-items: end;
+          align-items: start;
           margin-bottom: 28px;
         }
 

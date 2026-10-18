@@ -38,6 +38,11 @@ export type Celebrant = {
   hidden: boolean;
 };
 
+/** A celebrant placed on the school-time day they're celebrated next. */
+export type UpcomingBirthday = Celebrant & {
+  date: string;
+};
+
 /** month is 1–12. */
 export type MonthView = {
   year: number;
@@ -125,6 +130,11 @@ export function addDays(key: string, days: number): string {
   const date = keyToUTC(key);
   date.setUTCDate(date.getUTCDate() + days);
   return utcToKey(date);
+}
+
+/** Whole days from one day key to another (negative when `to` comes first). */
+export function daysBetween(from: string, to: string): number {
+  return Math.round((keyToUTC(to).getTime() - keyToUTC(from).getTime()) / 86_400_000);
 }
 
 export function weekdayOf(key: string): number {
