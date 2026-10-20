@@ -46,9 +46,9 @@ INSERT INTO public.admins (id) VALUES ('00000000-0000-4000-8000-000000000001');
 INSERT INTO public.students (id, student_id, year_level, course)
 SELECT s.id, s.student_id, (SELECT id FROM public.yearlevels WHERE name = '2nd Year'), (SELECT id FROM public.courses WHERE name = 'BS Computer Engineering')
 FROM (VALUES
-  ('00000000-0000-4000-8000-000000000003'::uuid, '2024-00003'),
-  ('00000000-0000-4000-8000-000000000004'::uuid, '2024-00004'),
-  ('00000000-0000-4000-8000-000000000005'::uuid, '2024-00005')
+  ('00000000-0000-4000-8000-000000000003'::uuid, 'SOE12345678'),
+  ('00000000-0000-4000-8000-000000000004'::uuid, 'SOE76543210'),
+  ('00000000-0000-4000-8000-000000000005'::uuid, 'SOE18273645')
 ) AS s (id, student_id);
 
 -- Check-in stays open for 30 days after a reset so the data doesn't go stale.
