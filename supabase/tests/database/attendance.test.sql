@@ -188,7 +188,7 @@ RESET ROLE;
 -- Manual check-in by school ID ------------------------------------------------
 
 SELECT ok(
-  NOT has_function_privilege('anon', 'public.record_by_student_id(bigint, text, public.attendance_status, text)', 'execute'),
+  NOT has_function_privilege('anon', 'public.record_by_student_id(bigint, text, public.attendance_status, text, boolean)', 'execute'),
   'anon cannot check students in by ID'
 );
 

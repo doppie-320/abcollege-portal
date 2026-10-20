@@ -54,6 +54,7 @@ export default function RosterTable({
   eventName,
   exportHref,
   onRemove,
+  onResetPass,
 }: {
   report: RosterRow[];
   /** Every student's history for the event, newest first. */
@@ -62,6 +63,8 @@ export default function RosterTable({
   exportHref: string;
   /** Asks before deleting; the row disappears as soon as it's confirmed. */
   onRemove: (row: RosterRow) => void;
+  /** Asks before voiding the student's static pass. */
+  onResetPass: (row: RosterRow) => void;
 }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
@@ -305,6 +308,15 @@ export default function RosterTable({
                                 title="History"
                               >
                                 <Icon name="history" size={14} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => onResetPass(row)}
+                                className={HISTORY_BUTTON}
+                                aria-label={`Reset ${rosterName(row)}'s static pass`}
+                                title="Reset static pass"
+                              >
+                                <Icon name="id" size={14} />
                               </button>
                               <button
                                 type="button"

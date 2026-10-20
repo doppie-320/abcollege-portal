@@ -29,7 +29,7 @@ import {
   PersonChip,
   StatStrip,
 } from "@/app/attendance/ui";
-import { assignScanner, removeAttendance, removeScanner, setAttendance } from "../actions";
+import { assignScanner, removeAttendance, removeScanner, resetStaticPass, setAttendance } from "../actions";
 import ActionForm from "../ActionForm";
 import EventSettings, { type AttendanceSettings } from "./EventSettings";
 import RosterTable, { rosterName, type RosterRow } from "./RosterTable";
@@ -81,7 +81,10 @@ function scannerName(scanner: ScannerRow): string {
   return `${scanner.first_name ?? ""} ${scanner.last_name ?? ""}`.trim() || scanner.email_address;
 }
 
-type Confirming = { kind: "record"; row: RosterRow } | { kind: "scanner"; scanner: ScannerRow };
+type Confirming =
+  | { kind: "record"; row: RosterRow }
+  | { kind: "pass"; row: RosterRow }
+  | { kind: "scanner"; scanner: ScannerRow };
 
 /**
  * Everything on an event's attendance page below the nav. Each change shows at once
@@ -134,6 +137,17 @@ export default function EventAttendance({
       removeAttendance,
       `Couldn't remove ${rosterName(row)}'s record.`,
     );
+  }
+
+  // Nothing on this page changes, so there's no optimistic update; just report the outcome.
+  function resetPass(row: RosterRow) {
+    const formData = new FormData();
+    formData.set("userId", row.user_id);
+    startTransition(async () => {
+      const result: ActionResult = await settle(resetStaticPass({}, formData));
+      if (result.error) toast(`Couldn't reset ${rosterName(row)}'s static pass. ${result.error}`);
+      else toast(`${rosterName(row)}'s static pass was reset. Old copies no longer work.`, "success");
+    });
   }
 
   function unassignScanner(scanner: ScannerRow) {
@@ -243,6 +257,7 @@ export default function EventAttendance({
         eventName={event.event_name}
         exportHref={exportHref}
         onRemove={(row) => setConfirming({ kind: "record", row })}
+        onResetPass={(row) => setConfirming({ kind: "pass", row })}
       />
 
       <div className="grid grid-cols-2 items-start gap-6 max-[900px]:grid-cols-1">
@@ -400,6 +415,35 @@ export default function EventAttendance({
             detail={[confirming.row.student_id, confirming.row.course, confirming.row.year_level].filter(Boolean).join(" · ") || "—"}
             aside={<AttendanceBadge status={confirming.row.status} />}
             mark={{ icon: "trash", color: "bg-[#b3261e]" }}
+          />
+        </ConfirmDialog>
+      )}
+
+      {confirming?.kind === "pass" && (
+        <ConfirmDialog
+          tone="warning"
+          eyebrow="RESET · STATIC PASS"
+          icon={ICON_PATHS.id}
+          title="Reset this student's static pass?"
+          message={
+            <>
+              Every saved, printed or shared copy of <strong>{rosterName(confirming.row)}</strong>&rsquo;s static pass
+              stops working, at every event. They get a new one on their attendance page. Their live QR and this
+              event&rsquo;s record aren&rsquo;t affected.
+            </>
+          }
+          confirmLabel="Reset pass"
+          onCancel={() => setConfirming(null)}
+          onConfirm={() => {
+            setConfirming(null);
+            resetPass(confirming.row);
+          }}
+        >
+          <PersonChip
+            first={confirming.row.first_name}
+            last={confirming.row.last_name}
+            detail={[confirming.row.student_id, confirming.row.course, confirming.row.year_level].filter(Boolean).join(" · ") || "—"}
+            mark={{ icon: "id", color: "bg-orange" }}
           />
         </ConfirmDialog>
       )}
