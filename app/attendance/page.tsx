@@ -11,6 +11,7 @@ import { createClient } from "@/lib/supabase/server";
 import LocalTime from "./LocalTime";
 import HistoryList from "./HistoryList";
 import { SplitBar } from "./motion";
+import StaticPass from "./StaticPass";
 import StudentToken from "./StudentToken";
 import {
   BLUEPRINT_GRID,
@@ -159,6 +160,7 @@ export default async function AttendancePage() {
 
                 <div className="px-5 pt-7 pb-5">
                   <StudentToken name={profile.name} studentId={studentNumber} />
+                  <StaticPass studentId={studentNumber} />
                 </div>
               </Frame>
 

@@ -42,6 +42,7 @@ export async function updateEventAttendance(_prev: ActionResult, formData: FormD
             // The form converts these to ISO strings in the browser's time zone.
             check_in_opens_at: text(formData, "checkInOpensAt") || null,
             check_in_closes_at: text(formData, "checkInClosesAt") || null,
+            accepts_static_pass: formData.get("acceptsStaticPass") === "on",
         })
         .eq("event_id", eventIdFrom(formData));
     if (error) return failed(error, { "23514": "Check-in must close after it opens." });
@@ -112,6 +113,16 @@ export async function setAttendance(_prev: ActionResult, formData: FormData): Pr
     if (error) return failed(error);
 
     refresh();
+    return { success: true };
+}
+
+/** Voids a student's static pass, e.g. after it was shared; they get a new one on their attendance page. */
+export async function resetStaticPass(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+    const supabase = await requireAdmin();
+
+    const { error } = await supabase.rpc("reset_static_pass", { p_user_id: text(formData, "userId") });
+    if (error) return failed(error);
+
     return { success: true };
 }
 

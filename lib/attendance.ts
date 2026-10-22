@@ -3,7 +3,8 @@
 // supabase/migrations/20261014164346_attendance_scanning.sql.
 
 export type AttendanceStatus = "present" | "rejected";
-export type AttendanceMethod = "scan" | "manual";
+/** scan: rotating QR · static: static pass · manual: by student ID, or by an admin. */
+export type AttendanceMethod = "scan" | "static" | "manual";
 
 export type AttendanceEvent = {
   event_id: number;
@@ -13,10 +14,12 @@ export type AttendanceEvent = {
   takes_attendance: boolean;
   check_in_opens_at: string | null;
   check_in_closes_at: string | null;
+  /** Whether scanners accept static passes as well as rotating codes. */
+  accepts_static_pass: boolean;
 };
 
 export const ATTENDANCE_EVENT_COLUMNS =
-  "event_id, event_name, event_start, event_end, takes_attendance, check_in_opens_at, check_in_closes_at";
+  "event_id, event_name, event_start, event_end, takes_attendance, check_in_opens_at, check_in_closes_at, accepts_static_pass";
 
 export type ScannedStudent = {
   user_id: string;
@@ -28,6 +31,8 @@ export type ScannedStudent = {
   year_level: string | null;
   status: AttendanceStatus | null;
   recorded_at: string | null;
+  /** How a check-in would be saved; set for scanned codes (scan or static), not ID lookups. */
+  method?: AttendanceMethod;
 };
 
 export type AttendanceReportRow = {

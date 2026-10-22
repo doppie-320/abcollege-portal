@@ -59,11 +59,17 @@ export function CheckInBadge({ state }: { state: CheckInState }) {
   return <Pill tone={CHECK_IN_TONES[state]} live={state === "open"} />;
 }
 
+const METHODS: Record<AttendanceMethod, { icon: IconName; label: string }> = {
+  scan: { icon: "qr", label: "QR scan" },
+  static: { icon: "id", label: "Static pass" },
+  manual: { icon: "pen", label: "Manual" },
+};
+
 export function MethodTag({ method }: { method: AttendanceMethod }) {
   return (
     <span className="mono inline-flex items-center gap-1 rounded bg-vellum-2 px-1.5 py-px text-[10px] text-ink-soft">
-      <Icon name={method === "scan" ? "qr" : "pen"} size={10} />
-      {method === "scan" ? "QR scan" : "Manual"}
+      <Icon name={METHODS[method].icon} size={10} />
+      {METHODS[method].label}
     </span>
   );
 }

@@ -185,7 +185,10 @@ export default function LoginForm({ initialNotice, noAccountEmail }: LoginFormPr
         <StatusNotice notice={notice} onDismiss={() => setNoticeHidden(true)} />
       )}
 
-      <form onSubmit={handleSubmit} noValidate>
+      {/* handleSubmit runs the action once the page is interactive. `action` covers a tap
+          before then (slow phones in dev): the browser POSTs to the server action instead of
+          falling back to a GET that puts the email and password in the URL. */}
+      <form action={formAction} onSubmit={handleSubmit} noValidate>
         <div className="field">
           <label htmlFor="email">Email Address</label>
           <input

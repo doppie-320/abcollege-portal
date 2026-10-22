@@ -13,7 +13,13 @@ function toLocalInput(iso: string | null): string {
   return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
 }
 
-export type AttendanceSettings = Pick<AttendanceEvent, "takes_attendance" | "check_in_opens_at" | "check_in_closes_at">;
+export type AttendanceSettings = Pick<
+  AttendanceEvent,
+  "takes_attendance" | "check_in_opens_at" | "check_in_closes_at" | "accepts_static_pass"
+>;
+
+const SWITCH =
+  "relative h-6 w-11 shrink-0 rounded-full bg-rule transition-colors duration-200 peer-checked:bg-orange peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-blue after:absolute after:top-0.5 after:left-0.5 after:size-5 after:rounded-full after:bg-paper after:shadow after:transition-transform after:duration-200 after:content-[''] peer-checked:after:translate-x-5";
 
 /** `onSave` shows the new settings at once (see ActionForm's `optimistic`). */
 export default function EventSettings({
@@ -35,6 +41,7 @@ export default function EventSettings({
           takes_attendance: formData.get("takesAttendance") === "on",
           check_in_opens_at: (formData.get("checkInOpensAt") as string) || null,
           check_in_closes_at: (formData.get("checkInClosesAt") as string) || null,
+          accepts_static_pass: formData.get("acceptsStaticPass") === "on",
         })
       }
       className="flex flex-col gap-4"
@@ -47,10 +54,24 @@ export default function EventSettings({
           <span className="block text-[12px] font-normal text-ink-soft">Lets scanners check students in.</span>
         </span>
         <input type="checkbox" name="takesAttendance" defaultChecked={event.takes_attendance} className="peer sr-only" />
-        <span
-          aria-hidden="true"
-          className="relative h-6 w-11 shrink-0 rounded-full bg-rule transition-colors duration-200 peer-checked:bg-orange peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-blue after:absolute after:top-0.5 after:left-0.5 after:size-5 after:rounded-full after:bg-paper after:shadow after:transition-transform after:duration-200 after:content-[''] peer-checked:after:translate-x-5"
+        <span aria-hidden="true" className={SWITCH} />
+      </label>
+
+      <label className="m-0 flex cursor-pointer items-center justify-between gap-4 rounded-lg border border-rule bg-vellum/40 px-3.5 py-3">
+        <span>
+          <span className="block text-[13.5px] font-semibold text-navy-deep">Accept static passes</span>
+          <span className="block text-[12px] font-normal text-ink-soft">
+            Also takes the printable pass that never changes. Copies keep working, so leave this off when attendance
+            matters.
+          </span>
+        </span>
+        <input
+          type="checkbox"
+          name="acceptsStaticPass"
+          defaultChecked={event.accepts_static_pass}
+          className="peer sr-only"
         />
+        <span aria-hidden="true" className={SWITCH} />
       </label>
 
       <div className="grid grid-cols-1 gap-3" key={hydrated ? "local" : "server"}>

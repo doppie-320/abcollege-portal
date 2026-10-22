@@ -25,6 +25,26 @@ export async function getAttendanceToken(): Promise<AttendanceResult<{ token: st
     return { data: { token: data.token, refreshInMs: Math.max(1000, new Date(data.expires_at).getTime() - Date.now()) } };
 }
 
+/** The student's static pass: a QR that doesn't change, accepted only at events that allow it. */
+export async function getStaticPass(): Promise<AttendanceResult<{ pass: string }>> {
+    const supabase = await requireUser();
+
+    const { data, error } = await supabase.rpc("get_my_static_pass");
+    if (error) return toAttendanceError(error);
+
+    return { data: { pass: data as string } };
+}
+
+/** Voids the student's static pass (every saved or printed copy) and returns the new one. */
+export async function resetMyStaticPass(): Promise<AttendanceResult<{ pass: string }>> {
+    const supabase = await requireUser();
+
+    const { error } = await supabase.rpc("reset_static_pass");
+    if (error) return toAttendanceError(error);
+
+    return getStaticPass();
+}
+
 type StudentRow = Omit<ScannedStudent, "avatarUrl"> & { avatar_path: string | null };
 
 function withAvatarUrl(supabase: Awaited<ReturnType<typeof createClient>>, { avatar_path, ...student }: StudentRow): ScannedStudent {

@@ -593,7 +593,9 @@ export default function SignupForm({courses, yearLevels, googleUser, oauthFailed
             </span>
           </div>
 
-          <form onSubmit={handleSubmit} noValidate>
+          {/* As on the login form: `action` makes a submit before the page is interactive
+              POST to the server action rather than GET with the password in the URL. */}
+          <form action={formAction} onSubmit={handleSubmit} noValidate>
             <div className="fieldRow">
               <div className="field">
                 <label htmlFor="firstName">First Name</label>
