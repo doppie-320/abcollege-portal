@@ -435,9 +435,10 @@ export default function CreatePostModal({
               onClick={togglePreview}
               disabled={!editor}
               aria-pressed={!!previewPost}
+              aria-label={previewPost ? "Keep editing" : "Preview"}
             >
               {previewPost ? <Icon d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /> : <Icon d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12ZM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />}
-              {previewPost ? "Keep editing" : "Preview"}
+              <span className="previewLabel">{previewPost ? "Keep editing" : "Preview"}</span>
             </button>
             <button type="submit" className="btn primary publishBtn" disabled={!canPublish}>
               {isEdit ? "Save changes" : "Publish"}
@@ -988,6 +989,10 @@ export default function CreatePostModal({
           .composeColumn {
             padding: 12px;
           }
+
+          .previewLabel {
+            display: none;
+          }
         }
       `}</style>
     </div>,
@@ -1435,6 +1440,11 @@ function Toolbar({ editor, onUpload }: { editor: Editor; onUpload: (files: File[
           box-shadow: none !important;
         }
 
+        .urlInput:focus {
+          outline: 1px solid #a6c8e8;
+          outline-offset: 1px;
+        }
+
         .urlActions {
           display: flex;
           align-items: center;
@@ -1581,7 +1591,8 @@ type MenuItem = {
 // `inline` lays the items out as one row of icon buttons, e.g. the alignment options.
 type MenuSection = { title?: string; inline?: boolean; items: MenuItem[] };
 
-const MENU_WIDTH = 244;
+const MENU_WIDTH = 224;
+const TOUCH_MENU_WIDTH = 192;
 // Someone who opened a menu is already looking for something, so options explain themselves sooner than buttons.
 const MENU_HOVER_DELAY_MS = 500;
 
@@ -1598,7 +1609,7 @@ function ToolMenu({
   chevron?: boolean;
   sections: MenuSection[];
 }) {
-  const [place, setPlace] = useState<{ left: number; top: number; above: boolean; maxHeight: number } | null>(null);
+  const [place, setPlace] = useState<{ left: number; top: number; above: boolean; maxHeight: number; width: number } | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const focusFirstItem = useRef(false);
@@ -1628,15 +1639,18 @@ function ToolMenu({
     const viewTop = vv?.offsetTop ?? 0;
     const viewBottom = viewTop + (vv?.height ?? window.innerHeight);
     const viewRight = (vv?.offsetLeft ?? 0) + (vv?.width ?? window.innerWidth);
+    const menuWidth = label === "Insert" ? 150 : window.matchMedia("(hover: none)").matches ? TOUCH_MENU_WIDTH : MENU_WIDTH;
+    const width = Math.min(menuWidth, (vv?.width ?? window.innerWidth) - 16);
     const spaceBelow = viewBottom - rect.bottom - 12;
     const spaceAbove = rect.top - viewTop - 12;
     const above = spaceBelow < 200 && spaceAbove > spaceBelow;
     focusFirstItem.current = byKeyboard;
     setPlace({
-      left: Math.max(8, Math.min(rect.left, viewRight - MENU_WIDTH - 8)),
+      left: Math.max(8, Math.min(rect.left, viewRight - width - 8)),
       top: above ? rect.top - 4 : rect.bottom + 4,
       above,
       maxHeight: above ? spaceAbove : spaceBelow,
+      width,
     });
   }
 
@@ -1733,7 +1747,7 @@ function ToolMenu({
         createPortal(
           <div
             className="menuPlace"
-            style={{ left: place.left, top: place.top, width: MENU_WIDTH, transform: place.above ? "translateY(-100%)" : undefined }}
+            style={{ left: place.left, top: place.top, width: place.width, transform: place.above ? "translateY(-100%)" : undefined }}
           >
             <div
               ref={menuRef}
@@ -2194,6 +2208,12 @@ function ToolBtn({
         .toolBtn.active:hover:not(:disabled) {
           background: var(--navy-deep);
           color: var(--white);
+        }
+
+        .toolBtn.active:is([aria-label="Bold"], [aria-label="Italic"], [aria-label="Underline"], [aria-label="Link"]),
+        .toolBtn.active:is([aria-label="Bold"], [aria-label="Italic"], [aria-label="Underline"], [aria-label="Link"]):hover:not(:disabled) {
+          background: #e6f3ff;
+          color: var(--navy);
         }
 
         .toolBtn:disabled {
