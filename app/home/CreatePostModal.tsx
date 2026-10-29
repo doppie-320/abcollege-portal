@@ -100,6 +100,8 @@ export default function CreatePostModal({
   // A restored draft counts as unsaved work, so closing it asks first.
   const [bodyChanged, setBodyChanged] = useState(!!draft);
   const [showDiscard, setShowDiscard] = useState(false);
+  const [closing, setClosing] = useState(false);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const backdrop = useBackdropDismiss(requestClose);
   const [error, setError] = useState(initialError ?? "");
   const [uploading, setUploading] = useState(0);
@@ -194,11 +196,28 @@ export default function CreatePostModal({
   const canPublish =
     title.trim() !== "" && tag !== "" && !(counts?.isEmpty ?? true) && uploading === 0;
 
+  function closeSheet() {
+    if (closing) return;
+    if (typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      onClose();
+      return;
+    }
+    setClosing(true);
+    closeTimer.current = setTimeout(onClose, 250);
+  }
+
   // Asks via the discard panel first when there's something to lose.
   function requestClose() {
+    if (closing) return;
     if (isDirty) setShowDiscard(true);
-    else onClose();
+    else closeSheet();
   }
+
+  useEffect(() => {
+    return () => {
+      if (closeTimer.current) clearTimeout(closeTimer.current);
+    };
+  }, []);
 
   useEffect(() => {
     titleRef.current?.focus();
@@ -255,19 +274,19 @@ export default function CreatePostModal({
     event.preventDefault();
     if (!editor || !canPublish) return;
     onSubmit({ title: title.trim(), tag, content: editor.getHTML() });
-    onClose();
+    closeSheet();
   }
 
   if (typeof document === "undefined") return null;
 
   return createPortal(
     <div
-      className="modalBackdrop"
+      className={`modalBackdrop${closing ? " closing" : ""}`}
       {...backdrop}
       style={keyboardView ? { top: keyboardView.top, bottom: "auto", height: keyboardView.height } : undefined}
     >
       <form
-        className={`modalPanel${keyboardView ? " keyboardUp" : ""}`}
+        className={`modalPanel${keyboardView ? " keyboardUp" : ""}${closing ? " closing" : ""}`}
         onClick={(e) => e.stopPropagation()}
         onSubmit={publish}
         role="dialog"
@@ -448,7 +467,10 @@ export default function CreatePostModal({
             setShowDiscard(false);
             editor?.commands.focus();
           }}
-          onConfirm={onClose}
+          onConfirm={() => {
+            setShowDiscard(false);
+            closeSheet();
+          }}
         />
       )}
 
@@ -479,12 +501,49 @@ export default function CreatePostModal({
           animation: popIn 0.2s ease backwards;
         }
 
+        .modalBackdrop.closing {
+          animation: fadeOut 0.25s ease forwards;
+        }
+
+        .modalPanel.closing {
+          animation: popOut 0.2s ease forwards;
+        }
+
+        @keyframes fadeOut {
+          from {
+            opacity: 1;
+          }
+          to {
+            opacity: 0;
+          }
+        }
+
+        @keyframes popOut {
+          from {
+            opacity: 1;
+            transform: scale(1);
+          }
+          to {
+            opacity: 0;
+            transform: scale(0.96) translateY(8px);
+          }
+        }
+
         @keyframes sheetUp {
           from {
             transform: translateY(100%);
           }
           to {
             transform: translateY(0);
+          }
+        }
+
+        @keyframes sheetDown {
+          from {
+            transform: translateY(0);
+          }
+          to {
+            transform: translateY(100%);
           }
         }
 
@@ -861,6 +920,10 @@ export default function CreatePostModal({
             border-bottom: none;
             box-shadow: 0 -12px 48px rgba(13, 30, 56, 0.35);
             animation: sheetUp 0.28s cubic-bezier(0.32, 0.9, 0.35, 1) backwards;
+          }
+
+          .modalPanel.closing {
+            animation: sheetDown 0.25s cubic-bezier(0.4, 0, 0.4, 1) forwards;
           }
 
           .modalTopBar {
