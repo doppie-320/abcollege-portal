@@ -258,7 +258,9 @@ export default function CreatePostModal({
     onClose();
   }
 
-  return (
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
     <div
       className="modalBackdrop"
       {...backdrop}
@@ -273,6 +275,7 @@ export default function CreatePostModal({
         aria-labelledby="createPostHeading"
       >
         <div className="modalTopBar">
+          <span className="sheetHandle" aria-hidden="true"></span>
           <span className="modalTopBarTitle mono" id="createPostHeading">
             {isEdit ? "EDIT ANNOUNCEMENT" : "NEW ANNOUNCEMENT"}
             {tag ? ` / ${tag.toUpperCase()}` : ""}
@@ -476,6 +479,15 @@ export default function CreatePostModal({
           animation: popIn 0.2s ease backwards;
         }
 
+        @keyframes sheetUp {
+          from {
+            transform: translateY(100%);
+          }
+          to {
+            transform: translateY(0);
+          }
+        }
+
         .modalTopBar {
           display: flex;
           align-items: center;
@@ -497,6 +509,10 @@ export default function CreatePostModal({
           font-size: 11.5px;
           color: #c6d3e5;
           letter-spacing: 0.08em;
+        }
+
+        .sheetHandle {
+          display: none;
         }
 
         .modalClose {
@@ -829,14 +845,39 @@ export default function CreatePostModal({
 
         @media (max-width: 820px) {
           .modalBackdrop {
+            align-items: flex-end;
             padding: 0;
+            background: rgba(13, 30, 56, 0.15);
+            -webkit-backdrop-filter: blur(8px);
+            backdrop-filter: blur(8px);
           }
 
           .modalPanel {
-            height: 100%;
-            max-height: none;
-            border-radius: 0;
-            border: none;
+            height: 92vh;
+            height: 92dvh;
+            max-height: 92dvh;
+            border-radius: 16px 16px 0 0;
+            border: 1px solid #c9bfa0;
+            border-bottom: none;
+            box-shadow: 0 -12px 48px rgba(13, 30, 56, 0.35);
+            animation: sheetUp 0.28s cubic-bezier(0.32, 0.9, 0.35, 1) backwards;
+          }
+
+          .modalTopBar {
+            position: relative;
+            padding-top: 18px;
+          }
+
+          .sheetHandle {
+            display: block;
+            position: absolute;
+            top: 7px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 40px;
+            height: 4px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.5);
           }
 
           .modalBody {
@@ -886,7 +927,8 @@ export default function CreatePostModal({
           }
         }
       `}</style>
-    </div>
+    </div>,
+    document.body
   );
 }
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { createPortal } from "react-dom";
 import { useBackdropDismiss } from "@/lib/useBackdropDismiss";
 import Image from "next/image";
 import PostContent from "./PostContent";
@@ -90,11 +91,8 @@ export default function PostModal({
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    // Lets the nav hide itself while the sheet covers the screen on phones.
-    document.body.classList.add("post-modal-open");
     return () => {
       document.body.style.overflow = previousOverflow;
-      document.body.classList.remove("post-modal-open");
     };
   }, []);
 
@@ -156,7 +154,9 @@ export default function PostModal({
     }
   }
 
-  return (
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
     <div className={`modalBackdrop ${closing ? "closing" : ""}`} {...backdrop}>
       <div className={`modalPanel ${closing ? "closing" : ""}`} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
         <div className="modalTopBar">
@@ -355,6 +355,14 @@ export default function PostModal({
 
         .modalBackdrop.closing {
           animation: fadeOut 0.25s ease forwards;
+        }
+
+        @media (max-width: 819px) {
+          .modalBackdrop {
+            background: rgba(13, 30, 56, 0.15);
+            -webkit-backdrop-filter: blur(8px);
+            backdrop-filter: blur(8px);
+          }
         }
 
         @keyframes fadeOut {
@@ -982,7 +990,8 @@ export default function PostModal({
           }
         }
       `}</style>
-    </div>
+    </div>,
+    document.body
   );
 }
 
