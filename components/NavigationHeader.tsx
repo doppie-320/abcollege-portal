@@ -258,6 +258,19 @@ export default function SiteNav({
         display: none;
       }
 
+      /* The post/comment sheet covers the screen below desktop; the nav
+         would otherwise paint over it (the sheet sits inside a card's
+         stacking context, below the fixed nav). */
+      @media (max-width: 819px) {
+        body.post-modal-open .site-nav-bar {
+          visibility: hidden;
+        }
+
+        body.post-modal-open .mobile-tabbar.tick-frame {
+          display: none;
+        }
+      }
+
       @media (max-width: 900px) {
         /* Desktop text tabs hide below desktop widths. */
         .site-header .main-nav {

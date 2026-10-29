@@ -90,8 +90,11 @@ export default function PostModal({
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+    // Lets the nav hide itself while the sheet covers the screen on phones.
+    document.body.classList.add("post-modal-open");
     return () => {
       document.body.style.overflow = previousOverflow;
+      document.body.classList.remove("post-modal-open");
     };
   }, []);
 

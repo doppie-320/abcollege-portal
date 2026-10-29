@@ -627,9 +627,6 @@ export default function HomeContent({ current_user, is_admin, today, birthdays, 
 
             {/* Each post is its own segment; only the outer corners of the stack are rounded. */}
             <div className="feed tick-frame">
-              <span className="tick-bl"></span>
-              <span className="tick-br"></span>
-
               <header className="feedHead">
                 <span className="feedHeadIcon">
                   <MegaphoneIcon />
@@ -940,11 +937,9 @@ export default function HomeContent({ current_user, is_admin, today, birthdays, 
           background: none;
         }
 
-        /* Corner ticks frame the whole stack rather than each segment. */
+        /* Top corner ticks frame the head of the stack; no ticks at the bottom. */
         .feed.tick-frame::before,
-        .feed.tick-frame::after,
-        .feed.tick-frame .tick-bl,
-        .feed.tick-frame .tick-br {
+        .feed.tick-frame::after {
           z-index: 2;
         }
 
@@ -958,18 +953,6 @@ export default function HomeContent({ current_user, is_admin, today, birthdays, 
           top: 0;
           right: 0;
           border-radius: 0 8px 0 0;
-        }
-
-        .feed.tick-frame .tick-bl {
-          bottom: 0;
-          left: 0;
-          border-radius: 0 0 0 8px;
-        }
-
-        .feed.tick-frame .tick-br {
-          bottom: 0;
-          right: 0;
-          border-radius: 0 0 8px 0;
         }
 
         /* :where keeps this at one class of specificity so segment-specific rules win. */
