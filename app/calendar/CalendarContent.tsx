@@ -361,9 +361,9 @@ export default function CalendarContent({
 
                 <div className="calToolbarActions">
                   {isAdmin && (
-                    <button type="button" className="btn calAddBtn" onClick={() => setEditing({})}>
+                    <button type="button" className="btn calAddBtn" onClick={() => setEditing({})} aria-label="Add event">
                       <PlusIcon />
-                      Add event
+                      <span className="calAddLabel">Add event</span>
                     </button>
                   )}
                   <div className="calSegment" role="group" aria-label="Change month">
@@ -916,12 +916,12 @@ export default function CalendarContent({
         }
 
         .calAddBtn:not(:disabled):hover {
-          transform: translate(-2px, -2px);
-          box-shadow: 3px 3px 0 var(--orange), 6px 6px 0 var(--yellow);
+          background: var(--navy-deep);
+          box-shadow: 0 2px 6px rgba(19, 42, 77, 0.18);
         }
 
         .calAddBtn:not(:disabled):active {
-          transform: none;
+          transform: scale(0.98);
           box-shadow: none;
         }
 
@@ -1548,6 +1548,14 @@ export default function CalendarContent({
         }
 
         @media (max-width: 640px) {
+          .calAddBtn {
+            padding: 7px 8px;
+          }
+
+          .calAddLabel {
+            display: none;
+          }
+
           .calToolbar {
             padding: 14px 14px 8px;
           }
