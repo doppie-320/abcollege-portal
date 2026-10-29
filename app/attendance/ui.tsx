@@ -136,7 +136,7 @@ export function PageHeader({
           </Link>
         )}
         <span className="eyebrow">{eyebrow}</span>
-        <h1 className="mb-1 text-[30px] leading-none [overflow-wrap:anywhere]">{title}</h1>
+        <h1 className="mb-1 text-[length:var(--fs-section)] leading-none [overflow-wrap:anywhere]">{title}</h1>
         {description && <p className="mb-0 text-xs text-ink-soft">{description}</p>}
       </div>
       {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
@@ -156,7 +156,7 @@ export function StatStrip({ stats, columns = "grid-cols-3" }: { stats: Stat[]; c
             {stat.dot && <span className={`size-1.5 shrink-0 rounded-full ${stat.dot}`} />}
             <span className="truncate">{stat.label}</span>
           </dt>
-          <dd className="font-display truncate text-[26px] leading-none font-semibold text-navy-deep tabular-nums">
+          <dd className="font-display truncate text-[length:var(--fs-stat-sm)] leading-none font-semibold text-navy-deep tabular-nums">
             {typeof stat.value === "number" ? <CountUp value={stat.value} /> : stat.value}
           </dd>
         </div>
@@ -207,7 +207,7 @@ export function IdleNotice({
       </div>
 
       <div className="animate-fade-in-up relative z-10 w-full max-w-md text-center">
-        <h1 className="font-display mb-3 text-5xl font-medium tracking-tight text-ink">{title}</h1>
+        <h1 className="font-display mb-3 text-[length:var(--fs-error)] leading-none font-medium tracking-tight text-ink">{title}</h1>
         <p className="mx-auto mb-8 max-w-sm text-sm text-ink-soft">{children}</p>
         <div className="flex items-center justify-center gap-3 max-sm:flex-col">{actions}</div>
       </div>

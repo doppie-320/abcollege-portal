@@ -23,7 +23,7 @@ export default function GlobalNotFound() {
 
           {/* Foreground content */}
           <div className="relative z-10 w-full max-w-md animate-fade-in-up text-center">
-            <h1 className="font-display mb-3 text-5xl font-medium tracking-tight text-ink">
+            <h1 className="font-display mb-3 text-[length:var(--fs-error)] leading-none font-medium tracking-tight text-ink">
               Page Not Found
             </h1>
             <p className="mx-auto mb-8 max-w-sm text-sm text-ink-soft">

@@ -704,7 +704,7 @@ export default function HomeContent({ current_user, is_admin, today, birthdays, 
         }
 
         .hero h1 {
-          font-size: 44px;
+          font-size: var(--fs-display);
           margin-bottom: 0;
           line-height: 1;
         }

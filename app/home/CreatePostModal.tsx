@@ -545,7 +545,7 @@ export default function CreatePostModal({
           background: transparent !important;
           padding: 4px 0 10px !important;
           font-family: "Space Grotesk", sans-serif !important;
-          font-size: 24px !important;
+          font-size: var(--fs-card) !important;
           font-weight: 600;
           color: var(--navy-deep) !important;
         }

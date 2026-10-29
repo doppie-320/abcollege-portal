@@ -573,11 +573,19 @@ export default function LoginForm({ initialNotice, noAccountEmail }: LoginFormPr
           .formside {
             padding: 32px 24px 40px;
           }
+
+          .formside h2 {
+            font-size: 24px;
+          }
         }
 
         @media (max-width: 480px) {
           .formside {
             padding: 20px 16px;
+          }
+
+          .formside h2 {
+            font-size: 22px;
           }
         }
       `}</style>

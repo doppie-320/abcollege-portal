@@ -75,7 +75,7 @@ export default function ProfileContent({ profile }: ProfileContentProps) {
                   eyebrow={null}
                 >
                   <div className="min-w-0 pt-[72px]">
-                    <h2 className="mb-2 text-2xl leading-tight [overflow-wrap:anywhere]">{profile.name}</h2>
+                    <h2 className="mb-2 text-[length:var(--fs-card)] leading-tight [overflow-wrap:anywhere]">{profile.name}</h2>
                     <div className="flex flex-wrap gap-1.5">
                       {profile.program !== UNKNOWN && <span className="tag orange">{profile.program}</span>}
                       {profile.yearLevel !== UNKNOWN && <span className="tag">{profile.yearLevel}</span>}

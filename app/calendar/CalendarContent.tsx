@@ -752,7 +752,7 @@ export default function CalendarContent({
 
         .calStatValue {
           font-family: "Space Grotesk", sans-serif;
-          font-size: 30px;
+          font-size: var(--fs-stat);
           font-weight: 700;
           line-height: 1;
           color: var(--navy-deep);
@@ -789,7 +789,7 @@ export default function CalendarContent({
         }
 
         .calHero h1 {
-          font-size: 44px;
+          font-size: var(--fs-display);
           margin-bottom: 0;
           line-height: 1;
         }
@@ -865,7 +865,7 @@ export default function CalendarContent({
 
         .calTitle {
           margin: 0;
-          font-size: 30px;
+          font-size: var(--fs-section);
           line-height: 1.1;
           font-weight: 400;
           color: var(--ink-soft);
@@ -1548,10 +1548,6 @@ export default function CalendarContent({
         }
 
         @media (max-width: 640px) {
-          .calHero h1 {
-            font-size: 36px;
-          }
-
           .calToolbar {
             padding: 14px 14px 8px;
           }
@@ -1563,14 +1559,6 @@ export default function CalendarContent({
 
           .calStats {
             gap: 8px;
-          }
-
-          .calStatValue {
-            font-size: 24px;
-          }
-
-          .calTitle {
-            font-size: 24px;
           }
 
           .calLegend {

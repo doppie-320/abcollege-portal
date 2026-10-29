@@ -17,6 +17,40 @@
   --rule: #c9bfa0;
   --rule-soft: #e4dcc9;
   --control-h: 40px;
+
+  /* Responsive type scale. Display text shrinks on tablets and phones so the
+     desktop hierarchy still reads comfortably on narrower screens. */
+  --fs-display: 44px;
+  --fs-error: 48px;
+  --fs-section: 30px;
+  --fs-card: 24px;
+  --fs-stat: 30px;
+  --fs-stat-sm: 26px;
+  --fs-body: 15px;
+}
+
+@media (max-width: 1024px) {
+  :root {
+    --fs-display: 36px;
+    --fs-error: 38px;
+    --fs-section: 26px;
+    --fs-card: 21px;
+    --fs-stat: 26px;
+    --fs-stat-sm: 23px;
+    --fs-body: 14.5px;
+  }
+}
+
+@media (max-width: 640px) {
+  :root {
+    --fs-display: 30px;
+    --fs-error: 32px;
+    --fs-section: 23px;
+    --fs-card: 19px;
+    --fs-stat: 22px;
+    --fs-stat-sm: 20px;
+    --fs-body: 14px;
+  }
 }
 
 @theme inline {
@@ -56,6 +90,9 @@
 
   html {
     height: 100%;
+    /* Stop mobile browsers from inflating text on their own. */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
   }
 
   /* min-height, not height: a fixed-height body would cut sticky children (the nav bar) loose after one screen. */
@@ -67,7 +104,7 @@
     background: var(--vellum);
     color: var(--ink);
     font-family: 'Inter', sans-serif;
-    font-size: 15px;
+    font-size: var(--fs-body);
     line-height: 1.55;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -292,16 +329,10 @@
   }
 
   .page-title {
-    font-size: 44px;
+    font-size: var(--fs-display);
     line-height: 1;
     margin-bottom: 0;
     text-transform: uppercase;
-  }
-
-  @media (max-width: 640px) {
-    .page-title {
-      font-size: 36px;
-    }
   }
 
   /* ---------- Layout shells ---------- */
@@ -604,7 +635,7 @@
 
   /* ---------- Rich text (announcement bodies + Create post editor) ---------- */
   .richText {
-    font-size: 15px;
+    font-size: var(--fs-body);
     line-height: 1.65;
     color: var(--ink);
     overflow-wrap: anywhere;
@@ -629,16 +660,17 @@
     margin-top: 0;
   }
 
+  /* Relative to the body token, so post headings shrink with it. */
   .richText h1 {
-    font-size: 22px;
+    font-size: 1.45em;
   }
 
   .richText h2 {
-    font-size: 19px;
+    font-size: 1.25em;
   }
 
   .richText h3 {
-    font-size: 16.5px;
+    font-size: 1.1em;
   }
 
   .richText ul,

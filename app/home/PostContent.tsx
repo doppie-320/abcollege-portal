@@ -265,7 +265,7 @@ export default function PostContent({
 
       <style jsx>{`
         .postTitle {
-          font-size: 24px;
+          font-size: var(--fs-card);
           line-height: 1.25;
           margin-bottom: 12px;
           padding-bottom: 10px;

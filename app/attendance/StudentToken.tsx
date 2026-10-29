@@ -160,7 +160,7 @@ export default function StudentToken({ name, studentId }: { name: string; studen
         >
           <div className="animate-fade-in-up">
             <span className="mono text-[10px] tracking-[0.14em] text-navy-tint">ATTENDANCE PASS</span>
-            <h2 className="mt-1 mb-0.5 text-[22px] text-paper">{name}</h2>
+            <h2 className="mt-1 mb-0.5 text-[20px] text-paper sm:text-[22px]">{name}</h2>
             <p className="mono mb-0 text-[11px] text-navy-tint">{studentId}</p>
           </div>
 

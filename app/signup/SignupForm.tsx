@@ -1488,6 +1488,14 @@ export default function SignupForm({courses, yearLevels, googleUser, oauthFailed
           .formside {
             padding: 32px 24px 40px;
           }
+
+          .formside h2 {
+            font-size: 24px;
+          }
+
+          .successTitle {
+            font-size: 25px;
+          }
         }
 
         @media (max-width: 480px) {
@@ -1498,6 +1506,14 @@ export default function SignupForm({courses, yearLevels, googleUser, oauthFailed
 
           .formside {
             padding: 20px 16px;
+          }
+
+          .formside h2 {
+            font-size: 22px;
+          }
+
+          .successTitle {
+            font-size: 23px;
           }
         }
       `}</style>

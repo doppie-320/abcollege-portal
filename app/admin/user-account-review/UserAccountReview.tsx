@@ -264,7 +264,7 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
                     <span className={`size-1.5 rounded-full ${STATUS_STYLES[status].dot}`} />
                     {STATUS_LABELS[status]}
                   </dt>
-                  <dd className="font-display text-[26px] leading-none font-semibold text-navy-deep tabular-nums">
+                  <dd className="font-display text-[length:var(--fs-stat-sm)] leading-none font-semibold text-navy-deep tabular-nums">
                     {counts[status]}
                   </dd>
                 </div>

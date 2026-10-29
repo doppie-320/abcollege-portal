@@ -33,7 +33,7 @@ export default function AdminProfileContent({ profile }: AdminProfileContentProp
 
       <div className="page-wrap">
         <div className="mb-6">
-          <h1 className="mb-1 text-[30px] leading-none">My Profile</h1>
+          <h1 className="mb-1 text-[length:var(--fs-section)] leading-none">My Profile</h1>
           <p className="mb-0 text-xs text-ink-soft">
             The council account you review student registrations with.
           </p>
@@ -51,7 +51,7 @@ export default function AdminProfileContent({ profile }: AdminProfileContentProp
             eyebrow="COUNCIL CARD"
           >
             <div className="min-w-0">
-              <h2 className="mb-2 text-2xl [overflow-wrap:anywhere]">{profile.name}</h2>
+              <h2 className="mb-2 text-[length:var(--fs-card)] [overflow-wrap:anywhere]">{profile.name}</h2>
               <div className="mb-4 flex flex-wrap gap-1.5">
                 <span className="tag orange">{roleBadge}</span>
               </div>
