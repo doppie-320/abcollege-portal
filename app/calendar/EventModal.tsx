@@ -465,6 +465,16 @@ export default function EventModal({
           min-height: 80px;
         }
 
+        .evField :global(input[type="text"]:focus),
+        .evField textarea:focus,
+        .evField :global(.selectTrigger:focus-visible),
+        .evField :global(.dateTrigger:focus-visible),
+        .evField :global(.dateHeaderSelects select:focus) {
+          outline: none;
+          border-color: #b9ae92;
+          box-shadow: 0 0 0 3px rgba(19, 42, 77, 0.08);
+        }
+
         .evLabel {
           display: block;
           font-size: 13px;

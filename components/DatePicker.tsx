@@ -396,8 +396,8 @@ export default function DatePicker({
 
         .dateCellSelected,
         .dateCellSelected:hover {
-          background: var(--navy);
-          color: var(--white);
+          background: #e6f3ff;
+          color: var(--navy);
           font-weight: 600;
         }
 
