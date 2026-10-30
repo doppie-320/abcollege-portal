@@ -264,7 +264,7 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
                     <span className={`size-1.5 rounded-full ${STATUS_STYLES[status].dot}`} />
                     {STATUS_LABELS[status]}
                   </dt>
-                  <dd className="font-display text-[26px] leading-none font-semibold text-navy-deep tabular-nums">
+                  <dd className="font-display text-[length:var(--fs-stat-sm)] leading-none font-semibold text-navy-deep tabular-nums">
                     {counts[status]}
                   </dd>
                 </div>
@@ -486,14 +486,14 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
               <>
                 {/* Identity banner */}
                 <div
-                  className={`shrink-0 rounded-t-[5px] border-b-[3px] border-orange bg-navy px-6 py-5 ${BLUEPRINT_GRID}`}
+                  className={`shrink-0 rounded-t-[5px] border-b-[3px] border-orange bg-navy px-6 py-5 max-[480px]:px-4 max-[480px]:py-4 ${BLUEPRINT_GRID}`}
                 >
                   <div
                     key={selected.id}
-                    className="animate-fade-in flex items-center justify-between gap-4"
+                    className="animate-fade-in flex items-center justify-between gap-4 max-[480px]:flex-wrap max-[480px]:gap-3"
                   >
-                    <div className="flex min-w-0 items-center gap-4">
-                      <span className="mono flex size-14 shrink-0 items-center justify-center rounded-full border-2 border-paper bg-vellum text-[17px] font-semibold text-navy-deep shadow-[0_0_0_4px_rgba(217,83,30,0.35)]">
+                    <div className="flex min-w-0 items-center gap-4 max-[480px]:w-full max-[480px]:gap-3">
+                      <span className="mono flex size-14 shrink-0 items-center justify-center rounded-full border-2 border-paper bg-vellum text-[17px] font-semibold text-navy-deep shadow-[0_0_0_4px_rgba(217,83,30,0.35)] max-[480px]:size-11 max-[480px]:text-sm">
                         {applicantInitials(selected)}
                       </span>
                       <div className="min-w-0">
@@ -506,12 +506,16 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
                         </p>
                       </div>
                     </div>
-                    {selectedStatus && <StatusBadge status={selectedStatus} live />}
+                    {selectedStatus && (
+                      <div className="max-[480px]:ml-14">
+                        <StatusBadge status={selectedStatus} live />
+                      </div>
+                    )}
                   </div>
                 </div>
 
                 {/* Scrollable body */}
-                <div key={selected.id} className="animate-fade-in min-h-0 flex-1 overflow-y-auto p-6">
+                <div key={selected.id} className="animate-fade-in min-h-0 flex-1 overflow-y-auto p-6 max-[480px]:p-4">
                   <span className="eyebrow">SUBMITTED DETAILS</span>
 
                   <ul className="mb-3 list-none divide-y divide-rule-soft overflow-hidden rounded-lg border border-rule bg-paper">
@@ -535,20 +539,20 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
                 </div>
 
                 {/* Footer */}
-                <div className={`${FOOTER_BAR} px-6`}>
+                <div className={`${FOOTER_BAR} px-6 max-[480px]:h-auto max-[480px]:gap-2 max-[480px]:px-4 max-[480px]:py-3`}>
                   <button
                     type="button"
-                    className="ml-auto btn rounded-lg primary px-2.5 py-1 text-sm font-normal"
+                    className="ml-auto btn rounded-lg primary px-2.5 py-1 text-sm font-normal max-[480px]:min-h-11 max-[480px]:min-w-0 max-[480px]:flex-1 max-[480px]:px-2 max-[480px]:text-xs"
                     onClick={() => void decide("accept")}
                   >
                     <Icon name="check" />
                     Accept application
                   </button>
 
-                  <div className="relative shrink-0" ref={rejectRef}>
+                  <div className="relative shrink-0 max-[480px]:min-w-0 max-[480px]:flex-1" ref={rejectRef}>
                     <button
                       type="button"
-                      className="btn font-normal rounded-lg ghost border-[#b3261e] px-2 py-1 text-sm text-[#b3261e] hover:bg-[rgba(205,79,60,0.08)]"
+                      className="btn font-normal rounded-lg ghost border-[#b3261e] px-2 py-1 text-sm text-[#b3261e] hover:bg-[rgba(205,79,60,0.08)] max-[480px]:min-h-11 max-[480px]:w-full max-[480px]:text-xs"
                       onClick={() => setRejectOpen((v) => !v)}
                       aria-haspopup="menu"
                       aria-expanded={rejectOpen}
@@ -679,7 +683,7 @@ type DetailRowProps = {
 
 function DetailRow({ icon, label, value, mono = false, href }: DetailRowProps) {
   return (
-    <li className="flex items-center justify-between gap-3 px-3.5 py-2.5 text-[13px] transition-colors duration-150 hover:bg-vellum/40">
+    <li className={`flex items-center justify-between gap-3 px-3.5 py-2.5 text-[13px] transition-colors duration-150 hover:bg-vellum/40 ${href ? "max-[480px]:flex-wrap max-[480px]:gap-y-1" : ""}`}>
       <span className="flex shrink-0 items-center gap-2.5 text-ink-soft">
         <span className="flex size-6 items-center justify-center rounded-md bg-vellum text-navy">
           <Icon name={icon} size={13} />
@@ -689,13 +693,13 @@ function DetailRow({ icon, label, value, mono = false, href }: DetailRowProps) {
       {href ? (
         <a
           href={href}
-          className="text-right font-semibold text-blue [overflow-wrap:anywhere] hover:text-navy hover:underline"
+          className="min-w-0 text-right font-semibold text-blue [overflow-wrap:anywhere] hover:text-navy hover:underline max-[480px]:ml-[34px] max-[480px]:w-[calc(100%-34px)] max-[480px]:text-left"
         >
           {value}
         </a>
       ) : (
         <strong
-          className={`text-right font-semibold [overflow-wrap:anywhere] ${mono ? "font-mono" : ""}`}
+          className={`min-w-0 text-right font-semibold [overflow-wrap:anywhere] ${mono ? "font-mono" : ""}`}
         >
           {value}
         </strong>

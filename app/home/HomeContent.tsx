@@ -588,6 +588,11 @@ export default function HomeContent({ current_user, is_admin, today, birthdays, 
                   <span className="searchIcon">
                     <SearchIcon />
                   </span>
+                  {!searchQuery && (
+                    <span className="searchShortPlaceholder" aria-hidden="true">
+                      Search...
+                    </span>
+                  )}
                   <input
                     type="text"
                     className="searchInput"
@@ -627,9 +632,6 @@ export default function HomeContent({ current_user, is_admin, today, birthdays, 
 
             {/* Each post is its own segment; only the outer corners of the stack are rounded. */}
             <div className="feed tick-frame">
-              <span className="tick-bl"></span>
-              <span className="tick-br"></span>
-
               <header className="feedHead">
                 <span className="feedHeadIcon">
                   <MegaphoneIcon />
@@ -707,7 +709,7 @@ export default function HomeContent({ current_user, is_admin, today, birthdays, 
         }
 
         .hero h1 {
-          font-size: 44px;
+          font-size: var(--fs-display);
           margin-bottom: 0;
           line-height: 1;
         }
@@ -806,10 +808,27 @@ export default function HomeContent({ current_user, is_admin, today, birthdays, 
 
         .searchInput {
           width: 100%;
+          height: 36px;
           margin-bottom: 0 !important;
-          padding: 8px 12px 8px 32px !important;
+          padding: 0 12px 0 32px !important;
           font-size: 13px !important;
           box-shadow: none !important;
+        }
+
+        .searchShortPlaceholder {
+          display: none;
+        }
+
+        .tagFilterWrap :global(.selectTrigger) {
+          height: 36px;
+          padding-top: 0;
+          padding-bottom: 0;
+        }
+
+        .searchInput:focus {
+          outline: none;
+          border-color: #b9ae92;
+          box-shadow: 0 0 0 3px rgba(19, 42, 77, 0.08) !important;
         }
 
         .toolbarActions {
@@ -827,7 +846,8 @@ export default function HomeContent({ current_user, is_admin, today, birthdays, 
         }
 
         .createPostBtn {
-          padding: 7px 14px;
+          height: 36px;
+          padding: 0 14px;
           font-size: 13px;
           gap: 6px;
           white-space: nowrap;
@@ -836,18 +856,35 @@ export default function HomeContent({ current_user, is_admin, today, birthdays, 
 
         .createPostBtn:not(:disabled):hover {
           background: var(--navy-deep);
-          transform: translate(-2px, -2px);
-          box-shadow: 3px 3px 0 var(--orange), 6px 6px 0 var(--yellow);
+          box-shadow: 0 2px 6px rgba(19, 42, 77, 0.18);
         }
 
         .createPostBtn:not(:disabled):active {
-          transform: none;
-          box-shadow: 0 0 0 var(--orange), 0 0 0 var(--yellow);
+          transform: scale(0.98);
+          box-shadow: none;
         }
 
         .createPostBtn:focus-visible {
           outline: 2px solid var(--blue);
           outline-offset: 2px;
+        }
+
+        @media (max-width: 640px) {
+          .searchInput::placeholder {
+            color: transparent;
+          }
+
+          .searchShortPlaceholder {
+            display: block;
+            position: absolute;
+            top: 50%;
+            left: 32px;
+            transform: translateY(-50%);
+            font-size: 13px;
+            line-height: 1;
+            color: var(--ink-soft);
+            pointer-events: none;
+          }
         }
 
         @media (max-width: 560px) {
@@ -896,7 +933,7 @@ export default function HomeContent({ current_user, is_admin, today, birthdays, 
           }
 
           .createPostBtn {
-            padding: 8px;
+            padding: 0 8px;
           }
 
           .createPostBtn .createPostLabel {
@@ -940,11 +977,9 @@ export default function HomeContent({ current_user, is_admin, today, birthdays, 
           background: none;
         }
 
-        /* Corner ticks frame the whole stack rather than each segment. */
+        /* Top corner ticks frame the head of the stack; no ticks at the bottom. */
         .feed.tick-frame::before,
-        .feed.tick-frame::after,
-        .feed.tick-frame .tick-bl,
-        .feed.tick-frame .tick-br {
+        .feed.tick-frame::after {
           z-index: 2;
         }
 
@@ -958,18 +993,6 @@ export default function HomeContent({ current_user, is_admin, today, birthdays, 
           top: 0;
           right: 0;
           border-radius: 0 8px 0 0;
-        }
-
-        .feed.tick-frame .tick-bl {
-          bottom: 0;
-          left: 0;
-          border-radius: 0 0 0 8px;
-        }
-
-        .feed.tick-frame .tick-br {
-          bottom: 0;
-          right: 0;
-          border-radius: 0 0 8px 0;
         }
 
         /* :where keeps this at one class of specificity so segment-specific rules win. */
@@ -994,7 +1017,7 @@ export default function HomeContent({ current_user, is_admin, today, birthdays, 
           align-items: center;
           gap: 10px;
           padding: 11px 20px;
-          border-bottom: 2px solid var(--navy);
+          border-bottom: 1px solid var(--navy);
           color: var(--navy);
           animation: fadeInUp 0.4s ease backwards;
         }

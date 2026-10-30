@@ -858,6 +858,12 @@ const styles = css.global`
     color: #a8427a;
   }
 
+  @media (max-width: 640px) {
+    .hbGreeting {
+      font-size: 19px;
+    }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .hbRain,
     .hbBurst {

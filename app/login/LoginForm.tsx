@@ -573,11 +573,33 @@ export default function LoginForm({ initialNotice, noAccountEmail }: LoginFormPr
           .formside {
             padding: 32px 24px 40px;
           }
+
+          .formside h2 {
+            font-size: 24px;
+          }
         }
 
         @media (max-width: 480px) {
+          .split {
+            background: var(--vellum) url("/Background-Mobile.png") top center / 220% auto no-repeat;
+          }
+
+          .promo {
+            aspect-ratio: 400 / 310;
+            padding: 36px 40px;
+          }
+
+          .seal {
+            width: clamp(48px, 18vw, 72px);
+            height: clamp(48px, 18vw, 72px);
+          }
+
           .formside {
             padding: 20px 16px;
+          }
+
+          .formside h2 {
+            font-size: 22px;
           }
         }
       `}</style>

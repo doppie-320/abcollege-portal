@@ -160,12 +160,14 @@ export default function Select({
 
         .selectDropdown {
           position: absolute;
-          top: calc(100% + 6px);
-          left: 50%;
-          transform: translateX(-50%);
+          top: calc(100% + 10px);
+          left: 0;
           z-index: 50;
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
           width: 100%;
-          min-width: 180px;
+          min-width: 0;
           max-height: 220px;
           overflow-y: auto;
           background: var(--white);
@@ -179,7 +181,7 @@ export default function Select({
         .selectOption {
           width: 100%;
           text-align: left;
-          padding: 8px 10px;
+          padding: 6px 8px;
           border: none;
           background: none;
           border-radius: 5px;
@@ -187,34 +189,22 @@ export default function Select({
           font-size: 13.5px;
           color: var(--ink);
           cursor: pointer;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          gap: 6px;
         }
 
         .selectOption:hover {
-          background: var(--vellum-2);
+          background: rgba(19, 42, 77, 0.05);
         }
 
         .selectOptionActive,
         .selectOptionActive:hover {
-          background: var(--navy);
-          color: var(--white);
+          background: #e6f3ff;
+          color: var(--ink);
         }
 
-        /* Tablet and below: the panel hugs the trigger instead of forcing a
-           180px centred float that overflows small triggers and screens. */
-        @media (max-width: 900px) {
-          .selectDropdown {
-            left: 0;
-            transform: none;
-            width: 100%;
-            min-width: 0;
-          }
-
-          .selectOption {
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-          }
-        }
       `}</style>
     </div>
   );

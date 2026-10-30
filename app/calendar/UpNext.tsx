@@ -504,6 +504,16 @@ const styles = css.global`
     }
   }
 
+  @media (max-width: 640px) {
+    .hcName {
+      font-size: 19px;
+    }
+
+    .hcCard.isQuiet .hcName {
+      font-size: 16px;
+    }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .hcCard,
     .hcCard.isLive .hcBeacon,

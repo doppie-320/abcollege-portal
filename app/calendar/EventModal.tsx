@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { useBackdropDismiss } from "@/lib/useBackdropDismiss";
 import DatePicker from "@/components/DatePicker";
 import Select from "@/components/Select";
@@ -57,28 +57,44 @@ export default function EventModal({
   const [description, setDescription] = useState(draft?.description ?? event?.description ?? "");
   const [error, setError] = useState(initialError);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>(initialFieldErrors);
-  const backdrop = useBackdropDismiss(onClose);
+  const [closing, setClosing] = useState(false);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nameRef = useRef<HTMLInputElement>(null);
 
   // Keeps the picker's year list around the event rather than capping it at this year.
   const baseYear = Number(defaultDay.slice(0, 4));
 
+  const requestClose = useCallback(() => {
+    if (closing) return;
+    if (typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      onClose();
+      return;
+    }
+    setClosing(true);
+    closeTimer.current = setTimeout(onClose, 250);
+  }, [closing, onClose]);
+
+  const backdrop = useBackdropDismiss(requestClose);
+
   useEffect(() => {
-    nameRef.current?.focus();
+    // The sheet sizes don't autofocus: on phones the keyboard would open mid-slide
+    // and fight the animation, which is why the /home comment sheet stays smooth.
+    if (window.matchMedia?.("(min-width: 820px)").matches) nameRef.current?.focus();
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
+      if (closeTimer.current) clearTimeout(closeTimer.current);
       document.body.style.overflow = previousOverflow;
     };
   }, []);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") requestClose();
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
+  }, [requestClose]);
 
   function changeTag(value: string) {
     const next = value as EventTag;
@@ -115,9 +131,9 @@ export default function EventModal({
   }
 
   return (
-    <div className="evBackdrop" {...backdrop}>
+    <div className={`evBackdrop${closing ? " closing" : ""}`} {...backdrop}>
       <form
-        className="evPanel"
+        className={`evPanel${closing ? " closing" : ""}`}
         onClick={(e) => e.stopPropagation()}
         onSubmit={submit}
         role="dialog"
@@ -126,10 +142,11 @@ export default function EventModal({
         noValidate
       >
         <div className="evTopBar">
+          <span className="sheetHandle" aria-hidden="true" />
           <span className="evTopBarTitle mono" id="eventModalHeading">
             {isEdit ? "EDIT EVENT" : "NEW EVENT"} / {TAG_LABELS[tag].toUpperCase()}
           </span>
-          <button type="button" className="evClose" onClick={onClose} aria-label="Close">
+          <button type="button" className="evClose" onClick={requestClose} aria-label="Close">
             <CloseIcon />
           </button>
         </div>
@@ -235,7 +252,7 @@ export default function EventModal({
         <div className="evFooter">
           <span className="evHint mono">TIMES IN PHILIPPINE TIME</span>
           <div className="evActions">
-            <button type="button" className="btn ghost" onClick={onClose}>
+            <button type="button" className="btn ghost" onClick={requestClose}>
               Cancel
             </button>
             <button type="submit" className="btn primary">
@@ -251,33 +268,140 @@ export default function EventModal({
           inset: 0;
           background: rgba(13, 30, 56, 0.55);
           display: flex;
-          padding: 24px;
-          overflow-y: auto;
+          align-items: flex-end;
+          justify-content: center;
+          padding: 0;
           z-index: 100;
+          backdrop-filter: blur(3px);
           animation: fadeIn 0.15s ease backwards;
         }
 
-        /* No overflow clipping, so the date picker's dropdown can hang below the panel. */
+        .evBackdrop.closing {
+          animation: fadeOut 0.25s ease forwards;
+        }
+
+        @keyframes fadeOut {
+          from {
+            opacity: 1;
+          }
+          to {
+            opacity: 0;
+          }
+        }
+
+        /* On phones and tablets the form is a bottom sheet, like the comment sheet on /home. */
         .evPanel {
           width: 100%;
-          max-width: 520px;
-          margin: auto;
+          max-width: 100%;
+          height: 92vh;
+          height: 92dvh;
+          max-height: 92vh;
+          max-height: 92dvh;
+          margin: 0;
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
           background: var(--white);
-          border-radius: 8px;
+          border-radius: 16px 16px 0 0;
           border: 1px solid #c9bfa0;
-          box-shadow: 0 24px 60px rgba(13, 30, 56, 0.35);
-          animation: popIn 0.2s ease backwards;
+          border-bottom: none;
+          box-shadow: 0 -12px 48px rgba(13, 30, 56, 0.35);
+          will-change: transform;
+          animation: sheetUp 0.28s cubic-bezier(0.32, 0.9, 0.35, 1) backwards;
+        }
+
+        .evPanel.closing {
+          animation: sheetDown 0.25s cubic-bezier(0.4, 0, 0.4, 1) forwards;
+        }
+
+        @keyframes sheetUp {
+          from {
+            transform: translateY(100%);
+          }
+          to {
+            transform: translateY(0);
+          }
+        }
+
+        @keyframes sheetDown {
+          from {
+            transform: translateY(0);
+          }
+          to {
+            transform: translateY(100%);
+          }
+        }
+
+        @keyframes popOut {
+          from {
+            opacity: 1;
+            transform: scale(1);
+          }
+          to {
+            opacity: 0;
+            transform: scale(0.96) translateY(8px);
+          }
+        }
+
+        @media (min-width: 820px) {
+          .evBackdrop {
+            align-items: center;
+            padding: 24px;
+            overflow-y: auto;
+          }
+
+          /* No overflow clipping, so the date picker's dropdown can hang below the panel. */
+          .evPanel {
+            max-width: 520px;
+            height: auto;
+            max-height: none;
+            margin: auto;
+            display: block;
+            overflow: visible;
+            border-radius: 8px;
+            border-bottom: 1px solid #c9bfa0;
+            box-shadow: 0 24px 60px rgba(13, 30, 56, 0.35);
+            animation: popIn 0.2s ease backwards;
+          }
+
+          .evPanel.closing {
+            animation: popOut 0.2s ease forwards;
+          }
         }
 
         .evTopBar {
+          position: relative;
           display: flex;
           align-items: center;
           justify-content: space-between;
           gap: 12px;
-          padding: 10px 12px 10px 18px;
+          padding: 18px 12px 10px 18px;
           background: var(--navy);
           border-bottom: 3px solid var(--orange);
-          border-radius: 7px 7px 0 0;
+          border-radius: 0;
+          flex-shrink: 0;
+        }
+
+        .sheetHandle {
+          position: absolute;
+          top: 7px;
+          left: 50%;
+          transform: translateX(-50%);
+          width: 40px;
+          height: 4px;
+          border-radius: 999px;
+          background: rgba(255, 255, 255, 0.5);
+        }
+
+        @media (min-width: 820px) {
+          .evTopBar {
+            padding-top: 10px;
+            border-radius: 7px 7px 0 0;
+          }
+
+          .sheetHandle {
+            display: none;
+          }
         }
 
         .evTopBarTitle {
@@ -312,7 +436,19 @@ export default function EventModal({
         }
 
         .evBody {
+          flex: 1;
+          min-height: 0;
+          overflow-y: auto;
           padding: 20px 22px 6px;
+          scrollbar-width: thin;
+          scrollbar-color: #c9bfa0 transparent;
+        }
+
+        @media (min-width: 820px) {
+          .evBody {
+            flex: none;
+            overflow: visible;
+          }
         }
 
         .evField {
@@ -327,6 +463,16 @@ export default function EventModal({
         .evField textarea {
           resize: vertical;
           min-height: 80px;
+        }
+
+        .evField :global(input[type="text"]:focus),
+        .evField textarea:focus,
+        .evField :global(.selectTrigger:focus-visible),
+        .evField :global(.dateTrigger:focus-visible),
+        .evField :global(.dateHeaderSelects select:focus) {
+          outline: none;
+          border-color: #b9ae92;
+          box-shadow: 0 0 0 3px rgba(19, 42, 77, 0.08);
         }
 
         .evLabel {
@@ -456,10 +602,18 @@ export default function EventModal({
           align-items: center;
           justify-content: space-between;
           gap: 12px;
-          padding: 12px 22px;
+          padding: 12px 22px calc(12px + env(safe-area-inset-bottom));
           border-top: 1px solid #c9bfa0;
           background: var(--vellum);
-          border-radius: 0 0 8px 8px;
+          border-radius: 0;
+          flex-shrink: 0;
+        }
+
+        @media (min-width: 820px) {
+          .evFooter {
+            padding: 12px 22px;
+            border-radius: 0 0 8px 8px;
+          }
         }
 
         .evHint {
@@ -479,16 +633,12 @@ export default function EventModal({
         }
 
         @media (max-width: 560px) {
-          .evBackdrop {
-            padding: 12px;
-          }
-
           .evBody {
             padding: 16px 16px 4px;
           }
 
           .evFooter {
-            padding: 12px 16px;
+            padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
           }
 
           .evHint {
@@ -509,6 +659,10 @@ export default function EventModal({
           .evSwitchTrack,
           .evSwitchTrack::after {
             transition: none;
+          }
+
+          .evPanel {
+            animation: none;
           }
         }
       `}</style>

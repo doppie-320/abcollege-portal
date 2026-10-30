@@ -361,9 +361,9 @@ export default function CalendarContent({
 
                 <div className="calToolbarActions">
                   {isAdmin && (
-                    <button type="button" className="btn calAddBtn" onClick={() => setEditing({})}>
+                    <button type="button" className="btn calAddBtn" onClick={() => setEditing({})} aria-label="Add event">
                       <PlusIcon />
-                      Add event
+                      <span className="calAddLabel">Add event</span>
                     </button>
                   )}
                   <div className="calSegment" role="group" aria-label="Change month">
@@ -752,7 +752,7 @@ export default function CalendarContent({
 
         .calStatValue {
           font-family: "Space Grotesk", sans-serif;
-          font-size: 30px;
+          font-size: var(--fs-stat);
           font-weight: 700;
           line-height: 1;
           color: var(--navy-deep);
@@ -789,7 +789,7 @@ export default function CalendarContent({
         }
 
         .calHero h1 {
-          font-size: 44px;
+          font-size: var(--fs-display);
           margin-bottom: 0;
           line-height: 1;
         }
@@ -865,7 +865,7 @@ export default function CalendarContent({
 
         .calTitle {
           margin: 0;
-          font-size: 30px;
+          font-size: var(--fs-section);
           line-height: 1.1;
           font-weight: 400;
           color: var(--ink-soft);
@@ -916,12 +916,12 @@ export default function CalendarContent({
         }
 
         .calAddBtn:not(:disabled):hover {
-          transform: translate(-2px, -2px);
-          box-shadow: 3px 3px 0 var(--orange), 6px 6px 0 var(--yellow);
+          background: var(--navy-deep);
+          box-shadow: 0 2px 6px rgba(19, 42, 77, 0.18);
         }
 
         .calAddBtn:not(:disabled):active {
-          transform: none;
+          transform: scale(0.98);
           box-shadow: none;
         }
 
@@ -1548,8 +1548,12 @@ export default function CalendarContent({
         }
 
         @media (max-width: 640px) {
-          .calHero h1 {
-            font-size: 36px;
+          .calAddBtn {
+            padding: 7px 8px;
+          }
+
+          .calAddLabel {
+            display: none;
           }
 
           .calToolbar {
@@ -1563,14 +1567,6 @@ export default function CalendarContent({
 
           .calStats {
             gap: 8px;
-          }
-
-          .calStatValue {
-            font-size: 24px;
-          }
-
-          .calTitle {
-            font-size: 24px;
           }
 
           .calLegend {

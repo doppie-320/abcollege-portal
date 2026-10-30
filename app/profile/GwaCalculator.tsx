@@ -153,7 +153,7 @@ export default function GwaCalculator() {
           <span
             key={display}
             aria-live="polite"
-            className="animate-pop-in font-mono text-[34px] leading-none font-bold text-orange tabular-nums motion-reduce:animate-none"
+            className="animate-pop-in font-mono text-[28px] leading-none font-bold text-orange tabular-nums motion-reduce:animate-none sm:text-[30px] lg:text-[34px]"
           >
             {display}
           </span>

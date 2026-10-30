@@ -9,6 +9,7 @@ import { BLUEPRINT_GRID, Icon } from "./ui";
 const TOKEN_PERIOD_MS = 30_000;
 /** The countdown turns orange for the last few seconds. */
 const ENDING_SECONDS = 5;
+const EXIT_DURATION_MS = 220;
 const RING_RADIUS = 15;
 const RING_LENGTH = 2 * Math.PI * RING_RADIUS;
 
@@ -19,6 +20,25 @@ export default function StudentToken({ name, studentId }: { name: string; studen
   const [refreshAt, setRefreshAt] = useState(0);
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [enlarged, setEnlarged] = useState(false);
+  const [closing, setClosing] = useState(false);
+
+  function closePass() {
+    if (closing) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setEnlarged(false);
+    } else {
+      setClosing(true);
+    }
+  }
+
+  useEffect(() => {
+    if (!closing) return;
+    const timer = setTimeout(() => {
+      setEnlarged(false);
+      setClosing(false);
+    }, EXIT_DURATION_MS);
+    return () => clearTimeout(timer);
+  }, [closing]);
 
   useEffect(() => {
     let cancelled = false;
@@ -82,7 +102,13 @@ export default function StudentToken({ name, studentId }: { name: string; studen
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") setEnlarged(false);
+      if (e.key === "Escape") {
+        if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+          setEnlarged(false);
+        } else {
+          setClosing(true);
+        }
+      }
     }
     document.addEventListener("keydown", onKeyDown);
     return () => {
@@ -155,12 +181,12 @@ export default function StudentToken({ name, studentId }: { name: string; studen
           role="dialog"
           aria-modal="true"
           aria-label="Attendance pass"
-          onClick={() => setEnlarged(false)}
-          className={`animate-fade-in fixed inset-0 z-[110] flex cursor-zoom-out flex-col items-center justify-center gap-5 bg-navy-deep/95 p-6 text-center backdrop-blur-sm ${BLUEPRINT_GRID}`}
+          onClick={closePass}
+          className={`${closing ? "animate-fade-out" : "animate-fade-in"} fixed inset-0 z-[110] flex cursor-zoom-out flex-col items-center justify-center gap-5 bg-navy-deep/95 p-6 text-center backdrop-blur-sm ${BLUEPRINT_GRID}`}
         >
           <div className="animate-fade-in-up">
             <span className="mono text-[10px] tracking-[0.14em] text-navy-tint">ATTENDANCE PASS</span>
-            <h2 className="mt-1 mb-0.5 text-[22px] text-paper">{name}</h2>
+            <h2 className="mt-1 mb-0.5 text-[20px] text-paper sm:text-[22px]">{name}</h2>
             <p className="mono mb-0 text-[11px] text-navy-tint">{studentId}</p>
           </div>
 

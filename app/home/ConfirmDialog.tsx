@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { useBackdropDismiss } from "@/lib/useBackdropDismiss";
 
 type Tone = "danger" | "warning";
@@ -70,19 +71,25 @@ export default function ConfirmDialog({
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [mounted, setMounted] = useState(false);
   const backdrop = useBackdropDismiss(onCancel, !busy);
   const cancelRef = useRef<HTMLButtonElement>(null);
   const colors = TONES[tone];
   const glyph = icon ?? colors.icon;
 
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
     cancelRef.current?.focus();
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = previousOverflow;
     };
-  }, []);
+  }, [mounted]);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -103,7 +110,9 @@ export default function ConfirmDialog({
     }
   }
 
-  return (
+  if (!mounted) return null;
+
+  return createPortal(
     <div
       className="animate-fade-in fixed inset-0 z-[110] flex items-center justify-center bg-[rgba(13,30,56,0.55)] p-6 backdrop-blur-[2px]"
       onMouseDown={backdrop.onMouseDown}
@@ -198,7 +207,8 @@ export default function ConfirmDialog({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

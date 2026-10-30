@@ -397,7 +397,7 @@ export default function Scanner({ events }: { events: AttendanceEvent[] }) {
                   placeholder="Student number"
                   autoComplete="off"
                   spellCheck={false}
-                  className={`${FIELD} pl-9 font-mono tracking-wide`}
+                  className="mb-0 w-full rounded-[5px] border border-rule bg-paper py-2 pr-3 pl-9 font-mono text-[13.5px] tracking-wide text-ink shadow-none focus:border-[#b9ae92] focus:shadow-[0_0_0_3px_rgba(19,42,77,0.08)] focus:outline-none"
                 />
               </div>
               <button type="submit" disabled={pending || !manualId.trim()} className="btn rounded-lg px-4 py-2 text-[13px]">
