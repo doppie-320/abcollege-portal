@@ -18,7 +18,6 @@ import {
   AttendanceBadge,
   CheckInBadge,
   EmptyState,
-  FIELD,
   FIELD_LABEL,
   Frame,
   ICON_PATHS,
@@ -36,6 +35,8 @@ import RosterTable, { rosterName, type RosterRow } from "./RosterTable";
 
 const ICON_BUTTON =
   "flex size-8 cursor-pointer items-center justify-center rounded-md border border-transparent bg-transparent text-ink-soft transition-colors duration-150 hover:border-[#b3261e]/30 hover:bg-[rgba(205,79,60,0.08)] hover:text-[#b3261e] focus-visible:outline-2 focus-visible:outline-blue disabled:cursor-not-allowed disabled:opacity-50";
+const SUBTLE_FIELD =
+  "mb-0 w-full rounded-[5px] border border-rule bg-paper px-3 py-2 text-[13.5px] text-ink shadow-none focus:border-[#b9ae92] focus:shadow-[0_0_0_3px_rgba(19,42,77,0.08)] focus:outline-none";
 
 /** A scanner row; `pending` while an assignment is still being saved. */
 type ScannerRow = EventScanner & { pending?: boolean };
@@ -277,7 +278,7 @@ export default function EventAttendance({
                 <input type="hidden" name="eventId" value={event.event_id} />
                 <label className="m-0">
                   <span className={FIELD_LABEL}>Student ID</span>
-                  <input type="text" name="studentId" required autoComplete="off" className={`${FIELD} font-mono`} />
+                  <input type="text" name="studentId" required autoComplete="off" className={`${SUBTLE_FIELD} font-mono`} />
                 </label>
                 <div>
                   <span className={FIELD_LABEL} id="manual-status-label">
@@ -297,7 +298,7 @@ export default function EventAttendance({
                           defaultChecked={status === "present"}
                           className="peer sr-only"
                         />
-                        <span className="mono block rounded-[3px] px-3 py-[7px] text-center text-[11px] tracking-[0.04em] text-ink-soft uppercase transition-colors duration-150 peer-checked:bg-navy peer-checked:text-paper peer-focus-visible:outline-2 peer-focus-visible:outline-blue hover:bg-vellum-2 peer-checked:hover:bg-navy">
+                        <span className="mono block rounded-[3px] px-3 py-[7px] text-center text-[11px] tracking-[0.04em] text-ink-soft uppercase transition-colors duration-150 peer-checked:bg-[#E6F3FF] peer-checked:text-navy peer-focus-visible:outline-2 peer-focus-visible:outline-blue hover:bg-vellum-2 peer-checked:hover:bg-[#E6F3FF]">
                           {status}
                         </span>
                       </label>
@@ -306,7 +307,7 @@ export default function EventAttendance({
                 </div>
                 <label className="m-0">
                   <span className={FIELD_LABEL}>Note (optional)</span>
-                  <input type="text" name="note" autoComplete="off" className={FIELD} />
+                  <input type="text" name="note" autoComplete="off" className={SUBTLE_FIELD} />
                 </label>
                 <button type="submit" className="btn rounded-lg px-4 py-2 text-[13px]">
                   <Icon name="check" size={13} />
@@ -379,7 +380,7 @@ export default function EventAttendance({
                 <input type="hidden" name="eventId" value={event.event_id} />
                 <label className="m-0 min-w-0 flex-1">
                   <span className={FIELD_LABEL}>Assign by email</span>
-                  <input type="email" name="email" required placeholder="Their account email" className={FIELD} />
+                  <input type="email" name="email" required placeholder="Their account email" className={SUBTLE_FIELD} />
                 </label>
                 <button type="submit" className="btn rounded-lg px-3 py-2 text-[13px]">
                   <Icon name="plus" size={13} />
