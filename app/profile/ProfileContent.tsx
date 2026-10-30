@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import AvatarEditor from "./AvatarEditor";
 import GwaCalculator from "./GwaCalculator";
-import SiteNav from "@/components/NavigationHeader";
+import SiteNav, { ADMIN_MENU_LINKS, HOME_ADMIN_NAV_LINKS } from "@/components/NavigationHeader";
 import { BLUEPRINT_GRID, Frame, Icon, PageHeader, type IconName } from "@/app/attendance/ui";
 import type { Profile } from "@/lib/auth";
 
@@ -12,9 +12,10 @@ const UNKNOWN = "—";
 
 type ProfileContentProps = {
   profile: Profile;
+  isAdmin: boolean;
 };
 
-export default function ProfileContent({ profile }: ProfileContentProps) {
+export default function ProfileContent({ profile, isAdmin }: ProfileContentProps) {
   const hasEmail = profile.email !== UNKNOWN;
   const hasStudentId = profile.studentId !== UNKNOWN;
 
@@ -25,6 +26,8 @@ export default function ProfileContent({ profile }: ProfileContentProps) {
         name={profile.name}
         userId={profile.id}
         avatarUrl={profile.avatarUrl}
+        links={isAdmin ? HOME_ADMIN_NAV_LINKS : undefined}
+        menuLinks={isAdmin ? ADMIN_MENU_LINKS : undefined}
         isProfilePage
       />
 
