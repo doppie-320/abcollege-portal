@@ -316,17 +316,6 @@ export default function EventAttendance({
               </ActionForm>
             </div>
           </Frame>
-        </div>
-
-        <div className="flex min-w-0 flex-col gap-6">
-          {/* ───────── Settings ───────── */}
-          <Frame className="animate-fade-in-up p-0 [animation-delay:0.08s]">
-            <PanelHeader icon="sliders" title="Check-in settings" />
-            <div className="px-5 py-4">
-              <EventSettings event={event} onSave={(settings) => apply({ type: "settings", settings })} />
-            </div>
-          </Frame>
-
           {/* ───────── Scanners ───────── */}
           <Frame className="animate-fade-in-up p-0 [animation-delay:0.12s]">
             <PanelHeader icon="scan" title="Scanners">
@@ -387,6 +376,16 @@ export default function EventAttendance({
                   Assign
                 </button>
               </ActionForm>
+            </div>
+          </Frame>
+        </div>
+
+        <div className="flex min-w-0 flex-col gap-6">
+          {/* ───────── Settings ───────── */}
+          <Frame className="animate-fade-in-up p-0 [animation-delay:0.08s]">
+            <PanelHeader icon="sliders" title="Check-in settings" />
+            <div className="px-5 py-4">
+              <EventSettings event={event} onSave={(settings) => apply({ type: "settings", settings })} />
             </div>
           </Frame>
         </div>

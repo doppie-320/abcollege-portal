@@ -107,7 +107,7 @@ export default function EventSettings({
         </p>
       </div>
 
-      <button type="submit" className="btn self-start rounded-lg px-4 py-2 text-[13px]">
+      <button type="submit" className="btn self-end rounded-lg px-4 py-2 text-[13px]">
         <Icon name="check" size={13} />
         Save settings
       </button>
