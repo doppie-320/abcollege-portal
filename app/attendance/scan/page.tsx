@@ -1,15 +1,25 @@
 export const instant = false;
 
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import Link from "next/link";
 import SiteNav, { ADMIN_MENU_LINKS, HOME_ADMIN_NAV_LINKS } from "@/components/NavigationHeader";
 import { getProfile, isAdmin } from "@/lib/auth";
 import { fetchScannableEvents } from "@/lib/attendance-server";
+import RegisterServiceWorker from "../RegisterServiceWorker";
 import { IdleNotice, PageHeader } from "../ui";
 import Scanner from "./Scanner";
 
+// Installable as its own app on phones; see public/scanner.webmanifest.
 export const metadata: Metadata = {
   title: "Scan Attendance — SOE Hub",
+  manifest: "/scanner.webmanifest",
+  appleWebApp: { title: "SOE Scanner", statusBarStyle: "default" },
+  icons: { apple: "/icons/scanner-apple-180.png" },
+};
+
+// Navy, matching the manifest, so the phone's status bar blends with the app.
+export const viewport: Viewport = {
+  themeColor: "#132a4d",
 };
 
 export default async function ScanPage() {
@@ -18,6 +28,7 @@ export default async function ScanPage() {
 
   return (
     <>
+      <RegisterServiceWorker />
       <SiteNav
         initials={profile.initials}
         name={profile.name}

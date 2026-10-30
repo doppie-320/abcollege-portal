@@ -1,6 +1,6 @@
 export const instant = false;
 
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import SiteNav, { ADMIN_MENU_LINKS, HOME_ADMIN_NAV_LINKS } from "@/components/NavigationHeader";
@@ -9,6 +9,7 @@ import { checkInState, checkInWindow, type AttendanceEvent } from "@/lib/attenda
 import { fetchMyAttendance, fetchScannableEvents } from "@/lib/attendance-server";
 import { createClient } from "@/lib/supabase/server";
 import LocalTime from "./LocalTime";
+import RegisterServiceWorker from "./RegisterServiceWorker";
 import HistoryList from "./HistoryList";
 import { SplitBar } from "./motion";
 import StaticPass from "./StaticPass";
@@ -26,8 +27,17 @@ import {
   StatStrip,
 } from "./ui";
 
+// Installable as its own app on phones; see public/attendance.webmanifest.
 export const metadata: Metadata = {
   title: "Attendance — SOE Hub",
+  manifest: "/attendance.webmanifest",
+  appleWebApp: { title: "SOE Pass", statusBarStyle: "default" },
+  icons: { apple: "/icons/pass-apple-180.png" },
+};
+
+// Navy, matching the manifest, so the phone's status bar blends with the app.
+export const viewport: Viewport = {
+  themeColor: "#132a4d",
 };
 
 type StudentRecord = {
@@ -84,6 +94,7 @@ export default async function AttendancePage() {
 
   return (
     <>
+      <RegisterServiceWorker />
       <SiteNav
         initials={profile.initials}
         name={profile.name}
