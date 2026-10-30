@@ -1499,6 +1499,20 @@ export default function SignupForm({courses, yearLevels, googleUser, oauthFailed
         }
 
         @media (max-width: 480px) {
+          .split {
+            background: var(--vellum) url("/Background-Mobile.png") top center / 220% auto no-repeat;
+          }
+
+          .promo {
+            aspect-ratio: 400 / 310;
+            padding: 36px 40px;
+          }
+
+          .seal {
+            width: clamp(48px, 18vw, 72px);
+            height: clamp(48px, 18vw, 72px);
+          }
+
           .fieldRow {
             flex-direction: column;
             gap: 0;
