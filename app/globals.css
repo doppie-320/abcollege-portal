@@ -75,6 +75,7 @@
 
   --animate-fade-in-up: fadeInUp 0.4s ease backwards;
   --animate-fade-in: fadeIn 0.3s ease backwards;
+  --animate-fade-out: fadeOut 0.22s ease-out forwards;
   --animate-pop-in: popIn 0.2s ease backwards;
   --animate-scan-sweep: scanSweep 2.2s ease-in-out infinite alternate;
   --animate-sheen: sheen 0.9s ease-out both;
@@ -202,6 +203,15 @@
     }
     to {
       opacity: 1;
+    }
+  }
+
+  @keyframes fadeOut {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
     }
   }
 
