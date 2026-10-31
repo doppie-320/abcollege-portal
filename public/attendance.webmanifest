@@ -1,0 +1,16 @@
+{
+  "id": "/attendance",
+  "name": "SOE Hub Attendance Pass",
+  "short_name": "SOE Pass",
+  "description": "Your attendance QR pass for School of Engineering events.",
+  "start_url": "/attendance",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ede7d9",
+  "theme_color": "#132a4d",
+  "icons": [
+    { "src": "/icons/pass-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/pass-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/pass-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
