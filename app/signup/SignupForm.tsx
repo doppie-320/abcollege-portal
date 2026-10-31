@@ -34,6 +34,8 @@ type SignupFormProps = {
 };
 
 const TODAY_ISO = new Date().toISOString().slice(0, 10);
+// Matches the stacked phone and tablet layouts in the styles below.
+const MODAL_QUERY = "(max-width: 1024px), (orientation: portrait)";
 
 type Fields = {
   firstName: string;
@@ -487,6 +489,7 @@ export default function SignupForm({courses, yearLevels, googleUser, oauthFailed
                 onChange={(v) => setGoogleField("birthday", v)}
                 placeholder="Select date"
                 max={TODAY_ISO}
+                modalQuery={MODAL_QUERY}
               />
               {googleErrors.birthday && <p className="error">{googleErrors.birthday}</p>}
               <p className="fieldHint">
@@ -658,6 +661,7 @@ export default function SignupForm({courses, yearLevels, googleUser, oauthFailed
                   onChange={(v) => setField("birthday", v)}
                   placeholder="Select date"
                   max={TODAY_ISO}
+                  modalQuery={MODAL_QUERY}
                 />
                 {errors.birthday && <p className="error">{errors.birthday}</p>}
               </div>
@@ -1460,13 +1464,15 @@ export default function SignupForm({courses, yearLevels, googleUser, oauthFailed
             height: auto;
             min-height: 100vh;
             overflow: visible;
-            background: var(--vellum) url("/Background-Mobile.svg") top center / 100% auto no-repeat;
+            /* One zoom for every phone width so the header grows smoothly with the screen */
+            background: var(--vellum) url("/Background-Mobile.svg") top center / 130% auto no-repeat;
           }
 
           .promo {
             justify-content: flex-start;
-            padding: 18px 20px;
-            aspect-ratio: 820 / 250;
+            /* At 130% zoom the wave bottoms out at ~0.37 x width */
+            aspect-ratio: 820 / 305;
+            padding: max(16px, 5vw);
           }
 
           .promo h1,
@@ -1481,8 +1487,8 @@ export default function SignupForm({courses, yearLevels, googleUser, oauthFailed
           }
 
           .seal {
-            width: clamp(26px, 8vw, 40px);
-            height: clamp(26px, 8vw, 40px);
+            width: clamp(40px, 12vw, 64px);
+            height: clamp(40px, 12vw, 64px);
           }
 
           .formside {
@@ -1498,21 +1504,36 @@ export default function SignupForm({courses, yearLevels, googleUser, oauthFailed
           }
         }
 
-        @media (max-width: 480px) {
+        /* Tablet: desktop wave pinned to the left, form beside it */
+        @media (min-width: 600px) and (max-width: 1024px) {
           .split {
-            background: var(--vellum) url("/Background-Mobile.svg") top center / 220% auto no-repeat;
+            grid-template-columns: 2fr 3fr;
+            align-content: stretch;
+            height: 100vh;
+            height: 100dvh;
+            min-height: 0;
+            /* Fit the SVG to the height, then shift it so the wave's widest
+               point (x=876 of 820 tall) lands at 38% of the width */
+            background: var(--vellum) url("/promo-bg.svg") calc(38vw - 106.8vh) 0 / auto 100% no-repeat;
+            background-position-x: calc(38vw - 106.8dvh);
           }
 
           .promo {
-            aspect-ratio: 400 / 310;
-            padding: 36px 40px;
+            aspect-ratio: auto;
+            padding: 32px;
           }
 
           .seal {
-            width: clamp(48px, 18vw, 72px);
-            height: clamp(48px, 18vw, 72px);
+            width: 64px;
+            height: 64px;
           }
 
+          .formside {
+            padding: 32px 32px 32px 0;
+          }
+        }
+
+        @media (max-width: 480px) {
           .fieldRow {
             flex-direction: column;
             gap: 0;

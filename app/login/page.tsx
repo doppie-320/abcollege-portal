@@ -2,7 +2,6 @@ export const instant = false;
 
 import type { Metadata } from "next";
 import Image from "next/image";
-import Link from "next/link";
 import LoginForm from "./LoginForm";
 import { createClient } from "@/lib/supabase/server";
 import { LOGIN_ERRORS, toNotice } from "./messages";
@@ -39,7 +38,7 @@ export default async function LoginPage({
   return (
     <div className="split">
       <div className="promo">
-        <Link href="/" className="brand">
+        <div className="brand">
           <Image
             src="/logo.svg"
             alt="Andres Bonifacio College School of Engineering logo"
@@ -48,7 +47,7 @@ export default async function LoginPage({
             className="seal"
           />
           <span className="brandText">SOE HUB</span>
-        </Link>
+        </div>
         <div>
           <h1>SOE&apos;s HUB</h1>
           <p className="sub">
