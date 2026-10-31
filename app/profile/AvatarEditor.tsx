@@ -92,7 +92,8 @@ export default function AvatarEditor({
     <div className="flex w-full flex-col gap-2.5">
       {eyebrow && <span className="eyebrow">{eyebrow}</span>}
 
-      <div className="flex w-full items-start gap-6">
+      {/* Stacks on phones: side by side, the name column is too narrow and leaves a gap under the picture. */}
+      <div className="flex w-full items-start gap-6 max-[480px]:flex-col max-[480px]:items-stretch max-[480px]:gap-3">
         <div className="flex w-32 shrink-0 flex-col items-center gap-2.5">
           <div className="relative size-32 shrink-0">
             {/* Paper ring keeps the edge visible when the picture overlaps a navy banner. */}

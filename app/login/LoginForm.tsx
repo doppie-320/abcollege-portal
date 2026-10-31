@@ -306,7 +306,7 @@ export default function LoginForm({ initialNotice, noAccountEmail }: LoginFormPr
           height: 100vh;
           display: grid;
           grid-template-columns: 3fr 2fr;
-          background: var(--vellum) url("/promo-bg.png") center center / cover no-repeat;
+          background: var(--vellum) url("/promo-bg.svg") center center / cover no-repeat;
         }
 
         .promo {
@@ -545,7 +545,7 @@ export default function LoginForm({ initialNotice, noAccountEmail }: LoginFormPr
             height: auto;
             min-height: 100vh;
             overflow: visible;
-            background: var(--vellum) url("/Background-Mobile.png") top center / 100% auto no-repeat;
+            background: var(--vellum) url("/Background-Mobile.svg") top center / 100% auto no-repeat;
           }
 
           .promo {
@@ -581,7 +581,7 @@ export default function LoginForm({ initialNotice, noAccountEmail }: LoginFormPr
 
         @media (max-width: 480px) {
           .split {
-            background: var(--vellum) url("/Background-Mobile.png") top center / 220% auto no-repeat;
+            background: var(--vellum) url("/Background-Mobile.svg") top center / 220% auto no-repeat;
           }
 
           .promo {

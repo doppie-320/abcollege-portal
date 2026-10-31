@@ -41,8 +41,8 @@ export default async function LoginPage({
       <div className="promo">
         <Link href="/" className="brand">
           <Image
-            src="/logo.png"
-            alt="Andres Bonifacio College seal"
+            src="/logo.svg"
+            alt="Andres Bonifacio College School of Engineering logo"
             width={40}
             height={40}
             className="seal"

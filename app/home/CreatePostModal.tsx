@@ -2069,7 +2069,7 @@ const TOOL_INFO: Record<string, ToolInfo> = {
   Image: {
     description: "Upload an image, drop or paste one in, or insert from a URL.",
     // eslint-disable-next-line @next/next/no-img-element
-    preview: <img src="/promo-bg.png" alt="" />,
+    preview: <img src="/promo-bg.svg" alt="" />,
   },
   Video: {
     description: "Upload a video or insert one from a URL. It plays inside the post.",

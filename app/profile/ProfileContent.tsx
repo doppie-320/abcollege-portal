@@ -77,10 +77,13 @@ export default function ProfileContent({ profile, isAdmin }: ProfileContentProps
                   avatarUrl={profile.avatarUrl}
                   eyebrow={null}
                 >
-                  <div className="min-w-0 pt-[72px]">
+                  <div className="min-w-0 pt-[72px] max-[480px]:pt-0">
                     <h2 className="mb-2 text-[length:var(--fs-card)] leading-tight [overflow-wrap:anywhere]">{profile.name}</h2>
                     <div className="flex flex-wrap gap-1.5">
-                      {profile.program !== UNKNOWN && <span className="tag orange">{profile.program}</span>}
+                      {/* Long program names wrap instead of running past the card edge. */}
+                      {profile.program !== UNKNOWN && (
+                        <span className="tag orange max-w-full whitespace-normal">{profile.program}</span>
+                      )}
                       {profile.yearLevel !== UNKNOWN && <span className="tag">{profile.yearLevel}</span>}
                     </div>
                   </div>
