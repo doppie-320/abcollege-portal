@@ -701,8 +701,11 @@
     list-style: square;
   }
 
+  /* Markers hang outside the content box; the mono "10. " is ~2.2em wide,
+     so a narrower gutter pushes it past the left edge where it gets clipped. */
   .richText ol {
     list-style: decimal;
+    padding-left: 2.4em;
   }
 
   .richText ol ol {
