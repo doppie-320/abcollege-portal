@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useMediaQuery } from "@/lib/useMediaQuery";
 import WheelDateModal from "./WheelDateModal";
 
 const MONTH_NAMES = [
@@ -59,23 +60,6 @@ type Props = {
   /** While this media query matches, the picker opens as a modal with scroll wheels instead of the calendar. */
   modalQuery?: string;
 };
-
-function useMediaQuery(query: string | undefined): boolean {
-  const subscribe = useCallback(
-    (onChange: () => void) => {
-      if (!query) return () => {};
-      const mql = window.matchMedia(query);
-      mql.addEventListener("change", onChange);
-      return () => mql.removeEventListener("change", onChange);
-    },
-    [query],
-  );
-  return useSyncExternalStore(
-    subscribe,
-    () => !!query && window.matchMedia(query).matches,
-    () => false,
-  );
-}
 
 export default function DatePicker({
   id,

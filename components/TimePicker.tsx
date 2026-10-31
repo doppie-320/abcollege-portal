@@ -1,9 +1,12 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
+import { useMediaQuery } from "@/lib/useMediaQuery";
+import WheelTimeModal from "./WheelTimeModal";
 
 // Styled to match DatePicker. Values are "HH:mm" in 24-hour time, shown as "8:00 AM".
 // Type a time ("2:30p", "1430", "2") or pick from the list; ↑/↓ and Enter work too.
+// While `modalQuery` matches, it opens hour/minute/AM-PM scroll wheels instead.
 
 const STEP_MINUTES = 30;
 const LAST_MINUTE = 24 * 60 - 1;
@@ -71,10 +74,22 @@ type Props = {
   "aria-label"?: string;
   /** For an end time: list only times from this one on, each with how long the event would run. */
   durationFrom?: string;
+  /** While this media query matches, the picker opens as a modal with scroll wheels instead of the list. */
+  modalQuery?: string;
 };
 
-export default function TimePicker({ id, value, onChange, "aria-label": ariaLabel, durationFrom }: Props) {
+export default function TimePicker({
+  id,
+  value,
+  onChange,
+  "aria-label": ariaLabel,
+  durationFrom,
+  modalQuery,
+}: Props) {
   const [open, setOpen] = useState(false);
+  const [wheelOpen, setWheelOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const asModal = useMediaQuery(modalQuery);
   const [draft, setDraft] = useState<string | null>(null);
   const [active, setActive] = useState(-1);
   const listRef = useRef<HTMLDivElement>(null);
@@ -108,6 +123,76 @@ export default function TimePicker({ id, value, onChange, "aria-label": ariaLabe
       list.scrollTop = option.offsetTop + option.offsetHeight - list.clientHeight + 4;
     }
   }, [open, active, selectedIndex]);
+
+  if (asModal) {
+    const closeWheel = () => {
+      setWheelOpen(false);
+      triggerRef.current?.focus();
+    };
+
+    return (
+      <>
+        <button
+          type="button"
+          id={id}
+          ref={triggerRef}
+          className="timeTrigger"
+          onClick={() => setWheelOpen(true)}
+          aria-label={ariaLabel ? `${ariaLabel}, ${formatTimeValue(value)}` : undefined}
+          aria-haspopup="dialog"
+          aria-expanded={wheelOpen}
+        >
+          <span>{formatTimeValue(value)}</span>
+          <ClockIcon />
+        </button>
+
+        {wheelOpen && (
+          <WheelTimeModal
+            initial={minutesOf(current)}
+            min={durationFrom ? from : 0}
+            title={ariaLabel ?? "Select time"}
+            describe={durationFrom ? (minutes) => `Lasts ${formatDuration(minutes - from)}` : undefined}
+            onDone={(minutes) => {
+              onChange(timeFromMinutes(minutes));
+              closeWheel();
+            }}
+            onCancel={closeWheel}
+          />
+        )}
+
+        <style jsx>{`
+          .timeTrigger {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            border: 1px solid #c9bfa0;
+            border-radius: 5px;
+            background: var(--white);
+            padding: 11px 12px;
+            font-family: "Inter", sans-serif;
+            font-size: 14px;
+            font-variant-numeric: tabular-nums;
+            color: var(--ink);
+            box-shadow: inset 3px 3px 10px rgba(28, 35, 51, 0.14);
+            cursor: pointer;
+            text-align: left;
+          }
+
+          .timeTrigger:focus-visible {
+            outline: 2px solid var(--blue);
+            outline-offset: 1px;
+          }
+
+          .timeTrigger :global(svg) {
+            flex-shrink: 0;
+            color: var(--ink-soft);
+          }
+        `}</style>
+      </>
+    );
+  }
 
   function close() {
     setOpen(false);
