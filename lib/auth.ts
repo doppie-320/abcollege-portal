@@ -1,3 +1,4 @@
+import { fullAvatarPath } from "@/lib/avatarPaths";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 
@@ -12,6 +13,8 @@ export type Profile = {
   program: string;
   yearLevel: string;
   avatarUrl: string;
+  /** The whole photo the avatar was cropped from; the avatar itself when there is no separate one. */
+  avatarFullUrl: string;
   /** Council role from the admins table. Empty for non-admins or when unset. */
   role: string;
 };
@@ -110,9 +113,9 @@ export async function getProfile(): Promise<Profile> {
     supabase.from("admins").select("role").eq("id", authUser.id).maybeSingle(),
   ]);
 
-  const avatarUrl = avatarPath? 
-    supabase.storage.from("avatars").getPublicUrl(avatarPath).data.publicUrl
-    : "";
+  const avatars = supabase.storage.from("avatars");
+  const avatarUrl = avatarPath ? avatars.getPublicUrl(avatarPath).data.publicUrl : "";
+  const avatarFullUrl = avatarPath ? avatars.getPublicUrl(fullAvatarPath(avatarPath)).data.publicUrl : "";
 
   return {
     id: authUser.id,
@@ -125,6 +128,7 @@ export async function getProfile(): Promise<Profile> {
     program: toDisplay(course?.name),
     yearLevel: toDisplay(yearLevel?.name),
     avatarUrl: avatarUrl,
+    avatarFullUrl,
     role: clean(adminRow?.role)
   };
 }

@@ -75,6 +75,7 @@ export default function ProfileContent({ profile, isAdmin }: ProfileContentProps
                   initials={profile.initials}
                   name={profile.name}
                   avatarUrl={profile.avatarUrl}
+                  avatarFullUrl={profile.avatarFullUrl}
                   eyebrow={null}
                 >
                   <div className="min-w-0 pt-[72px] max-[480px]:pt-0">
