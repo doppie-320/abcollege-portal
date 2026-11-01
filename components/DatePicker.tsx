@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useMediaQuery } from "@/lib/useMediaQuery";
+import WheelDateModal from "./WheelDateModal";
 
 const MONTH_NAMES = [
   "January",
@@ -55,6 +57,8 @@ type Props = {
   minYear?: number;
   /** Latest year in the year dropdown; defaults to `max`'s year, or this year. */
   maxYear?: number;
+  /** While this media query matches, the picker opens as a modal with scroll wheels instead of the calendar. */
+  modalQuery?: string;
 };
 
 export default function DatePicker({
@@ -65,6 +69,7 @@ export default function DatePicker({
   max,
   minYear,
   maxYear,
+  modalQuery,
 }: Props) {
   const [open, setOpen] = useState(false);
   const selected = parseISO(value);
@@ -74,9 +79,12 @@ export default function DatePicker({
   const [viewYear, setViewYear] = useState(() => (selected ?? today).getFullYear());
   const [viewMonth, setViewMonth] = useState(() => (selected ?? today).getMonth());
   const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const asModal = useMediaQuery(modalQuery);
 
   useEffect(() => {
-    if (!open) return;
+    // The wheel modal handles its own dismissal.
+    if (!open || asModal) return;
 
     function onDocClick(e: MouseEvent) {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
@@ -93,7 +101,12 @@ export default function DatePicker({
       document.removeEventListener("mousedown", onDocClick);
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [open]);
+  }, [open, asModal]);
+
+  function closeModal() {
+    setOpen(false);
+    triggerRef.current?.focus();
+  }
 
   function toggleOpen() {
     if (!open && selected) {
@@ -150,6 +163,7 @@ export default function DatePicker({
       <button
         type="button"
         id={id}
+        ref={triggerRef}
         className="dateTrigger"
         onClick={toggleOpen}
         aria-haspopup="dialog"
@@ -161,7 +175,26 @@ export default function DatePicker({
         <CalendarIcon />
       </button>
 
-      {open && (
+      {open && asModal && (
+        <WheelDateModal
+          initial={selected ?? (maxDate && maxDate < today ? maxDate : today)}
+          maxDate={maxDate}
+          earliestYear={earliestYear}
+          latestYear={latestYear}
+          canClear={!!selected}
+          onDone={(date) => {
+            onChange(toISO(date));
+            closeModal();
+          }}
+          onClear={() => {
+            onChange("");
+            closeModal();
+          }}
+          onCancel={closeModal}
+        />
+      )}
+
+      {open && !asModal && (
         <div className="dateDropdown" role="dialog" aria-label="Choose a date">
           <div className="dateHeader">
             <button

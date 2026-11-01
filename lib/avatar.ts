@@ -7,11 +7,27 @@ const OUTPUT_QUALITY = 0.85;
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
+// The whole photo is kept for the viewer, scaled down until it fits beside the crop in one
+// server action request (capped at 1 MB by Next.js, multipart overhead included).
+const FULL_ATTEMPTS = [
+  { side: 1600, quality: 0.85 },
+  { side: 1280, quality: 0.8 },
+  { side: 1024, quality: 0.75 },
+];
+const FULL_BUDGET_BYTES = 850 * 1024;
+
 export const AVATAR_ACCEPT = ACCEPTED_TYPES.join(",");
 
-async function write(dataBlob: Blob): Promise<ActionResult> {
+/** The square of the source photo, in its own pixels, that becomes the profile picture. */
+export type AvatarCrop = { x: number; y: number; size: number };
+
+type AvatarImages = { crop: Blob; full: Blob };
+type AvatarUrls = { url: string; fullUrl: string };
+
+async function write({ crop, full }: AvatarImages): Promise<ActionResult> {
   const fd = new FormData();
-  fd.append("pfp", dataBlob, "avatar.jpg");
+  fd.append("pfp", crop, "avatar.jpg");
+  fd.append("pfp_full", full, "avatar-full.jpg");
   return uploadAvatar(fd);
 }
 
@@ -22,38 +38,48 @@ async function clear(): Promise<ActionResult> {
 export const avatarStore = { write, clear };
 
 /**
- * The picture shows the moment it's picked (or removed); the server's version takes over
+ * The picture shows the moment it's cropped (or removed); the server's version takes over
  * once the save and the refresh land, and the old one comes back if the save fails.
  */
-export function useAvatarEditor(avatarUrl: string) {
+export function useAvatarEditor(avatarUrl: string, avatarFullUrl: string) {
   const [isSaving, startSaving] = useTransition();
   const [error, setError] = useState("");
-  const [shownUrl, setShownUrl] = useOptimistic(avatarUrl);
-  const previewRef = useRef("");
+  const [shown, setShown] = useOptimistic<AvatarUrls>({ url: avatarUrl, fullUrl: avatarFullUrl });
+  const previewsRef = useRef<string[]>([]);
 
-  // Free the last local preview once it's no longer needed.
-  useEffect(() => () => {
-    if (previewRef.current) URL.revokeObjectURL(previewRef.current);
-  }, []);
+  function revokePreviews() {
+    previewsRef.current.forEach((url) => URL.revokeObjectURL(url));
+    previewsRef.current = [];
+  }
 
-  async function save(file: File) {
+  // Free the last local previews once they're no longer needed.
+  useEffect(() => revokePreviews, []);
+
+  /** Checks a picked file before it's cropped; false (with the reason shown) when it can't be used. */
+  function accept(file: File): boolean {
+    const problem = checkFile(file);
+    setError(problem ?? "");
+    return problem === null;
+  }
+
+  async function save(file: File, crop: AvatarCrop) {
     setError("");
-    let dataBlob: Blob;
+    let images: AvatarImages;
     try {
-      dataBlob = await compressToSquare(file);
+      images = await renderAvatar(file, crop);
     } catch (cause) {
-      // compressToSquare only throws messages written for the user.
+      // renderAvatar only throws messages written for the user.
       setError(cause instanceof Error ? cause.message : "That photo could not be read.");
       return;
     }
 
-    if (previewRef.current) URL.revokeObjectURL(previewRef.current);
-    const preview = URL.createObjectURL(dataBlob);
-    previewRef.current = preview;
+    revokePreviews();
+    const preview = { url: URL.createObjectURL(images.crop), fullUrl: URL.createObjectURL(images.full) };
+    previewsRef.current = [preview.url, preview.fullUrl];
 
     startSaving(async () => {
-      setShownUrl(preview);
-      const result = await settle(avatarStore.write(dataBlob));
+      setShown(preview);
+      const result = await settle(avatarStore.write(images));
       if (result.error) setError(result.error);
     });
   }
@@ -61,22 +87,24 @@ export function useAvatarEditor(avatarUrl: string) {
   function reset() {
     setError("");
     startSaving(async () => {
-      setShownUrl("");
+      setShown({ url: "", fullUrl: "" });
       const result = await settle(avatarStore.clear());
       if (result.error) setError(result.error);
     });
   }
 
-  return { avatarUrl: shownUrl, isSaving, error, save, reset };
+  return { avatarUrl: shown.url, avatarFullUrl: shown.fullUrl, isSaving, error, accept, save, reset };
 }
 
-async function compressToSquare(file: File): Promise<Blob> {
-  if (!ACCEPTED_TYPES.includes(file.type)) {
-    throw new Error("Pick a JPG, PNG, or WebP image.");
-  }
-  if (file.size > MAX_FILE_BYTES) {
-    throw new Error("That image is over 10 MB. Pick a smaller one.");
-  }
+function checkFile(file: File): string | null {
+  if (!ACCEPTED_TYPES.includes(file.type)) return "Pick a JPG, PNG, or WebP image.";
+  if (file.size > MAX_FILE_BYTES) return "That image is over 10 MB. Pick a smaller one.";
+  return null;
+}
+
+async function renderAvatar(file: File, crop: AvatarCrop): Promise<AvatarImages> {
+  const problem = checkFile(file);
+  if (problem) throw new Error(problem);
 
   let bitmap: ImageBitmap;
   try {
@@ -85,36 +113,50 @@ async function compressToSquare(file: File): Promise<Blob> {
     throw new Error("That file could not be read as an image.");
   }
 
+  try {
+    const cropped = await toJpeg(OUTPUT_SIZE, OUTPUT_SIZE, OUTPUT_QUALITY, (context) => {
+      context.drawImage(bitmap, crop.x, crop.y, crop.size, crop.size, 0, 0, OUTPUT_SIZE, OUTPUT_SIZE);
+    });
+
+    let full: Blob | null = null;
+    for (const { side, quality } of FULL_ATTEMPTS) {
+      const scale = Math.min(1, side / Math.max(bitmap.width, bitmap.height));
+      const width = Math.round(bitmap.width * scale);
+      const height = Math.round(bitmap.height * scale);
+      full = await toJpeg(width, height, quality, (context) => {
+        context.drawImage(bitmap, 0, 0, width, height);
+      });
+      if (full.size <= FULL_BUDGET_BYTES) break;
+    }
+
+    return { crop: cropped, full: full! };
+  } finally {
+    bitmap.close();
+  }
+}
+
+async function toJpeg(
+  width: number,
+  height: number,
+  quality: number,
+  draw: (context: CanvasRenderingContext2D) => void,
+): Promise<Blob> {
   const canvas = document.createElement("canvas");
-  canvas.width = OUTPUT_SIZE;
-  canvas.height = OUTPUT_SIZE;
+  canvas.width = width;
+  canvas.height = height;
 
   const context = canvas.getContext("2d");
-  if (!context) {
-    bitmap.close();
-    throw new Error("Your browser could not process that image.");
-  }
+  if (!context) throw new Error("Your browser could not process that image.");
 
-  const side = Math.min(bitmap.width, bitmap.height);
-  context.drawImage(
-    bitmap,
-    (bitmap.width - side) / 2,
-    (bitmap.height - side) / 2,
-    side,
-    side,
-    0,
-    0,
-    OUTPUT_SIZE,
-    OUTPUT_SIZE,
-  );
-  bitmap.close();
+  // JPEG has no transparency; without this, see-through parts of a PNG turn black.
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, width, height);
+  draw(context);
 
   const blob = await new Promise<Blob | null>((resolve) => {
-    canvas.toBlob(resolve, "image/jpeg", OUTPUT_QUALITY);
+    canvas.toBlob(resolve, "image/jpeg", quality);
   });
-  if (!blob) {
-    throw new Error("Your browser could not process that image.");
-  }
+  if (!blob) throw new Error("Your browser could not process that image.");
 
   return blob;
 }

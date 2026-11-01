@@ -1,6 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
+import { useAnchoredPopover } from "@/lib/useAnchoredPopover";
+
+const DROPDOWN_MAX_HEIGHT = 220;
 
 type Option = { value: string; label: string };
 
@@ -29,8 +33,9 @@ export default function Select({
   compact = false,
   inTable = false,
 }: Props) {
-  const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
+  // The list goes in document.body so a modal or scroll area around the trigger can't clip it.
+  const { triggerRef, place, open, show, hide } = useAnchoredPopover<HTMLButtonElement>({ gap: 10 });
+  const dropdownRef = useRef<HTMLUListElement>(null);
   const normalized = normalize(options);
   const selected = normalized.find((o) => o.value === value);
 
@@ -38,12 +43,11 @@ export default function Select({
     if (!open) return;
 
     function onDocClick(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
+      const target = e.target as Node;
+      if (!triggerRef.current?.contains(target) && !dropdownRef.current?.contains(target)) hide();
     }
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") hide();
     }
 
     document.addEventListener("mousedown", onDocClick);
@@ -52,22 +56,23 @@ export default function Select({
       document.removeEventListener("mousedown", onDocClick);
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [open]);
+  }, [open, hide, triggerRef]);
 
   function selectOption(v: string) {
     onChange(v);
-    setOpen(false);
+    hide();
   }
 
   return (
-    <div className="selectPicker" ref={containerRef}>
+    <div className="selectPicker">
       <button
         type="button"
         id={id}
+        ref={triggerRef}
         className={
           `selectTrigger${compact ? " compact" : ""}${inTable ? " row" : ""}`
         }
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => (open ? hide() : show())}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-label={ariaLabel}
@@ -78,8 +83,19 @@ export default function Select({
         <ChevronIcon open={open} size={inTable ? 14 : 16} />
       </button>
 
-      {open && (
-        <ul className="selectDropdown" role="listbox">
+      {place && createPortal(
+        <ul
+          ref={dropdownRef}
+          className="selectDropdown"
+          role="listbox"
+          style={{
+            left: place.left,
+            top: place.top,
+            width: place.width,
+            maxHeight: Math.min(DROPDOWN_MAX_HEIGHT, place.maxHeight),
+            transform: place.above ? "translateY(-100%)" : undefined,
+          }}
+        >
           {normalized.map((opt) => (
             <li key={opt.value}>
               <button
@@ -95,7 +111,8 @@ export default function Select({
               </button>
             </li>
           ))}
-        </ul>
+        </ul>,
+        document.body,
       )}
 
       <style jsx>{`
@@ -158,18 +175,16 @@ export default function Select({
           transition: transform 0.15s ease;
         }
 
+        /* Placed by useAnchoredPopover; above the modals (z-index 100–110) it may open in. */
         .selectDropdown {
-          position: absolute;
-          top: calc(100% + 10px);
-          left: 0;
-          z-index: 50;
+          position: fixed;
+          z-index: 150;
           display: flex;
           flex-direction: column;
           gap: 2px;
-          width: 100%;
           min-width: 0;
-          max-height: 220px;
           overflow-y: auto;
+          margin: 0;
           background: var(--white);
           border: 1px solid #c9bfa0;
           border-radius: 8px;

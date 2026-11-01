@@ -48,6 +48,7 @@ export default function AdminProfileContent({ profile }: AdminProfileContentProp
             initials={profile.initials}
             name={profile.name}
             avatarUrl={profile.avatarUrl}
+            avatarFullUrl={profile.avatarFullUrl}
             eyebrow="COUNCIL CARD"
           >
             <div className="min-w-0">

@@ -747,7 +747,7 @@ function AlreadyRecorded({ status, recordedAt }: { status: AttendanceStatus; rec
           {rejected ? "Rejected" : "Checked in"} at <LocalTime value={recordedAt} format="time" />.{" "}
           {rejected
             ? "Accepting will check them in; rejecting again replaces the earlier record."
-            : "Rejecting won't change this record."}
+            : "Rejecting will ask you to confirm, then change them to rejected."}
         </p>
       </div>
     </div>

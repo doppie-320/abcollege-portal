@@ -189,57 +189,65 @@ export default function RosterTable({
           </div>
 
           {/* ───────── Table ───────── */}
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[820px] border-collapse text-left text-[13px]">
-              <thead>
-                <tr className="border-b border-rule-soft bg-vellum/50">
-                  {COLUMNS.map((column) => {
-                    const sorted = column.sort && sort.key === column.sort;
-                    return (
-                      <th
-                        key={column.label}
-                        scope="col"
-                        aria-sort={sorted ? (sort.dir === "asc" ? "ascending" : "descending") : undefined}
-                        className="mono px-5 py-3 text-[10px] font-normal tracking-[0.08em] whitespace-nowrap text-ink-soft uppercase"
-                      >
-                        {column.sort ? (
-                          <button
-                            type="button"
-                            onClick={() => toggleSort(column.sort!)}
-                            className={`-mx-1.5 inline-flex cursor-pointer items-center gap-1 rounded border-none bg-transparent px-1.5 py-0.5 tracking-[inherit] uppercase transition-colors duration-150 hover:bg-vellum-2 hover:text-navy-deep ${
-                              sorted ? "text-navy-deep" : "text-ink-soft"
-                            }`}
-                          >
-                            {column.label}
-                            <span
-                              className={`transition-[transform,opacity] duration-200 ${sorted ? "opacity-100" : "opacity-30"} ${
-                                sorted && sort.dir === "asc" ? "rotate-180" : ""
+          {/* Outside the table, which is wider than a phone, so it stays centered on screen. */}
+          {visible.length === 0 ? (
+            <EmptyState icon="search" title="NO MATCHES">
+              Nothing in this roster matches your search or filter.
+              <button
+                type="button"
+                onClick={() => {
+                  setQuery("");
+                  setFilter("all");
+                }}
+                className="mono mx-auto mt-3 flex cursor-pointer items-center gap-1.5 rounded-md border border-rule bg-transparent px-2.5 py-1 text-[10.5px] tracking-[0.04em] text-navy uppercase transition-colors duration-150 hover:bg-[#e6f3ff] hover:text-navy-deep"
+              >
+                <Icon name="x" size={11} />
+                Show everyone
+              </button>
+            </EmptyState>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[820px] border-collapse text-left text-[13px]">
+                <thead>
+                  <tr className="border-b border-rule-soft bg-vellum/50">
+                    {COLUMNS.map((column) => {
+                      const sorted = column.sort && sort.key === column.sort;
+                      return (
+                        <th
+                          key={column.label}
+                          scope="col"
+                          aria-sort={sorted ? (sort.dir === "asc" ? "ascending" : "descending") : undefined}
+                          className="mono px-5 py-3 text-[10px] font-normal tracking-[0.08em] whitespace-nowrap text-ink-soft uppercase"
+                        >
+                          {column.sort ? (
+                            <button
+                              type="button"
+                              onClick={() => toggleSort(column.sort!)}
+                              className={`-mx-1.5 inline-flex cursor-pointer items-center gap-1 rounded border-none bg-transparent px-1.5 py-0.5 tracking-[inherit] uppercase transition-colors duration-150 hover:bg-vellum-2 hover:text-navy-deep ${
+                                sorted ? "text-navy-deep" : "text-ink-soft"
                               }`}
                             >
-                              <Icon name="chevronDown" size={11} />
-                            </span>
-                          </button>
-                        ) : (
-                          column.label
-                        )}
-                      </th>
-                    );
-                  })}
-                </tr>
-              </thead>
-
-              {/* Re-keyed on filter/sort so the rows replay their entrance, but not on every keystroke. */}
-              <tbody key={`${filter}-${sort.key}-${sort.dir}`} className="divide-y divide-rule-soft">
-                {visible.length === 0 ? (
-                  <tr>
-                    <td colSpan={COLUMNS.length}>
-                      <EmptyState icon="search" title="NO MATCHES">
-                        Nothing in this roster matches your search or filter.
-                      </EmptyState>
-                    </td>
+                              {column.label}
+                              <span
+                                className={`transition-[transform,opacity] duration-200 ${sorted ? "opacity-100" : "opacity-30"} ${
+                                  sorted && sort.dir === "asc" ? "rotate-180" : ""
+                                }`}
+                              >
+                                <Icon name="chevronDown" size={11} />
+                              </span>
+                            </button>
+                          ) : (
+                            column.label
+                          )}
+                        </th>
+                      );
+                    })}
                   </tr>
-                ) : (
-                  visible.map((row, index) => {
+                </thead>
+  
+                {/* Re-keyed on filter/sort so the rows replay their entrance, but not on every keystroke. */}
+                <tbody key={`${filter}-${sort.key}-${sort.dir}`} className="divide-y divide-rule-soft">
+                  {visible.map((row, index) => {
                     const changes = (historyByUser.get(row.user_id) ?? NO_HISTORY).filter(
                       (entry) => entry.action === "changed",
                     ).length;
@@ -332,11 +340,11 @@ export default function RosterTable({
                         </td>
                       </tr>
                     );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </>
       )}
 

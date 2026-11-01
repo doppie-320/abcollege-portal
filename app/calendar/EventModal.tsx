@@ -18,6 +18,9 @@ import {
   type EventTag,
 } from "@/lib/calendar";
 
+// Phones and tablets get scroll-wheel date and time pickers instead of the dropdowns, as on sign-up.
+const WHEEL_QUERY = "(max-width: 1024px), (orientation: portrait)";
+
 type Props = {
   /** The event being edited; omit to create one. */
   event?: CalendarEvent;
@@ -196,9 +199,15 @@ export default function EventModal({
                 placeholder="Start date"
                 minYear={baseYear - 2}
                 maxYear={baseYear + 5}
+                modalQuery={WHEEL_QUERY}
               />
               {!allDay && (
-                <TimePicker value={startTime} onChange={changeStartTime} aria-label="Start time" />
+                <TimePicker
+                  value={startTime}
+                  onChange={changeStartTime}
+                  aria-label="Start time"
+                  modalQuery={WHEEL_QUERY}
+                />
               )}
             </div>
             {fieldErrors.start && <p className="evError">{fieldErrors.start}</p>}
@@ -213,6 +222,7 @@ export default function EventModal({
                 placeholder="End date"
                 minYear={baseYear - 2}
                 maxYear={baseYear + 5}
+                modalQuery={WHEEL_QUERY}
               />
               {!allDay && (
                 <TimePicker
@@ -220,6 +230,7 @@ export default function EventModal({
                   onChange={setEndTime}
                   aria-label="End time"
                   durationFrom={startDate === endDate ? startTime : undefined}
+                  modalQuery={WHEEL_QUERY}
                 />
               )}
             </div>
@@ -469,6 +480,7 @@ export default function EventModal({
         .evField textarea:focus,
         .evField :global(.selectTrigger:focus-visible),
         .evField :global(.dateTrigger:focus-visible),
+        .evField :global(.timeTrigger:focus-visible),
         .evField :global(.dateHeaderSelects select:focus) {
           outline: none;
           border-color: #b9ae92;

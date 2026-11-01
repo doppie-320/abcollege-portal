@@ -1,6 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
+import { useAnchoredPopover } from "@/lib/useAnchoredPopover";
+
+const MENU_WIDTH = 160;
 
 export default function PostMenu({
   onEdit,
@@ -13,17 +17,23 @@ export default function PostMenu({
   // What the menu acts on, used in the labels ("Edit post", "Delete comment").
   noun?: string;
 }) {
-  const [open, setOpen] = useState(false);
-  const wrapRef = useRef<HTMLDivElement>(null);
+  // The menu goes in document.body so the comment list's scroll area can't clip it.
+  const { triggerRef, place, open, show, hide } = useAnchoredPopover<HTMLButtonElement>({
+    align: "end",
+    width: MENU_WIDTH,
+    minHeight: 100,
+  });
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
 
     function onDocClick(e: MouseEvent) {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (!triggerRef.current?.contains(target) && !menuRef.current?.contains(target)) hide();
     }
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") hide();
     }
 
     document.addEventListener("mousedown", onDocClick);
@@ -32,19 +42,20 @@ export default function PostMenu({
       document.removeEventListener("mousedown", onDocClick);
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [open]);
+  }, [open, hide, triggerRef]);
 
   function choose(action: () => void) {
-    setOpen(false);
+    hide();
     action();
   }
 
   return (
-    <div className="postMenu" ref={wrapRef}>
+    <div className="postMenu">
       <button
         type="button"
+        ref={triggerRef}
         className={`menuTrigger${open ? " open" : ""}`}
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => (open ? hide() : show())}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={`${noun.charAt(0).toUpperCase()}${noun.slice(1)} options`}
@@ -56,26 +67,33 @@ export default function PostMenu({
         </svg>
       </button>
 
-      {open && (
-        <div className="menuDropdown" role="menu">
-          {onEdit && (
-            <button type="button" role="menuitem" className="menuItem" onClick={() => choose(onEdit)}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
-              </svg>
-              Edit {noun}
-            </button>
-          )}
-          {onDelete && (
-            <button type="button" role="menuitem" className="menuItem danger" onClick={() => choose(onDelete)}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v5M14 11v5" />
-              </svg>
-              Delete {noun}
-            </button>
-          )}
-        </div>
-      )}
+      {place &&
+        createPortal(
+          <div
+            className="menuPlace"
+            style={{ left: place.left, top: place.top, width: place.width, transform: place.above ? "translateY(-100%)" : undefined }}
+          >
+            <div ref={menuRef} className={`menuDropdown${place.above ? " above" : ""}`} role="menu">
+              {onEdit && (
+                <button type="button" role="menuitem" className="menuItem" onClick={() => choose(onEdit)}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                  </svg>
+                  Edit {noun}
+                </button>
+              )}
+              {onDelete && (
+                <button type="button" role="menuitem" className="menuItem danger" onClick={() => choose(onDelete)}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v5M14 11v5" />
+                  </svg>
+                  Delete {noun}
+                </button>
+              )}
+            </div>
+          </div>,
+          document.body,
+        )}
 
       <style jsx>{`
         .postMenu {
@@ -113,19 +131,24 @@ export default function PostMenu({
           outline-offset: 1px;
         }
 
+        /* Placed by useAnchoredPopover; above the post modal (z-index 100). */
+        .menuPlace {
+          position: fixed;
+          z-index: 150;
+        }
+
         .menuDropdown {
-          position: absolute;
-          top: calc(100% + 4px);
-          right: 0;
-          min-width: 160px;
           padding: 4px;
           background: var(--white);
           border: 1px solid #c9bfa0;
           border-radius: 6px;
           box-shadow: 0 10px 24px rgba(13, 30, 56, 0.16);
-          z-index: 20;
           transform-origin: top right;
           animation: popIn 0.12s ease backwards;
+        }
+
+        .menuDropdown.above {
+          transform-origin: bottom right;
         }
 
         .menuItem {

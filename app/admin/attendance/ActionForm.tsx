@@ -1,13 +1,13 @@
 "use client";
 
-import { useActionState, useRef, type ReactNode } from "react";
+import { useActionState, type ReactNode } from "react";
 import { settle, type ActionResult } from "@/lib/actionResult";
 
 type Action = (prev: ActionResult, formData: FormData) => Promise<ActionResult>;
 
 /**
- * A plain form around an admin action that shows its result. datetime-local
- * inputs are sent as ISO strings so the server never guesses the time zone.
+ * A plain form around an admin action that shows its result. Send times as
+ * ISO strings so the server never guesses the time zone.
  * `className` lays out the fields; the result message goes underneath.
  *
  * `optimistic` runs inside the action's transition, before the request, so a
@@ -27,11 +27,7 @@ export default function ActionForm({
   successMessage?: string;
   className?: string;
 }) {
-  const formRef = useRef<HTMLFormElement>(null);
   const [state, formAction, pending] = useActionState(async (prev: ActionResult, formData: FormData): Promise<ActionResult> => {
-    formRef.current?.querySelectorAll<HTMLInputElement>('input[type="datetime-local"]').forEach((input) => {
-      formData.set(input.name, input.value ? new Date(input.value).toISOString() : "");
-    });
     optimistic?.(formData);
     return settle(action(prev, formData));
   }, {});
@@ -39,7 +35,7 @@ export default function ActionForm({
   const errors = [state.error, ...Object.values(state.fieldErrors ?? {})].filter(Boolean) as string[];
 
   return (
-    <form ref={formRef} action={formAction}>
+    <form action={formAction}>
       <fieldset disabled={pending} className={`m-0 min-w-0 border-none p-0 ${className}`}>
         {children}
       </fieldset>

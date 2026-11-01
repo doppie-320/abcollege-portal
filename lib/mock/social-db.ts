@@ -95,7 +95,7 @@ let announcements: Announcement[] = [
     postedAt: daysAgo(1),
     title: "Engineering Days 2026 registration is open",
     body: "Sign up for the sportsfest and talent night lineups through your block representative. Slots are first come, first served.",
-    media: { type: "images", items: [{ src: "/promo-bg.png", alt: "Engineering Days 2026 banner" }] },
+    media: { type: "images", items: [{ src: "/promo-bg.svg", alt: "Engineering Days 2026 banner" }] },
     reactedBy: ["u-maria", "u-carlo", "u-anna", "u-leo", "u-juan"],
     comments: [],
   },
@@ -109,11 +109,11 @@ let announcements: Announcement[] = [
     media: {
       type: "images",
       items: [
-        { src: "/promo-bg.png", alt: "Opening ceremony banner" },
-        { src: "/Background-Mobile.png", alt: "Crowd at the opening ceremony" },
-        { src: "/logo.png", alt: "SOE seal flag" },
-        { src: "/promo-bg.png", alt: "Block teams lining up" },
-        { src: "/Background-Mobile.png", alt: "Closing huddle" },
+        { src: "/promo-bg.svg", alt: "Opening ceremony banner" },
+        { src: "/Background-Mobile.svg", alt: "Crowd at the opening ceremony" },
+        { src: "/logo.svg", alt: "SOE seal flag" },
+        { src: "/promo-bg.svg", alt: "Block teams lining up" },
+        { src: "/Background-Mobile.svg", alt: "Closing huddle" },
       ],
     },
     reactedBy: ["u-maria", "u-leo"],
@@ -129,8 +129,8 @@ let announcements: Announcement[] = [
     media: {
       type: "images",
       items: [
-        { src: "/promo-bg.png", alt: "Receipt batch 1" },
-        { src: "/Background-Mobile.png", alt: "Receipt batch 2" },
+        { src: "/promo-bg.svg", alt: "Receipt batch 1" },
+        { src: "/Background-Mobile.svg", alt: "Receipt batch 2" },
       ],
     },
     reactedBy: ["u-carlo"],
@@ -159,9 +159,9 @@ let announcements: Announcement[] = [
     media: {
       type: "images",
       items: [
-        { src: "/promo-bg.png", alt: "Workshop room setup" },
-        { src: "/Background-Mobile.png", alt: "Students working on CAD models" },
-        { src: "/logo.png", alt: "Certificates handed out" },
+        { src: "/promo-bg.svg", alt: "Workshop room setup" },
+        { src: "/Background-Mobile.svg", alt: "Students working on CAD models" },
+        { src: "/logo.svg", alt: "Certificates handed out" },
       ],
     },
     reactedBy: ["u-maria", "u-anna", "u-leo"],

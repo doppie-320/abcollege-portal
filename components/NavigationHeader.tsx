@@ -148,8 +148,8 @@ export default function SiteNav({
           onClick={(e) => onLinkClick(e, brandHref)}
         >
           <Image
-            src="/logo.png"
-            alt="Andres Bonifacio College seal"
+            src="/logo.svg"
+            alt="Andres Bonifacio College School of Engineering logo"
             width={28}
             height={28}
             className="size-7 shrink-0 object-contain"

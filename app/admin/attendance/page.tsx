@@ -34,7 +34,7 @@ export default async function AdminAttendancePage() {
 
       <div className="page-wrap">
         <PageHeader
-          back={{ href: "/admin", label: "Admin console" }}
+          back={{ href: "/attendance", label: "Back to attendance" }}
           eyebrow="SOE HUB / ADMIN PANEL / ATTENDANCE"
           title="Event Attendance"
           description="Choose which events take attendance, assign scanners, and review who checked in."

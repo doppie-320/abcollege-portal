@@ -2,8 +2,13 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { useBackdropDismiss } from "@/lib/useBackdropDismiss";
-import { AVATAR_ACCEPT, useAvatarEditor } from "@/lib/avatar";
+import { createPortal } from "react-dom";
+import ImageLightbox from "@/app/home/ImageLightbox";
+import { AVATAR_ACCEPT, useAvatarEditor, type AvatarCrop } from "@/lib/avatar";
+import { useAnchoredPopover } from "@/lib/useAnchoredPopover";
+import AvatarCropper from "./AvatarCropper";
+
+const MENU_WIDTH = 192;
 
 type AvatarEditorProps = {
   userId: string;
@@ -14,6 +19,8 @@ type AvatarEditorProps = {
   /** Card caption above the picture. Defaults to the student-facing wording; null hides it. */
   eyebrow?: string | null;
   avatarUrl: string;
+  /** The whole photo the avatar was cropped from, shown by "View profile picture". */
+  avatarFullUrl: string;
 };
 
 export default function AvatarEditor({
@@ -21,49 +28,72 @@ export default function AvatarEditor({
   name,
   children,
   eyebrow = "STUDENT CARD",
-  avatarUrl: savedUrl
+  avatarUrl: savedUrl,
+  avatarFullUrl: savedFullUrl
 }: AvatarEditorProps) {
-  // Shows a picked photo (or its removal) at once, before the upload finishes.
-  const { avatarUrl, isSaving, error, save, reset } = useAvatarEditor(savedUrl);
+  // Shows a cropped photo (or its removal) at once, before the upload finishes.
+  const { avatarUrl, avatarFullUrl, isSaving, error, accept, save, reset } = useAvatarEditor(
+    savedUrl,
+    savedFullUrl
+  );
   const inputRef = useRef<HTMLInputElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const [menuOpen, setMenuOpen] = useState(false);
+  // The menu goes in document.body, kept on screen: beside the picture it ran off narrow phones.
+  const {
+    triggerRef,
+    place: menuPlace,
+    open: menuOpen,
+    show: showMenu,
+    hide: hideMenu,
+  } = useAnchoredPopover<HTMLButtonElement>({ width: MENU_WIDTH, minHeight: 130 });
   const [viewerOpen, setViewerOpen] = useState(false);
-  const viewerBackdrop = useBackdropDismiss(() => setViewerOpen(false));
+  // The picked photo, while the user chooses which part of it shows.
+  const [cropping, setCropping] = useState<{ file: File; src: string } | null>(null);
   const hasAvatar = Boolean(avatarUrl);
 
   function openPicker() {
-    setMenuOpen(false);
+    hideMenu();
     inputRef.current?.click();
   }
 
   function handleRemove() {
-    setMenuOpen(false);
+    hideMenu();
     reset();
   }
 
   function handleView() {
     if (!hasAvatar) return;
-    setMenuOpen(false);
+    hideMenu();
     setViewerOpen(true);
   }
 
   function onPick(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = "";
-    if (file) void save(file);
+    if (file && accept(file)) setCropping({ file, src: URL.createObjectURL(file) });
   }
+
+  function onCropped(crop: AvatarCrop) {
+    if (!cropping) return;
+    setCropping(null);
+    void save(cropping.file, crop);
+  }
+
+  // Free the picked photo's preview once the cropper closes.
+  useEffect(() => {
+    if (!cropping) return;
+    return () => URL.revokeObjectURL(cropping.src);
+  }, [cropping]);
 
   // Close the dropdown on outside click / Escape.
   useEffect(() => {
     if (!menuOpen) return;
     function onDocClick(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuOpen(false);
-      }
+      const target = e.target as Node;
+      if (!triggerRef.current?.contains(target) && !menuRef.current?.contains(target)) hideMenu();
     }
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") setMenuOpen(false);
+      if (e.key === "Escape") hideMenu();
     }
     document.addEventListener("mousedown", onDocClick);
     document.addEventListener("keydown", onKeyDown);
@@ -71,28 +101,14 @@ export default function AvatarEditor({
       document.removeEventListener("mousedown", onDocClick);
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [menuOpen]);
-
-  // Lock scroll + close viewer on Escape.
-  useEffect(() => {
-    if (!viewerOpen) return;
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") setViewerOpen(false);
-    }
-    document.addEventListener("keydown", onKeyDown);
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [viewerOpen]);
+  }, [menuOpen, hideMenu, triggerRef]);
 
   return (
     <div className="flex w-full flex-col gap-2.5">
       {eyebrow && <span className="eyebrow">{eyebrow}</span>}
 
-      <div className="flex w-full items-start gap-6">
+      {/* Stacks on phones: side by side, the name column is too narrow and leaves a gap under the picture. */}
+      <div className="flex w-full items-start gap-6 max-[480px]:flex-col max-[480px]:items-stretch max-[480px]:gap-3">
         <div className="flex w-32 shrink-0 flex-col items-center gap-2.5">
           <div className="relative size-32 shrink-0">
             {/* Paper ring keeps the edge visible when the picture overlaps a navy banner. */}
@@ -118,10 +134,11 @@ export default function AvatarEditor({
             </div>
 
             {/* Camera icon overlaid on the avatar border */}
-            <div ref={menuRef} className="absolute right-0 bottom-0">
+            <div className="absolute right-0 bottom-0">
               <button
+                ref={triggerRef}
                 type="button"
-                onClick={() => setMenuOpen((v) => !v)}
+                onClick={() => (menuOpen ? hideMenu() : showMenu())}
                 disabled={isSaving}
                 title="Profile picture options"
                 aria-label="Profile picture options"
@@ -132,11 +149,18 @@ export default function AvatarEditor({
                 <CameraIcon size={16} />
               </button>
 
-              {menuOpen && (
+              {menuPlace && createPortal(
                 <div
+                  ref={menuRef}
                   role="menu"
                   aria-label="Profile picture options"
-                  className="absolute top-0 left-11 z-30 w-48 overflow-hidden rounded-[6px] border border-rule bg-paper shadow-[0_10px_24px_rgba(13,30,56,0.16)]"
+                  style={{
+                    left: menuPlace.left,
+                    top: menuPlace.top,
+                    width: menuPlace.width,
+                    transform: menuPlace.above ? "translateY(-100%)" : undefined,
+                  }}
+                  className="fixed z-[150] overflow-hidden rounded-[6px] border border-rule bg-paper shadow-[0_10px_24px_rgba(13,30,56,0.16)]"
                 >
                   <button
                     type="button"
@@ -169,7 +193,8 @@ export default function AvatarEditor({
                       Remove photo
                     </button>
                   )}
-                </div>
+                </div>,
+                document.body
               )}
             </div>
           </div>
@@ -208,35 +233,18 @@ export default function AvatarEditor({
         {children}
       </div>
 
-      {/* Full-size profile picture viewer */}
+      {cropping && (
+        <AvatarCropper src={cropping.src} onCancel={() => setCropping(null)} onConfirm={onCropped} />
+      )}
+
+      {/* The whole photo, not just the cropped circle. */}
       {viewerOpen && hasAvatar && (
-        <div
-          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 p-6"
-          {...viewerBackdrop}
-        >
-          <button
-            type="button"
-            onClick={() => setViewerOpen(false)}
-            aria-label="Close profile picture viewer"
-            className="absolute top-5 right-5 flex size-9 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20"
-          >
-            <CloseIcon />
-          </button>
-          <div
-            className="rounded-full border-4 border-paper bg-paper p-1.5 shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="relative size-72 overflow-hidden rounded-full max-[480px]:size-56">
-              <Image
-                src={avatarUrl}
-                alt={`${name}'s profile picture`}
-                fill
-                sizes="288px"
-                className="object-cover"
-              />
-            </div>
-          </div>
-        </div>
+        <ImageLightbox
+          items={[{ src: avatarFullUrl || avatarUrl, alt: `${name}'s profile picture` }]}
+          index={0}
+          onClose={() => setViewerOpen(false)}
+          onIndexChange={() => {}}
+        />
       )}
     </div>
   );
@@ -298,24 +306,6 @@ function TrashIcon({ size = 20 }: { size?: number }) {
       <path d="M19 6v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6" />
       <line x1="10" y1="11" x2="10" y2="17" />
       <line x1="14" y1="11" x2="14" y2="17" />
-    </svg>
-  );
-}
-
-function CloseIcon() {
-  return (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      aria-hidden="true"
-    >
-      <line x1="6" y1="6" x2="18" y2="18" />
-      <line x1="18" y1="6" x2="6" y2="18" />
     </svg>
   );
 }
