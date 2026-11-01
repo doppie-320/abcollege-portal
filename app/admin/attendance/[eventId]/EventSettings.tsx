@@ -1,16 +1,70 @@
 "use client";
 
+import { useState } from "react";
 import { checkInWindow, type AttendanceEvent } from "@/lib/attendance";
 import LocalTime, { useHydrated } from "@/app/attendance/LocalTime";
-import { FIELD, FIELD_LABEL, Icon } from "@/app/attendance/ui";
+import { FIELD_LABEL, Icon } from "@/app/attendance/ui";
+import DatePicker from "@/components/DatePicker";
+import TimePicker from "@/components/TimePicker";
 import { updateEventAttendance } from "../actions";
 import ActionForm from "../ActionForm";
 
-// datetime-local wants "YYYY-MM-DDTHH:mm" in local time.
-function toLocalInput(iso: string | null): string {
-  if (!iso) return "";
-  const date = new Date(iso);
-  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+// Same pickers as the calendar's event modal: scroll wheels on phones and tablets.
+const WHEEL_QUERY = "(max-width: 1024px), (orientation: portrait)";
+
+// The pickers want "YYYY-MM-DD" and "HH:mm" in local time.
+function toLocalParts(date: Date): { day: string; time: string } {
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString();
+  return { day: local.slice(0, 10), time: local.slice(11, 16) };
+}
+
+/**
+ * A date and time sent as one ISO string, or blank to use the default. The time
+ * starts at `fallback`'s so picking only a date keeps the default window's time.
+ */
+function DateTimeField({
+  name,
+  label,
+  hint,
+  value,
+  fallback,
+  baseYear,
+}: {
+  name: string;
+  label: string;
+  hint: string;
+  value: string | null;
+  fallback: Date;
+  baseYear: number;
+}) {
+  const [day, setDay] = useState(() => (value ? toLocalParts(new Date(value)).day : ""));
+  const [time, setTime] = useState(() => toLocalParts(value ? new Date(value) : fallback).time);
+  const labelId = `${name}Label`;
+
+  return (
+    <div>
+      <span className={FIELD_LABEL} id={labelId}>
+        {label}
+      </span>
+      <div
+        role="group"
+        aria-labelledby={labelId}
+        className={`grid gap-2.5 ${day ? "grid-cols-[minmax(0,1fr)_124px] sm:grid-cols-[minmax(0,1fr)_136px]" : "grid-cols-1"}`}
+      >
+        <DatePicker
+          value={day}
+          onChange={setDay}
+          placeholder="Default"
+          minYear={baseYear - 2}
+          maxYear={baseYear + 5}
+          modalQuery={WHEEL_QUERY}
+        />
+        {day && <TimePicker value={time} onChange={setTime} aria-label={`${label} time`} modalQuery={WHEEL_QUERY} />}
+      </div>
+      <input type="hidden" name={name} value={day ? new Date(`${day}T${time}`).toISOString() : ""} />
+      <span className="mt-1 block text-[11.5px] font-normal text-ink-soft">{hint}</span>
+    </div>
+  );
 }
 
 export type AttendanceSettings = Pick<
@@ -30,8 +84,9 @@ export default function EventSettings({
   onSave: (settings: AttendanceSettings) => void;
 }) {
   const { opens, closes } = checkInWindow(event);
-  // The server renders in its own time zone; remount the inputs once the browser's is known.
   const hydrated = useHydrated();
+  // Keeps the picker's year list around the event rather than capping it at this year.
+  const baseYear = new Date(event.event_start).getFullYear();
 
   return (
     <ActionForm
@@ -74,27 +129,24 @@ export default function EventSettings({
         <span aria-hidden="true" className={SWITCH} />
       </label>
 
+      {/* Remounted once hydrated so the fields start from the browser's time zone, not the server's. */}
       <div className="grid grid-cols-1 gap-3" key={hydrated ? "local" : "server"}>
-        <label className="m-0">
-          <span className={FIELD_LABEL}>Check-in opens</span>
-          <input
-            type="datetime-local"
-            name="checkInOpensAt"
-            defaultValue={hydrated ? toLocalInput(event.check_in_opens_at) : ""}
-            className={FIELD}
-          />
-          <span className="mt-1 block text-[11.5px] font-normal text-ink-soft">Blank = 30 minutes before the event starts.</span>
-        </label>
-        <label className="m-0">
-          <span className={FIELD_LABEL}>Check-in closes</span>
-          <input
-            type="datetime-local"
-            name="checkInClosesAt"
-            defaultValue={hydrated ? toLocalInput(event.check_in_closes_at) : ""}
-            className={FIELD}
-          />
-          <span className="mt-1 block text-[11.5px] font-normal text-ink-soft">Blank = when the event ends.</span>
-        </label>
+        <DateTimeField
+          name="checkInOpensAt"
+          label="Check-in opens"
+          hint="Blank = 30 minutes before the event starts."
+          value={hydrated ? event.check_in_opens_at : null}
+          fallback={opens}
+          baseYear={baseYear}
+        />
+        <DateTimeField
+          name="checkInClosesAt"
+          label="Check-in closes"
+          hint="Blank = when the event ends."
+          value={hydrated ? event.check_in_closes_at : null}
+          fallback={closes}
+          baseYear={baseYear}
+        />
       </div>
 
       <div className="rounded-lg border border-dashed border-navy/30 bg-[#e6f3ff]/60 px-3.5 py-2.5">
