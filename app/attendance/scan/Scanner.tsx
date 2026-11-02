@@ -563,7 +563,7 @@ export default function Scanner({ events }: { events: AttendanceEvent[] }) {
                 <span className="mt-px text-orange">
                   <Icon name="alert" size={13} />
                 </span>
-                This is a static pass, which a printout or screenshot can copy. Check their face carefully.
+                This is a static pass, which anyone who knows their student ID can make. Check their face carefully.
               </p>
             )}
 

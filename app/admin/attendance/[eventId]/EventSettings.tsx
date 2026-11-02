@@ -116,8 +116,8 @@ export default function EventSettings({
         <span>
           <span className="block text-[13.5px] font-semibold text-navy-deep">Accept static passes</span>
           <span className="block text-[12px] font-normal text-ink-soft">
-            Also takes the printable pass that never changes. Copies keep working, so leave this off when attendance
-            matters.
+            Takes the printed pass, which is just the student&apos;s ID in a QR. Turn off to require the live code from
+            their phone, which can&apos;t be copied or made from an ID.
           </span>
         </span>
         <input
