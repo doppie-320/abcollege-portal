@@ -135,15 +135,8 @@ export default async function AttendancePage() {
               {/* ───────── Attendance pass ───────── */}
               <Frame className="animate-fade-in-up p-0">
                 <div className={`rounded-t-[5px] border-b-[3px] border-orange bg-navy px-5 py-4 ${BLUEPRINT_GRID}`}>
-                  <div className="mb-3 flex items-center justify-between">
+                  <div className="mb-3">
                     <span className="mono text-[10px] tracking-[0.12em] text-navy-tint uppercase">Attendance pass</span>
-                    <span className="mono flex items-center gap-1.5 text-[10px] text-navy-tint">
-                      <span className="relative flex size-1.5">
-                        <span className="absolute inline-flex size-full animate-ping rounded-full bg-yellow opacity-75" />
-                        <span className="relative inline-flex size-1.5 rounded-full bg-yellow" />
-                      </span>
-                      LIVE
-                    </span>
                   </div>
                   <div className="flex items-center gap-3.5">
                     {profile.avatarUrl ? (
@@ -170,8 +163,8 @@ export default async function AttendancePage() {
                 </div>
 
                 <div className="px-5 pt-7 pb-5">
+                  <StaticPass name={profile.name} studentId={studentNumber} />
                   <StudentToken name={profile.name} studentId={studentNumber} />
-                  <StaticPass studentId={studentNumber} />
                 </div>
               </Frame>
 

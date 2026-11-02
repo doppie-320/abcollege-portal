@@ -428,8 +428,8 @@ export default function EventAttendance({
           message={
             <>
               Every saved, printed or shared copy of <strong>{rosterName(confirming.row)}</strong>&rsquo;s static pass
-              stops working, at every event. They get a new one on their attendance page. Their live QR and this
-              event&rsquo;s record aren&rsquo;t affected.
+              stops working, at every event. They get a new one on their attendance page. This event&rsquo;s record
+              isn&rsquo;t affected.
             </>
           }
           confirmLabel="Reset pass"

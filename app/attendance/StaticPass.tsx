@@ -1,13 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import QRCode from "qrcode";
 import ConfirmDialog from "@/app/home/ConfirmDialog";
 import { getStaticPass, resetMyStaticPass } from "./actions";
+import { FullScreenPass, PassQrButton } from "./PassQr";
 import { ICON_PATHS, Icon } from "./ui";
 
+const ALT = "Your attendance pass";
+
 function drawPass(pass: string): Promise<string> {
-  // Larger and with more error correction than the live code: it's meant to survive printing.
+  // More error correction than the live code: it's meant to survive printing.
   return QRCode.toDataURL(pass, {
     errorCorrectionLevel: "Q",
     margin: 4,
@@ -17,39 +20,46 @@ function drawPass(pass: string): Promise<string> {
 }
 
 /**
- * The student's static pass: a QR that doesn't change, for printing or showing
- * without data. Only events that allow static passes accept it. Collapsed by
- * default so the live code stays the obvious one to show.
+ * The student's main pass: a QR that doesn't change, so it can be saved or
+ * printed. Events can turn it off to require the live code instead; see StudentToken.
  */
-export default function StaticPass({ studentId }: { studentId: string }) {
-  const [open, setOpen] = useState(false);
+export default function StaticPass({ name, studentId }: { name: string; studentId: string }) {
   const [qrUrl, setQrUrl] = useState("");
   const [error, setError] = useState("");
+  const [enlarged, setEnlarged] = useState(false);
   const [confirmingReset, setConfirmingReset] = useState(false);
   const [resetDone, setResetDone] = useState(false);
+  const closeFullScreen = useCallback(() => setEnlarged(false), []);
 
-  // Fetched the first time the panel opens; the pass doesn't change until it's reset.
+  // The pass doesn't change until it's reset, so it's fetched once.
   useEffect(() => {
-    if (!open || qrUrl) return;
     let cancelled = false;
-    getStaticPass()
-      .then(async (result) => {
+    let timer: ReturnType<typeof setTimeout>;
+
+    async function load() {
+      try {
+        const result = await getStaticPass();
         if (cancelled) return;
-        if (result.error !== undefined) {
-          setError(result.error);
-          return;
-        }
+        if (result.error !== undefined) throw new Error(result.error);
         const url = await drawPass(result.data.pass);
-        if (!cancelled) setQrUrl(url);
-      })
-      .catch((err) => {
-        console.error("Couldn't load the static pass:", err);
-        if (!cancelled) setError("Couldn't load your static pass. Please try again.");
-      });
+        if (cancelled) return;
+        setError("");
+        setQrUrl(url);
+      } catch (err) {
+        console.error("Couldn't load the attendance pass:", err);
+        if (cancelled) return;
+        setError(err instanceof Error && err.message ? err.message : "Couldn't load your attendance pass.");
+        // e.g. while offline.
+        timer = setTimeout(load, 10_000);
+      }
+    }
+
+    load();
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
-  }, [open, qrUrl]);
+  }, []);
 
   async function reset() {
     const result = await resetMyStaticPass();
@@ -60,79 +70,72 @@ export default function StaticPass({ studentId }: { studentId: string }) {
     setConfirmingReset(false);
   }
 
-  return (
-    <div className="mt-6 border-t border-rule-soft pt-4">
-      <button
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        aria-expanded={open}
-        className="flex w-full cursor-pointer items-center justify-between gap-3 rounded-md border-none bg-transparent p-0 text-left focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-blue"
+  if (error && !qrUrl) {
+    return (
+      <div
+        role="alert"
+        className="animate-fade-in flex items-start gap-3 rounded-lg border border-[#b3261e]/30 bg-[#fbe9e7] px-4 py-3 text-[13px] text-[#8f1e18]"
       >
-        <span>
-          <span className="mono block text-[10px] tracking-[0.1em] text-ink-soft uppercase">No data at the event?</span>
-          <span className="block text-[13.5px] font-semibold text-navy-deep">Static pass</span>
+        <span className="mt-0.5">
+          <Icon name="alert" size={16} />
         </span>
-        <span className={`text-ink-soft transition-transform duration-200 ${open ? "rotate-180" : ""}`}>
-          <Icon name="chevronDown" size={16} />
-        </span>
-      </button>
-
-      {open && (
-        <div className="animate-fade-in mt-3">
-          <p className="mb-3 text-[12.5px] text-ink-soft">
-            A code that never changes, so you can print it or save it. Only events that allow static passes accept it.
-            Anyone with a copy can check in as you, so don&apos;t share it.
-          </p>
-
-          {error ? (
-            <p role="alert" className="mb-0 rounded-md border border-[#b3261e]/30 bg-[#fbe9e7] px-3 py-2 text-[12.5px] text-[#8f1e18]">
-              {error}
-            </p>
-          ) : !qrUrl ? (
-            <div className="mx-auto flex size-[180px] animate-pulse items-center justify-center rounded-md bg-vellum-2 text-ink-soft">
-              <Icon name="id" size={32} />
-            </div>
-          ) : (
-            <>
-              <div className="mx-auto w-fit rounded-lg border border-dashed border-navy/40 bg-white p-2">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img key={qrUrl} src={qrUrl} alt="Your static attendance pass" width={180} height={180} className="animate-pop-in block" />
-              </div>
-              {resetDone && (
-                <p role="status" className="mt-3 mb-0 text-center text-[12px] font-medium text-blue">
-                  New pass ready. Old copies no longer work.
-                </p>
-              )}
-              <div className="mt-3 flex flex-wrap justify-center gap-2">
-                <a
-                  href={qrUrl}
-                  download={`attendance-pass-${studentId.replace(/[^\w-]+/g, "_")}.png`}
-                  className="btn ghost rounded-lg px-3 py-1.5 text-xs no-underline"
-                >
-                  <Icon name="download" size={13} />
-                  Save image
-                </a>
-                <button
-                  type="button"
-                  onClick={() => setConfirmingReset(true)}
-                  className="btn ghost rounded-lg px-3 py-1.5 text-xs"
-                >
-                  <Icon name="x" size={13} />
-                  Reset pass
-                </button>
-              </div>
-            </>
-          )}
+        <div>
+          <p className="mb-0.5 font-semibold">{error}</p>
+          <p className="mono mb-0 text-[11px] opacity-80">Trying again in a few seconds…</p>
         </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="flex flex-col items-center">
+        <PassQrButton url={qrUrl} alt={ALT} size={240} onEnlarge={() => setEnlarged(true)} />
+
+        <p className="mt-5 mb-0 max-w-[290px] text-center text-[12.5px] text-ink-soft">
+          Show this to a scanner. It never changes, so you can save or print it. Anyone with a copy can check in as you,
+          so don&apos;t share it.
+        </p>
+
+        {resetDone && (
+          <p role="status" className="mt-3 mb-0 text-center text-[12px] font-medium text-blue">
+            New pass ready. Old copies no longer work.
+          </p>
+        )}
+
+        {qrUrl && (
+          <div className="mt-4 flex flex-wrap justify-center gap-2">
+            <button type="button" onClick={() => setEnlarged(true)} className="btn ghost rounded-lg px-3 py-1.5 text-xs">
+              <Icon name="scan" size={13} />
+              Full screen
+            </button>
+            <a
+              href={qrUrl}
+              download={`attendance-pass-${studentId.replace(/[^\w-]+/g, "_")}.png`}
+              className="btn ghost rounded-lg px-3 py-1.5 text-xs no-underline"
+            >
+              <Icon name="download" size={13} />
+              Save image
+            </a>
+            <button type="button" onClick={() => setConfirmingReset(true)} className="btn ghost rounded-lg px-3 py-1.5 text-xs">
+              <Icon name="x" size={13} />
+              Reset pass
+            </button>
+          </div>
+        )}
+      </div>
+
+      {enlarged && qrUrl && (
+        <FullScreenPass name={name} studentId={studentId} url={qrUrl} alt={ALT} onClose={closeFullScreen} />
       )}
 
       {confirmingReset && (
         <ConfirmDialog
           tone="warning"
-          eyebrow="RESET · STATIC PASS"
+          eyebrow="RESET · ATTENDANCE PASS"
           icon={ICON_PATHS.id}
-          title="Reset your static pass?"
-          message="Every saved, printed or shared copy stops working. Do this if you lost a printout or someone else has your pass. Your live QR code isn't affected."
+          title="Reset your attendance pass?"
+          message="Every saved, printed or shared copy stops working. Do this if you lost a printout or someone else has your pass."
           confirmLabel="Reset pass"
           busyLabel="Resetting…"
           errorMessage="Couldn't reset your pass. Please try again."

@@ -49,10 +49,9 @@ SELECT ok(
   NOT has_function_privilege('anon', 'public.get_my_static_pass()', 'execute'),
   'anon cannot request a static pass'
 );
-SELECT is(
-  (SELECT accepts_static_pass FROM public.events WHERE event_id = 9102),
-  false,
-  'events refuse static passes unless an admin allows them'
+SELECT col_default_is(
+  'public', 'events', 'accepts_static_pass', 'true',
+  'events accept static passes unless an admin turns them off'
 );
 
 SELECT pg_temp.login('b0000000-0000-0000-0000-000000000005');

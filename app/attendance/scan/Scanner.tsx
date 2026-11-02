@@ -558,15 +558,6 @@ export default function Scanner({ events }: { events: AttendanceEvent[] }) {
               <AlreadyRecorded status={student.status} recordedAt={student.recorded_at} />
             )}
 
-            {source?.kind === "qr" && student.method === "static" && (
-              <p className="animate-fade-in-up mx-5 mb-4 flex items-start gap-2 rounded-md border border-orange/30 bg-orange/10 px-3 py-2 text-[12px] text-navy-deep [animation-delay:0.16s]">
-                <span className="mt-px text-orange">
-                  <Icon name="alert" size={13} />
-                </span>
-                This is a static pass, which a printout or screenshot can copy. Check their face carefully.
-              </p>
-            )}
-
             {source?.kind === "id" && (
               <div className="animate-fade-in-up mx-5 mb-4 [animation-delay:0.16s]">
                 <p className="mb-3 flex items-start gap-2 rounded-md border border-orange/30 bg-orange/10 px-3 py-2 text-[12px] text-navy-deep">
