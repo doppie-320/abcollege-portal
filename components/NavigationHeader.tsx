@@ -41,7 +41,7 @@ const NAV_LINKS: readonly NavLink[] = [
   { href: "/home", label: "Home", icon: "home" },
   { href: "/calendar", label: "Calendar", icon: "calendar" },
   { href: "/attendance", label: "Attendance", icon: "attendance" },
-  { href: "#", label: "Suggestion Box", icon: "suggestion" },
+  { href: "/suggestions", label: "Suggestion Box", icon: "suggestion" },
 ];
 
 /** Tabs for admins on /home — standard links plus User Account Review. */

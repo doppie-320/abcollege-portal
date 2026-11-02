@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { useBackdropDismiss } from "@/lib/useBackdropDismiss";
+import { useSheetDrag } from "@/lib/useSheetDrag";
+import SheetHandle from "@/components/SheetHandle";
 import DatePicker from "@/components/DatePicker";
 import Select from "@/components/Select";
 import TimePicker, { minutesOf, timeFromMinutes } from "@/components/TimePicker";
@@ -78,6 +80,12 @@ export default function EventModal({
   }, [closing, onClose]);
 
   const backdrop = useBackdropDismiss(requestClose);
+  // Phones and tablets: drag the top bar down to close, up for full screen.
+  const sheet = useSheetDrag<HTMLFormElement>({
+    onRequestClose: () => !closing,
+    onClosed: onClose,
+    onHandleClose: requestClose,
+  });
 
   useEffect(() => {
     // The sheet sizes don't autofocus: on phones the keyboard would open mid-slide
@@ -134,8 +142,9 @@ export default function EventModal({
   }
 
   return (
-    <div className={`evBackdrop${closing ? " closing" : ""}`} {...backdrop}>
+    <div ref={sheet.backdropRef} className={`evBackdrop${closing ? " closing" : ""}`} {...backdrop}>
       <form
+        ref={sheet.panelRef}
         className={`evPanel${closing ? " closing" : ""}`}
         onClick={(e) => e.stopPropagation()}
         onSubmit={submit}
@@ -144,8 +153,8 @@ export default function EventModal({
         aria-labelledby="eventModalHeading"
         noValidate
       >
-        <div className="evTopBar">
-          <span className="sheetHandle" aria-hidden="true" />
+        <div className="evTopBar" {...sheet.zoneProps}>
+          <SheetHandle {...sheet.handleProps} />
           <span className="evTopBarTitle mono" id="eventModalHeading">
             {isEdit ? "EDIT EVENT" : "NEW EVENT"} / {TAG_LABELS[tag].toUpperCase()}
           </span>
@@ -393,25 +402,21 @@ export default function EventModal({
           flex-shrink: 0;
         }
 
-        .sheetHandle {
-          position: absolute;
-          top: 7px;
-          left: 50%;
-          transform: translateX(-50%);
-          width: 40px;
-          height: 4px;
-          border-radius: 999px;
-          background: rgba(255, 255, 255, 0.5);
+        /* As a sheet, the handle closes it (tap or drag), so the X steps aside. */
+        @media (max-width: 819px) {
+          .evTopBar {
+            padding-bottom: 12px;
+          }
+
+          .evTopBar .evClose {
+            display: none;
+          }
         }
 
         @media (min-width: 820px) {
           .evTopBar {
             padding-top: 10px;
             border-radius: 7px 7px 0 0;
-          }
-
-          .sheetHandle {
-            display: none;
           }
         }
 

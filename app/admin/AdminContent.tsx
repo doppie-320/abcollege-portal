@@ -10,7 +10,7 @@ type AdminModule = {
   description: string;
   tag: string;
   cta: string;
-  icon: "review" | "attendance";
+  icon: "review" | "attendance" | "suggestions";
 };
 
 const ADMIN_MODULES: readonly AdminModule[] = [
@@ -31,6 +31,15 @@ const ADMIN_MODULES: readonly AdminModule[] = [
     tag: "Events",
     cta: "Manage Attendance",
     icon: "attendance",
+  },
+  {
+    href: "/suggestions",
+    title: "Suggestion Box",
+    description:
+      "Read what students suggest and take down anything inappropriate.",
+    tag: "Feedback",
+    cta: "Open Inbox",
+    icon: "suggestions",
   },
 ];
 
@@ -133,6 +142,25 @@ function ModuleIcon({ name }: { name: AdminModule["icon"] }) {
       >
         <path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2" />
         <path d="m8 12 3 3 5-6" />
+      </svg>
+    );
+  }
+
+  if (name === "suggestions") {
+    return (
+      <svg
+        width="22"
+        height="22"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5" />
+        <path d="M9 18h6M10 22h4" />
       </svg>
     );
   }

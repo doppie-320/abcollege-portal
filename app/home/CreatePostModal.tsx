@@ -14,6 +14,8 @@ import {
   type Ref,
 } from "react";
 import { useBackdropDismiss } from "@/lib/useBackdropDismiss";
+import { useSheetDrag } from "@/lib/useSheetDrag";
+import SheetHandle from "@/components/SheetHandle";
 import { createPortal } from "react-dom";
 import { EditorContent, useEditor, useEditorState, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -213,6 +215,20 @@ export default function CreatePostModal({
     else closeSheet();
   }
 
+  // Phones and tablets: drag the top bar down to close, up for full screen.
+  // Unsaved work springs back and asks first, same as the Cancel button.
+  const sheet = useSheetDrag<HTMLFormElement>({
+    query: "(max-width: 820px)",
+    onRequestClose: () => {
+      if (closing) return false;
+      if (!isDirty) return true;
+      setShowDiscard(true);
+      return false;
+    },
+    onClosed: onClose,
+    onHandleClose: requestClose,
+  });
+
   useEffect(() => {
     return () => {
       if (closeTimer.current) clearTimeout(closeTimer.current);
@@ -281,11 +297,13 @@ export default function CreatePostModal({
 
   return createPortal(
     <div
+      ref={sheet.backdropRef}
       className={`modalBackdrop${closing ? " closing" : ""}`}
       {...backdrop}
       style={keyboardView ? { top: keyboardView.top, bottom: "auto", height: keyboardView.height } : undefined}
     >
       <form
+        ref={sheet.panelRef}
         className={`modalPanel${keyboardView ? " keyboardUp" : ""}${closing ? " closing" : ""}`}
         onClick={(e) => e.stopPropagation()}
         onSubmit={publish}
@@ -293,8 +311,8 @@ export default function CreatePostModal({
         aria-modal="true"
         aria-labelledby="createPostHeading"
       >
-        <div className="modalTopBar">
-          <span className="sheetHandle" aria-hidden="true"></span>
+        <div className="modalTopBar" {...sheet.zoneProps}>
+          <SheetHandle {...sheet.handleProps} />
           <span className="modalTopBarTitle mono" id="createPostHeading">
             {isEdit ? "EDIT ANNOUNCEMENT" : "NEW ANNOUNCEMENT"}
             {tag ? ` / ${tag.toUpperCase()}` : ""}
@@ -569,10 +587,6 @@ export default function CreatePostModal({
           font-size: 11.5px;
           color: #c6d3e5;
           letter-spacing: 0.08em;
-        }
-
-        .sheetHandle {
-          display: none;
         }
 
         .modalClose {
@@ -870,9 +884,11 @@ export default function CreatePostModal({
           }
         }
 
-        /* On-screen keyboard is up: give the space to the text being typed. */
+        /* On-screen keyboard is up: give the space to the text being typed.
+           !important beats a full-screen sheet's inline height (see useSheetDrag). */
         .modalPanel.keyboardUp {
-          height: 100%;
+          height: 100% !important;
+          max-height: 100% !important;
         }
 
         .keyboardUp .modalAccent,
@@ -930,18 +946,12 @@ export default function CreatePostModal({
           .modalTopBar {
             position: relative;
             padding-top: 18px;
+            padding-bottom: 12px;
           }
 
-          .sheetHandle {
-            display: block;
-            position: absolute;
-            top: 7px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 40px;
-            height: 4px;
-            border-radius: 999px;
-            background: rgba(255, 255, 255, 0.5);
+          /* As a sheet, the handle closes it (tap or drag), so the X steps aside. */
+          .modalTopBar .modalClose {
+            display: none;
           }
 
           .modalBody {

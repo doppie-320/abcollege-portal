@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import { useBackdropDismiss } from "@/lib/useBackdropDismiss";
+import { useSheetDrag } from "@/lib/useSheetDrag";
+import SheetHandle from "@/components/SheetHandle";
 import Image from "next/image";
 import PostContent from "./PostContent";
 import PostMenu from "./PostMenu";
@@ -62,6 +64,12 @@ export default function PostModal({
   }, []);
 
   const backdrop = useBackdropDismiss(requestClose);
+  // Phones and tablets: drag the top bar down to close, up for full screen.
+  const sheet = useSheetDrag<HTMLDivElement>({
+    onRequestClose: () => !closing,
+    onClosed: onClose,
+    onHandleClose: requestClose,
+  });
 
   useEffect(() => {
     if (!announcement.authorId) {
@@ -157,10 +165,16 @@ export default function PostModal({
   if (typeof document === "undefined") return null;
 
   return createPortal(
-    <div className={`modalBackdrop ${closing ? "closing" : ""}`} {...backdrop}>
-      <div className={`modalPanel ${closing ? "closing" : ""}`} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
-        <div className="modalTopBar">
-          <span className="sheetHandle" aria-hidden="true" />
+    <div ref={sheet.backdropRef} className={`modalBackdrop ${closing ? "closing" : ""}`} {...backdrop}>
+      <div
+        ref={sheet.panelRef}
+        className={`modalPanel ${closing ? "closing" : ""}`}
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+      >
+        <div className="modalTopBar" {...sheet.zoneProps}>
+          <SheetHandle {...sheet.handleProps} />
           <span className="modalTopBarTitle mono">
             <span className="modalTopBarIcon">
               <MegaphoneIcon />
@@ -505,24 +519,20 @@ export default function PostModal({
           font-size: 10px;
         }
 
-        .sheetHandle {
-          position: absolute;
-          top: 7px;
-          left: 50%;
-          transform: translateX(-50%);
-          width: 40px;
-          height: 4px;
-          border-radius: 999px;
-          background: rgba(255, 255, 255, 0.5);
+        /* As a sheet, the handle closes it (tap or drag), so the X steps aside. */
+        @media (max-width: 819px) {
+          .modalTopBar {
+            padding-bottom: 12px;
+          }
+
+          .modalTopBar .modalClose {
+            display: none;
+          }
         }
 
         @media (min-width: 820px) {
           .modalTopBar {
             padding-top: 10px;
-          }
-
-          .sheetHandle {
-            display: none;
           }
         }
 
