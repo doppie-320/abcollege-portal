@@ -261,6 +261,16 @@
     }
   }
 
+  /* A band of light sweeping across a loading placeholder. */
+  @keyframes skeletonShimmer {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(100%);
+    }
+  }
+
   @keyframes heartPop {
     0% {
       transform: scale(1);
@@ -574,6 +584,40 @@
     border: none;
     border-top: 1px solid #c9bfa0;
     margin: 14px 0;
+  }
+
+  /* ---------- Skeleton placeholders (see components/Skeleton.tsx) ---------- */
+  /* Stands in for text, avatars and controls while a page loads; size it with utilities. */
+  .skeleton {
+    display: block;
+    position: relative;
+    overflow: hidden;
+    border-radius: 4px;
+    background: var(--vellum-2);
+  }
+
+  .skeleton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, rgba(251, 250, 246, 0.65), transparent);
+    animation: skeletonShimmer 1.4s ease-in-out infinite;
+  }
+
+  /* On the navy nav bar and banners. */
+  .skeleton.on-dark {
+    background: rgba(255, 255, 255, 0.12);
+  }
+
+  .skeleton.on-dark::after {
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.14), transparent);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .skeleton::after {
+      animation: none;
+    }
   }
 
   .btn {

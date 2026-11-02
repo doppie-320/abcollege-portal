@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState, type MouseEvent } from "react";
+import { useEffect, useRef, useState, type MouseEvent, type ReactNode, type Ref } from "react";
 import {
   CalendarDays,
   ClipboardCheck,
@@ -12,6 +12,7 @@ import {
   UserCheck,
   type LucideIcon,
 } from "lucide-react";
+import { Skeleton } from "./Skeleton";
 import UserMenu from "./UserMenu";
 
 export type NavIconKind = "home" | "calendar" | "attendance" | "suggestion" | "review";
@@ -139,13 +140,77 @@ export default function SiteNav({
   }
 
   return (
+    <NavChrome
+      barRef={barRef}
+      barClassName={`${hidden ? "is-hidden" : ""} ${scrolled ? "is-scrolled" : ""}`}
+      pathname={pathname}
+      links={links}
+      brandHref={brandHref}
+      onLinkClick={onLinkClick}
+    >
+      <UserMenu
+        initials={initials}
+        name={name}
+        nameOverride={nameOverride}
+        userId={userId}
+        avatarUrl={avatarUrl}
+        isProfilePage={isProfilePage}
+        profileHref={profileHref}
+        profileLabel={profileLabel}
+        menuLinks={menuLinks}
+      />
+    </NavChrome>
+  );
+}
+
+/**
+ * Stands in for SiteNav while a page loads (see the loading.tsx files). The bar and tabs are
+ * the real thing; only the user menu, which needs the signed-in user, is a placeholder.
+ * `pathname` is the page being loaded, so the right tab is already highlighted.
+ */
+export function SiteNavSkeleton({
+  pathname,
+  links = NAV_LINKS,
+  brandHref = "/home",
+}: {
+  pathname: string;
+  links?: readonly NavLink[];
+  brandHref?: string;
+}) {
+  return (
+    <NavChrome pathname={pathname} links={links} brandHref={brandHref}>
+      <span className="user-chip" aria-hidden="true">
+        <Skeleton dark className="size-[30px] shrink-0 rounded-full" />
+        <Skeleton dark className="h-3 w-24 max-[900px]:hidden" />
+      </span>
+    </NavChrome>
+  );
+}
+
+type NavChromeProps = {
+  pathname: string;
+  links: readonly NavLink[];
+  brandHref: string;
+  /** Right end of the bar: the user menu, or its placeholder. */
+  children: ReactNode;
+  barRef?: Ref<HTMLDivElement>;
+  barClassName?: string;
+  onLinkClick?: (e: MouseEvent<HTMLAnchorElement>, href: string) => void;
+};
+
+/** The bar, its tabs and the phone tab bar, shared by SiteNav and SiteNavSkeleton. */
+function NavChrome({ pathname, links, brandHref, children, barRef, barClassName = "", onLinkClick }: NavChromeProps) {
+  const clickHandler = (href: string) =>
+    onLinkClick && ((e: MouseEvent<HTMLAnchorElement>) => onLinkClick(e, href));
+
+  return (
     <>
-    <div ref={barRef} className={`site-nav-bar ${hidden ? "is-hidden" : ""} ${scrolled ? "is-scrolled" : ""}`}>
+    <div ref={barRef} className={`site-nav-bar ${barClassName}`}>
       <header className="site-header">
         <Link
           href={brandHref}
           className="brand text-base"
-          onClick={(e) => onLinkClick(e, brandHref)}
+          onClick={clickHandler(brandHref)}
         >
           <Image
             src="/logo.svg"
@@ -162,7 +227,7 @@ export default function SiteNav({
               key={link.label}
               href={link.href}
               className={pathname === link.href || pathname.startsWith(`${link.href}/`) ? "current" : undefined}
-              onClick={(e) => onLinkClick(e, link.href)}
+              onClick={clickHandler(link.href)}
             >
               {link.label}
             </Link>
@@ -200,24 +265,14 @@ export default function SiteNav({
                   title={link.label}
                   aria-current={active ? "page" : undefined}
                   className={`tablet-icon-nav-item${active ? " is-active" : ""}`}
-                  onClick={(e) => onLinkClick(e, link.href)}
+                  onClick={clickHandler(link.href)}
                 >
                   <Icon size={22} strokeWidth={active ? 2.4 : 2} aria-hidden="true" />
                 </Link>
               );
             })}
         </nav>
-        <UserMenu
-          initials={initials}
-          name={name}
-          nameOverride={nameOverride}
-          userId={userId}
-          avatarUrl={avatarUrl}
-          isProfilePage={isProfilePage}
-          profileHref={profileHref}
-          profileLabel={profileLabel}
-          menuLinks={menuLinks}
-        />
+        {children}
       </header>
       <div className="header-accent" />
     </div>
@@ -239,7 +294,7 @@ export default function SiteNav({
               title={link.label}
               aria-current={active ? "page" : undefined}
               className={`mobile-tabbar-item${active ? " is-active" : ""}`}
-              onClick={(e) => onLinkClick(e, link.href)}
+              onClick={clickHandler(link.href)}
             >
               <Icon size={22} strokeWidth={active ? 2.4 : 2} aria-hidden="true" />
               <span className="mobile-tabbar-dot" aria-hidden="true" />
