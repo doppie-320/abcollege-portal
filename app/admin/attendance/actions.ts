@@ -116,16 +116,6 @@ export async function setAttendance(_prev: ActionResult, formData: FormData): Pr
     return { success: true };
 }
 
-/** Voids a student's static pass, e.g. after it was shared; they get a new one on their attendance page. */
-export async function resetStaticPass(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
-    const supabase = await requireAdmin();
-
-    const { error } = await supabase.rpc("reset_static_pass", { p_user_id: text(formData, "userId") });
-    if (error) return failed(error);
-
-    return { success: true };
-}
-
 export async function removeAttendance(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
     const supabase = await requireAdmin();
 

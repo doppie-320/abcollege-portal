@@ -1,9 +1,9 @@
--- Static attendance passes. Run with: npx supabase test db
+-- Static attendance passes (the student's school ID in a QR). Run with: npx supabase test db
 BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
-SELECT plan(21);
+SELECT plan(16);
 
 -- Fixtures --------------------------------------------------------------------
 
@@ -35,114 +35,81 @@ INSERT INTO public.event_scanners (event_id, user_id) VALUES
   (9101, 'b0000000-0000-0000-0000-000000000002'),
   (9102, 'b0000000-0000-0000-0000-000000000002');
 
-CREATE TEMP TABLE passes (name text PRIMARY KEY, pass text);
-GRANT ALL ON passes TO "authenticated";
+CREATE TEMP TABLE tokens (name text PRIMARY KEY, token text);
+GRANT ALL ON tokens TO "authenticated";
 
 CREATE FUNCTION pg_temp.login(uid uuid) RETURNS void LANGUAGE sql AS $$
   SELECT set_config('request.jwt.claims', json_build_object('sub', uid, 'role', 'authenticated')::text, true),
          set_config('role', 'authenticated', true);
 $$;
 
--- Getting a pass --------------------------------------------------------------
-
-SELECT ok(
-  NOT has_function_privilege('anon', 'public.get_my_static_pass()', 'execute'),
-  'anon cannot request a static pass'
-);
 SELECT col_default_is(
   'public', 'events', 'accepts_static_pass', 'true',
   'events accept static passes unless an admin turns them off'
 );
-
-SELECT pg_temp.login('b0000000-0000-0000-0000-000000000005');
-SELECT throws_ok(
-  'SELECT public.get_my_static_pass()',
-  'P0001', 'ATTENDANCE_NOT_STUDENT',
-  'pending students get no static pass'
-);
-RESET ROLE;
+SELECT hasnt_function('public', 'get_my_static_pass', 'signed static passes are no longer issued');
+SELECT hasnt_function('public', 'reset_static_pass', 'there is no static pass to reset');
 
 SELECT pg_temp.login('b0000000-0000-0000-0000-000000000003');
-INSERT INTO passes VALUES ('original', public.get_my_static_pass());
-SELECT matches(
-  (SELECT pass FROM passes WHERE name = 'original'),
-  '^s1\.b0000000-0000-0000-0000-000000000003\.[A-Za-z0-9_-]{22}$',
-  'approved students get a signed static pass'
-);
-SELECT is(
-  public.get_my_static_pass(),
-  (SELECT pass FROM passes WHERE name = 'original'),
-  'the pass stays the same between calls'
-);
-INSERT INTO passes SELECT 'rotating', token FROM public.get_my_attendance_token();
+INSERT INTO tokens SELECT 'rotating', token FROM public.get_my_attendance_token();
 RESET ROLE;
-
-SELECT pg_temp.login('b0000000-0000-0000-0000-000000000004');
-INSERT INTO passes VALUES ('student2', public.get_my_static_pass());
-RESET ROLE;
-
-INSERT INTO passes VALUES
-  ('forged', (SELECT left(pass, -2) || CASE WHEN right(pass, 2) = 'AA' THEN 'BB' ELSE 'AA' END FROM passes WHERE name = 'original')),
-  -- Student 2's signature on student 1's ID.
-  ('swapped', 's1.b0000000-0000-0000-0000-000000000003.' || split_part((SELECT pass FROM passes WHERE name = 'student2'), '.', 3)),
-  -- Anyone can write a student number into a QR; that alone must not work.
-  ('unsigned', 's1.b0000000-0000-0000-0000-000000000003.');
 
 -- Scanning --------------------------------------------------------------------
 
 SELECT pg_temp.login('b0000000-0000-0000-0000-000000000002');
 
 SELECT results_eq(
-  $$SELECT first_name, student_id, status, method FROM public.scan_student(9101, (SELECT pass FROM passes WHERE name = 'original'))$$,
+  $$SELECT first_name, student_id, status, method FROM public.scan_student(9101, 'STATIC-0003')$$,
   $$VALUES ('Stu'::text, 'STATIC-0003'::text, NULL::public.attendance_status, 'static'::public.attendance_method)$$,
-  'scanners see who a static pass belongs to, flagged as static'
+  'scanners see who a student ID QR belongs to, flagged as static'
 );
 SELECT results_eq(
-  $$SELECT student_id, method FROM public.scan_student(9101, (SELECT pass FROM passes WHERE name = 'rotating'))$$,
+  $$SELECT student_id FROM public.scan_student(9101, '  STATIC-0003 ')$$,
+  $$VALUES ('STATIC-0003'::text)$$,
+  'whitespace around the ID is ignored'
+);
+SELECT results_eq(
+  $$SELECT student_id, method FROM public.scan_student(9101, (SELECT token FROM tokens WHERE name = 'rotating'))$$,
   $$VALUES ('STATIC-0003'::text, 'scan'::public.attendance_method)$$,
   'rotating codes still work at events that allow static passes'
 );
 SELECT throws_ok(
-  $$SELECT * FROM public.scan_student(9102, (SELECT pass FROM passes WHERE name = 'original'))$$,
+  $$SELECT * FROM public.scan_student(9102, 'STATIC-0003')$$,
   'P0001', 'ATTENDANCE_STATIC_NOT_ALLOWED',
   'live-only events refuse static passes'
 );
 SELECT throws_ok(
-  $$SELECT * FROM public.record_scan(9102, (SELECT pass FROM passes WHERE name = 'original'), 'present')$$,
+  $$SELECT * FROM public.record_scan(9102, 'STATIC-0003', 'present')$$,
   'P0001', 'ATTENDANCE_STATIC_NOT_ALLOWED',
   'live-only events refuse to record static passes'
 );
 SELECT results_eq(
-  $$SELECT student_id, method FROM public.scan_student(9102, (SELECT pass FROM passes WHERE name = 'rotating'))$$,
+  $$SELECT student_id, method FROM public.scan_student(9102, (SELECT token FROM tokens WHERE name = 'rotating'))$$,
   $$VALUES ('STATIC-0003'::text, 'scan'::public.attendance_method)$$,
   'live-only events still take rotating codes'
 );
 SELECT throws_ok(
-  $$SELECT * FROM public.scan_student(9101, (SELECT pass FROM passes WHERE name = 'forged'))$$,
+  $$SELECT * FROM public.scan_student(9101, 'NOPE-0000')$$,
   'P0001', 'ATTENDANCE_TOKEN_INVALID',
-  'tampered static passes are rejected'
+  'a QR that is no student''s ID is rejected'
 );
 SELECT throws_ok(
-  $$SELECT * FROM public.scan_student(9101, (SELECT pass FROM passes WHERE name = 'swapped'))$$,
-  'P0001', 'ATTENDANCE_TOKEN_INVALID',
-  'one student''s signature does not work for another'
+  $$SELECT * FROM public.scan_student(9101, 'STATIC-0005')$$,
+  'P0001', 'ATTENDANCE_NOT_STUDENT',
+  'pending students cannot be checked in by ID'
 );
 SELECT throws_ok(
-  $$SELECT * FROM public.scan_student(9101, (SELECT pass FROM passes WHERE name = 'unsigned'))$$,
+  $$SELECT * FROM public.scan_student(9101, 'v1.STATIC-0003')$$,
   'P0001', 'ATTENDANCE_TOKEN_INVALID',
-  'a student ID without a signature is rejected'
-);
-SELECT throws_ok(
-  $$SELECT * FROM public.scan_student(9101, replace((SELECT pass FROM passes WHERE name = 'original'), 's1.', 'v1.'))$$,
-  'P0001', 'ATTENDANCE_TOKEN_INVALID',
-  'a static pass cannot pass as a rotating code'
+  'an ID cannot pass as a rotating code'
 );
 
 SELECT results_eq(
-  $$SELECT status, method, recorded_by FROM public.record_scan(9101, (SELECT pass FROM passes WHERE name = 'original'), 'present')$$,
+  $$SELECT status, method, recorded_by FROM public.record_scan(9101, 'STATIC-0003', 'present')$$,
   $$VALUES ('present'::public.attendance_status, 'static'::public.attendance_method, 'b0000000-0000-0000-0000-000000000002'::uuid)$$,
   'a static check-in is saved with method static'
 );
+SELECT public.record_scan(9101, 'STATIC-0003', 'present');
 SELECT is(
   (SELECT count(*)::int FROM public.attendance WHERE event_id = 9101),
   1,
@@ -156,41 +123,13 @@ SELECT is(
   'the history records the static check-in'
 );
 
--- Resetting -------------------------------------------------------------------
+-- Only scanners ---------------------------------------------------------------
 
 SELECT pg_temp.login('b0000000-0000-0000-0000-000000000004');
 SELECT throws_ok(
-  $$SELECT public.reset_static_pass('b0000000-0000-0000-0000-000000000003')$$,
-  'P0001', 'ATTENDANCE_NOT_ADMIN',
-  'students cannot reset someone else''s pass'
-);
-RESET ROLE;
-
-SELECT pg_temp.login('b0000000-0000-0000-0000-000000000003');
-SELECT public.reset_static_pass();
-SELECT isnt(
-  public.get_my_static_pass(),
-  (SELECT pass FROM passes WHERE name = 'original'),
-  'resetting gives the student a new pass'
-);
-RESET ROLE;
-
-SELECT pg_temp.login('b0000000-0000-0000-0000-000000000002');
-SELECT throws_ok(
-  $$SELECT * FROM public.scan_student(9101, (SELECT pass FROM passes WHERE name = 'original'))$$,
-  'P0001', 'ATTENDANCE_TOKEN_INVALID',
-  'the old pass stops working after a reset'
-);
-RESET ROLE;
-
-SELECT pg_temp.login('b0000000-0000-0000-0000-000000000001');
-SELECT public.reset_static_pass('b0000000-0000-0000-0000-000000000004');
-RESET ROLE;
-SELECT pg_temp.login('b0000000-0000-0000-0000-000000000002');
-SELECT throws_ok(
-  $$SELECT * FROM public.scan_student(9101, (SELECT pass FROM passes WHERE name = 'student2'))$$,
-  'P0001', 'ATTENDANCE_TOKEN_INVALID',
-  'admins can reset any student''s pass'
+  $$SELECT * FROM public.record_scan(9101, 'STATIC-0004', 'present')$$,
+  'P0001', 'ATTENDANCE_NOT_SCANNER',
+  'students cannot check themselves in with their own ID'
 );
 RESET ROLE;
 
