@@ -139,7 +139,7 @@ export default function GwaCalculator() {
     subjects.length === 1 && !only.code && !only.units && !only.grade;
 
   return (
-    <div className="@container mx-auto w-full max-w-[520px]">
+    <div className="gwaCalculator @container mx-auto w-full max-w-[520px]">
       <div className="flex flex-wrap items-start justify-between gap-5 mb-4">
         <div>
           <span className="eyebrow mb-1.5">GWA CALCULATOR</span>
@@ -306,6 +306,14 @@ export default function GwaCalculator() {
         missing a subject code, units, or grade are skipped. This calculator is a
         scratchpad and is not saved to your account.
       </p>
+      <style jsx global>{`
+        .gwaCalculator input:focus,
+        .gwaCalculator .selectPicker .selectTrigger:focus-visible {
+          outline: none;
+          border-color: #b9ae92;
+          box-shadow: 0 0 0 3px rgba(19, 42, 77, 0.08);
+        }
+      `}</style>
     </div>
   );
 }
