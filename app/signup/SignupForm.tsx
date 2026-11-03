@@ -1,0 +1,1601 @@
+"use client";
+
+import { startTransition, useActionState, useEffect, useState, type CSSProperties, type SubmitEvent } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+import { STUDENT_ID_FORMAT_ERROR, STUDENT_ID_RE, normalizeStudentId } from "@/lib/student-id";
+import DatePicker from "@/components/DatePicker";
+import Select from "@/components/Select";
+import ConfirmDialog, { USER_ICON } from "@/app/home/ConfirmDialog";
+import { register, registerWithGoogle } from "./actions";
+
+type Course = {
+  id: number;
+  name: string;
+};
+
+type YearLevel = {
+  id: number;
+  name: string;
+};
+
+type GoogleUser = {
+  email: string;
+  firstName: string;
+  lastName: string;
+};
+
+type SignupFormProps = {
+  courses: Course[];
+  yearLevels: YearLevel[];
+  /** Set when the user just came back from Google and still needs to fill in their details. */
+  googleUser: GoogleUser | null;
+  oauthFailed: boolean;
+};
+
+const TODAY_ISO = new Date().toISOString().slice(0, 10);
+// Matches the stacked phone and tablet layouts in the styles below.
+const MODAL_QUERY = "(max-width: 1024px), (orientation: portrait)";
+
+type Fields = {
+  firstName: string;
+  lastName: string;
+  email: string;
+  studentId: string;
+  birthday: string;
+  birthdayConsent: boolean;
+  yearLevel: string;
+  program: string;
+  password: string;
+  confirmPassword: string;
+};
+
+const EMPTY_FIELDS: Fields = {
+  firstName: "",
+  lastName: "",
+  email: "",
+  studentId: "",
+  birthday: "",
+  birthdayConsent: false,
+  yearLevel: "",
+  program: "",
+  password: "",
+  confirmPassword: "",
+};
+
+type Errors = Partial<Record<keyof Fields, string>>;
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function validate(fields: Fields): Errors {
+  const errors: Errors = {};
+
+  if (!fields.firstName.trim()) errors.firstName = "First name is required.";
+  if (!fields.lastName.trim()) errors.lastName = "Last name is required.";
+
+  if (!fields.email.trim()) {
+    errors.email = "Email address is required.";
+  } else if (!EMAIL_RE.test(fields.email.trim())) {
+    errors.email = "Enter a valid email address.";
+  }
+
+  if (!fields.studentId.trim()) {
+    errors.studentId = "Student ID is required.";
+  } else if (!STUDENT_ID_RE.test(normalizeStudentId(fields.studentId))) {
+    errors.studentId = STUDENT_ID_FORMAT_ERROR;
+  }
+
+  if (fields.birthday && new Date(fields.birthday) > new Date()) {
+    errors.birthday = "Birthday can't be in the future.";
+  }
+
+  if (!fields.yearLevel) errors.yearLevel = "Select a year level.";
+  if (!fields.program) errors.program = "Select a program.";
+
+  if (!fields.password) {
+    errors.password = "Password is required.";
+  } else if (fields.password.length < 8) {
+    errors.password = "Password must be at least 8 characters.";
+  }
+
+  if (!fields.confirmPassword) {
+    errors.confirmPassword = "Please confirm your password.";
+  } else if (fields.confirmPassword !== fields.password) {
+    errors.confirmPassword = "Passwords do not match.";
+  }
+
+  return errors;
+}
+
+type GoogleFields = {
+  firstName: string;
+  lastName: string;
+  studentId: string;
+  yearLevel: string;
+  program: string;
+  birthday: string;
+  birthdayConsent: boolean;
+};
+
+const EMPTY_GOOGLE_FIELDS: GoogleFields = {
+  firstName: "",
+  lastName: "",
+  studentId: "",
+  yearLevel: "",
+  program: "",
+  birthday: "",
+  birthdayConsent: false,
+};
+
+type GoogleErrors = Partial<Record<keyof GoogleFields, string>>;
+
+function validateGoogleFields(fields: GoogleFields): GoogleErrors {
+  const errors: GoogleErrors = {};
+
+  if (!fields.firstName.trim()) errors.firstName = "First name is required.";
+  if (!fields.lastName.trim()) errors.lastName = "Last name is required.";
+
+  if (!fields.studentId.trim()) {
+    errors.studentId = "Student ID is required.";
+  } else if (!STUDENT_ID_RE.test(normalizeStudentId(fields.studentId))) {
+    errors.studentId = STUDENT_ID_FORMAT_ERROR;
+  }
+
+  if (!fields.yearLevel) errors.yearLevel = "Select a year level.";
+  if (!fields.program) errors.program = "Select a program.";
+
+  if (fields.birthday && new Date(fields.birthday) > new Date()) {
+    errors.birthday = "Birthday can't be in the future.";
+  }
+
+  return errors;
+}
+
+type Step = "form" | "googleDetails" | "googleConfirm";
+
+export default function SignupForm({courses, yearLevels, googleUser, oauthFailed}: SignupFormProps) {
+  const [fields, setFields] = useState<Fields>(EMPTY_FIELDS);
+  const [errors, setErrors] = useState<Errors>({});
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);  
+  const [successDismissed, setSuccessDismissed] = useState(false);
+
+  const [step, setStep] = useState<Step>(googleUser ? "googleDetails" : "form");
+  const [googleFields, setGoogleFields] = useState<GoogleFields>({
+    ...EMPTY_GOOGLE_FIELDS,
+    firstName: googleUser?.firstName ?? "",
+    lastName: googleUser?.lastName ?? "",
+  });
+  const [googleErrors, setGoogleErrors] = useState<GoogleErrors>({});
+  const [googleLoading, setGoogleLoading] = useState(false);
+  // Only for a failed click here; the URL error comes in fresh as a prop.
+  const [googleError, setGoogleError] = useState("");
+  const shownGoogleError =
+    googleError || (oauthFailed ? "Sign up with Google failed. Please try again." : "");
+
+  // cacheComponents keeps this component's state when navigating away and back,
+  // so the initial values above can be stale. When a (different) Google user
+  // arrives, start them on the details step with their own name. Only on
+  // arrival: submitting signs them out (googleUser becomes null) and the
+  // success screen has to stay up.
+  const [seenGoogleEmail, setSeenGoogleEmail] = useState(googleUser?.email ?? "");
+  if (googleUser && googleUser.email !== seenGoogleEmail) {
+    setSeenGoogleEmail(googleUser.email);
+    setStep("googleDetails");
+    setGoogleFields({
+      ...EMPTY_GOOGLE_FIELDS,
+      firstName: googleUser?.firstName ?? "",
+      lastName: googleUser?.lastName ?? "",
+    });
+    setGoogleErrors({});
+    setSuccessDismissed(true);
+  }
+
+  const [state, formAction, pending] = useActionState(register, {});
+  const [googleState, googleFormAction, googlePending] = useActionState(registerWithGoogle, {});
+  const showSuccess =
+    ((state.success && !pending) || (googleState.success && !googlePending)) && !successDismissed;
+  const successEmail = googleState.success ? seenGoogleEmail : fields.email;
+
+  // "Email already registered" gets a dialog instead of the inline error.
+  // Closing it (or leaving the page, which cacheComponents keeps alive) marks
+  // that result as handled, so only a new submit can reopen it.
+  const router = useRouter();
+  const [handledState, setHandledState] = useState<typeof state | null>(null);
+  const emailTaken = state.status === "user_already_exists";
+  const emailTakenOpen = emailTaken && !pending && state !== handledState;
+
+  useEffect(() => {
+    return () => setHandledState(state);
+  }, [state]);
+
+  const courseOptions = courses.map((course) => ({
+    value: String(course.id),
+    label: course.name,
+  }));
+
+  const yearLevelsOptions = yearLevels.map((yearLevel) => ({
+    value: String(yearLevel.id),
+    label: yearLevel.name,
+  }));
+
+  const labelOf = (options: { value: string; label: string }[], value: string) =>
+    options.find((option) => option.value === value)?.label ?? value;
+
+  function setField<K extends keyof Fields>(key: K, value: Fields[K]) {
+    setFields((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function setGoogleField<K extends keyof GoogleFields>(key: K, value: GoogleFields[K]) {
+    setGoogleFields((prev) => ({ ...prev, [key]: value }));
+  }
+
+  async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+
+    const nextErrors = validate(fields);
+    setErrors(nextErrors);
+
+    if (Object.keys(nextErrors).length === 0) {
+      const supabase = createClient();
+      const trimmedStudentId = normalizeStudentId(fields.studentId);
+
+      // Check if the student ID exists in the students table
+      const { data: existingStudent } = await supabase
+        .from("students") // Adjust table name if stored in user_requests or users
+        .select("id")
+        // Case-insensitive, to catch IDs saved in lowercase before they were capitalised.
+        // The ID is letters and numbers only by now, so ilike sees no wildcards.
+        .ilike("student_id", trimmedStudentId)
+        .limit(1)
+        .maybeSingle();
+
+      if (existingStudent) {
+        setErrors((prev) => ({
+          ...prev,
+          studentId: "This Student ID is already registered.",
+        }));
+        return; // Stop form submission
+      }
+      
+      const formData = new FormData(form);
+
+      formData.set("studentId", trimmedStudentId);
+      formData.set("yearLevelId", fields.yearLevel);
+      formData.set("courseId", fields.program);
+
+      setSuccessDismissed(false);
+      startTransition(() => formAction(formData));
+    }
+  }
+
+  function handleGoogleDetailsSubmit(event: SubmitEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const nextErrors = validateGoogleFields(googleFields);
+    setGoogleErrors(nextErrors);
+    if (Object.keys(nextErrors).length === 0) {
+      setStep("googleConfirm");
+    }
+  }
+
+  async function handleGoogleSignup() {
+    setGoogleLoading(true);
+    setGoogleError("");
+
+    // Google handles the account itself, then sends the user back here to fill
+    // in their student details (see app/auth/callback/route.ts).
+    // Same callback URL as the login button; this cookie is how the callback
+    // knows to come back to sign-up (expires after 10 minutes).
+    document.cookie = "oauth_from=signup; path=/; max-age=600; samesite=lax";
+
+    const supabase = createClient();
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
+    });
+
+    if (error) {
+      setGoogleLoading(false);
+      setGoogleError("Sign up with Google failed. Please try again.");
+      console.error("google signup failed:", error);
+    }
+  }
+
+  async function handleGoogleCancel() {
+    // Drop the half-finished Google session so the regular form starts clean.
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    setGoogleFields(EMPTY_GOOGLE_FIELDS);
+    setGoogleErrors({});
+    setStep("form");
+  }
+
+  function handleGoogleConfirm() {
+    const formData = new FormData();
+    formData.set("firstName", googleFields.firstName);
+    formData.set("lastName", googleFields.lastName);
+    formData.set("studentId", normalizeStudentId(googleFields.studentId));
+    formData.set("yearLevelId", googleFields.yearLevel);
+    formData.set("courseId", googleFields.program);
+
+    setSuccessDismissed(false);
+    startTransition(() => googleFormAction(formData));
+  }
+
+  const googleConfirmDisabled =
+    googlePending || (Boolean(googleFields.birthday) && !googleFields.birthdayConsent);
+
+  return (
+    <>
+      {showSuccess ? (
+        <div className="card success" role="status">
+          <div className="successSeal" aria-hidden="true">
+            <svg viewBox="0 0 120 120">
+              <circle className="sealOrbit" cx="60" cy="60" r="56" />
+              <circle className="sealDisc" cx="60" cy="60" r="42" />
+              <circle className="sealStroke" cx="60" cy="60" r="42" />
+              <path className="sealCheck" d="M42 61 L55 74 L80 47" />
+            </svg>
+            {Array.from({ length: 8 }, (_, i) => (
+              <span key={i} className="sealSpark" style={{ "--i": i } as CSSProperties} />
+            ))}
+          </div>
+
+          <span className="eyebrow successEyebrow">REQUEST RECEIVED</span>
+          <h2 className="successTitle">You&apos;re on the list</h2>
+          <p className="successLead">
+            A council admin will review your details. We&apos;ll email you as soon as
+            your account is approved.
+          </p>
+
+          <dl className="successTicket">
+            <div>
+              <dt>Email</dt>
+              <dd>{successEmail}</dd>
+            </div>
+            <div>
+              <dt>Status</dt>
+              <dd>
+                <span className="statusPill">
+                  <i />
+                  Pending review
+                </span>
+              </dd>
+            </div>
+          </dl>
+
+          <ol className="successSteps">
+            <li className="isDone">
+              <span className="stepDot">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M5 12.5 10 17.5 19 7" />
+                </svg>
+              </span>
+              <span className="stepLabel">Submitted</span>
+            </li>
+            <li className="isCurrent">
+              <span className="stepDot" />
+              <span className="stepLabel">Council review</span>
+            </li>
+            <li>
+              <span className="stepDot" />
+              <span className="stepLabel">Account ready</span>
+            </li>
+          </ol>
+
+          <Link href="/login" className="btn submitBtn successCta">
+            Go to log in
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M5 12h14M13 6l6 6-6 6" />
+            </svg>
+          </Link>
+          <button
+            type="button"
+            className="successBack"
+            onClick={() => {
+              setFields(EMPTY_FIELDS);
+              setErrors({});
+              setGoogleFields(EMPTY_GOOGLE_FIELDS);
+              setStep("form");
+              setSuccessDismissed(true);
+            }}
+          >
+            Back to sign-up form
+          </button>
+        </div>
+      ) : step === "googleDetails" ? (
+        <div className="card">
+          <div className="headRow headRowCompact">
+            <div>
+              <span className="eyebrow">CONTINUE WITH GOOGLE</span>
+              <h2>A few more details</h2>
+            </div>
+          </div>
+          <p className="stepHint">
+            Signed in with Google as <strong>{googleUser?.email}</strong>. Check that your
+            name is split correctly, then fill in the rest to set up your student profile.
+          </p>
+
+          <form onSubmit={handleGoogleDetailsSubmit} noValidate>
+            <div className="fieldRow">
+              <div className="field">
+                <label htmlFor="gFirstName">First Name</label>
+                <input
+                  id="gFirstName"
+                  type="text"
+                  placeholder="e.g. Iya"
+                  value={googleFields.firstName}
+                  onChange={(e) => setGoogleField("firstName", e.target.value)}
+                />
+                {googleErrors.firstName && <p className="error">{googleErrors.firstName}</p>}
+              </div>
+              <div className="field">
+                <label htmlFor="gLastName">Last Name</label>
+                <input
+                  id="gLastName"
+                  type="text"
+                  placeholder="e.g. Rei"
+                  value={googleFields.lastName}
+                  onChange={(e) => setGoogleField("lastName", e.target.value)}
+                />
+                {googleErrors.lastName && <p className="error">{googleErrors.lastName}</p>}
+              </div>
+            </div>
+
+            <div className="field">
+              <label htmlFor="gStudentId">Student ID</label>
+              <input
+                id="gStudentId"
+                type="text"
+                placeholder="e.g. SOE12345678"
+                value={googleFields.studentId}
+                onChange={(e) => setGoogleField("studentId", e.target.value.toUpperCase())}
+              />
+              {googleErrors.studentId && <p className="error">{googleErrors.studentId}</p>}
+            </div>
+
+            <div className="fieldRow">
+              <div className="field fieldNarrow">
+                <label htmlFor="gYearLevel">Year Level</label>
+                <Select
+                  id="gYearLevel"
+                  value={googleFields.yearLevel}
+                  onChange={(v) => setGoogleField("yearLevel", v)}
+                  options={yearLevelsOptions}
+                  placeholder="Select Year Level"
+                />
+                {googleErrors.yearLevel && <p className="error">{googleErrors.yearLevel}</p>}
+              </div>
+              <div className="field fieldWide">
+                <label htmlFor="gProgram">Program</label>
+                <Select
+                  id="gProgram"
+                  value={googleFields.program}
+                  onChange={(v) => setGoogleField("program", v)}
+                  options={courseOptions}
+                  placeholder="Select program"
+                />
+                {googleErrors.program && <p className="error">{googleErrors.program}</p>}
+              </div>
+            </div>
+
+            <div className="field">
+              <label htmlFor="gBirthday">
+                Birthday <span className="optionalTag">(optional)</span>
+              </label>
+              <DatePicker
+                id="gBirthday"
+                value={googleFields.birthday}
+                onChange={(v) => setGoogleField("birthday", v)}
+                placeholder="Select date"
+                max={TODAY_ISO}
+                modalQuery={MODAL_QUERY}
+              />
+              {googleErrors.birthday && <p className="error">{googleErrors.birthday}</p>}
+              <p className="fieldHint">
+                Leave blank if you&apos;d rather not share it — you&apos;ll confirm how
+                it&apos;s used on the next step.
+              </p>
+            </div>
+
+            <div className="stepActions">
+              <button type="button" className="btn ghost" onClick={handleGoogleCancel}>
+                Back
+              </button>
+              <button type="submit" className="btn submitBtn" style={{ flex: 1 }}>
+                Continue
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : step === "googleConfirm" ? (
+        <div className="card">
+          <div className="headRow">
+            <div>
+              <span className="eyebrow">REVIEW &amp; CONFIRM</span>
+              <h2>Confirm your details</h2>
+            </div>
+          </div>
+
+          <ul className="summaryList">
+            <li>
+              <span>First Name</span>
+              <strong>{googleFields.firstName.trim()}</strong>
+            </li>
+            <li>
+              <span>Last Name</span>
+              <strong>{googleFields.lastName.trim()}</strong>
+            </li>
+            <li>
+              <span>Email</span>
+              <strong>{googleUser?.email}</strong>
+            </li>
+            <li>
+              <span>Student ID</span>
+              <strong>{normalizeStudentId(googleFields.studentId)}</strong>
+            </li>
+            <li>
+              <span>Year Level</span>
+              <strong>{labelOf(yearLevelsOptions, googleFields.yearLevel)}</strong>
+            </li>
+            <li>
+              <span>Program</span>
+              <strong>{labelOf(courseOptions, googleFields.program)}</strong>
+            </li>
+            <li>
+              <span>Birthday</span>
+              <strong>{googleFields.birthday || "Not shared"}</strong>
+            </li>
+          </ul>
+
+          {googleFields.birthday && (
+            <label className="consentRow">
+              <input
+                type="checkbox"
+                checked={googleFields.birthdayConsent}
+                onChange={(e) => setGoogleField("birthdayConsent", e.target.checked)}
+              />
+              <span>
+                I consent to my birthday being visible on the SOE Hub shared calendar
+                (e.g. for birthday shoutouts). Leaving this unchecked keeps it private.
+              </span>
+            </label>
+          )}
+
+          {googleState.error && <p className="formError" role="alert">{googleState.error}</p>}
+
+          <div className="stepActions">
+            <button
+              type="button"
+              className="btn ghost"
+              onClick={() => setStep("googleDetails")}
+              disabled={googlePending}
+            >
+              Back
+            </button>
+            <button
+              type="button"
+              className="btn submitBtn"
+              style={{ flex: 1 }}
+              onClick={handleGoogleConfirm}
+              disabled={googleConfirmDisabled}
+            >
+              {googlePending ? "Working..." : "Request account"}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="card">
+          <div className="headRow">
+            <div>
+              <span className="eyebrow">CREATE ACCOUNT</span>
+              <h2>Request an account</h2>
+            </div>
+            <span className="loginLine">
+              Already have an account? <Link href="/login">Log in</Link>
+            </span>
+          </div>
+
+          {/* As on the login form: `action` makes a submit before the page is interactive
+              POST to the server action rather than GET with the password in the URL. */}
+          <form action={formAction} onSubmit={handleSubmit} noValidate>
+            <div className="fieldRow">
+              <div className="field">
+                <label htmlFor="firstName">First Name</label>
+                <input
+                  id="firstName"
+                  name="firstName"
+                  type="text"
+                  placeholder="e.g. Iya"
+                  value={fields.firstName}
+                  onChange={(e) => setField("firstName", e.target.value)}
+                />
+                {errors.firstName && <p className="error">{errors.firstName}</p>}
+              </div>
+              <div className="field">
+                <label htmlFor="lastName">Last Name</label>
+                <input
+                  id="lastName"
+                  name="lastName"
+                  type="text"
+                  placeholder="e.g. Rei"
+                  value={fields.lastName}
+                  onChange={(e) => setField("lastName", e.target.value)}
+                />
+                {errors.lastName && <p className="error">{errors.lastName}</p>}
+              </div>
+            </div>
+
+            <div className="field">
+              <label htmlFor="email">Email Address</label>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                placeholder="e.g. lyarei@gmail.com"
+                value={fields.email}
+                onChange={(e) => setField("email", e.target.value)}
+              />
+              {errors.email && <p className="error">{errors.email}</p>}
+            </div>
+
+            <div className="fieldRow">
+              <div className="field">
+                <label htmlFor="yearLevel">Year Level</label>
+                <Select
+                  id="yearLevel"
+                  value={fields.yearLevel}
+                  onChange={(v) => setField("yearLevel", v)}
+                  options={yearLevelsOptions}
+                  placeholder="Select Year Level"
+                />
+                {errors.yearLevel && <p className="error">{errors.yearLevel}</p>}
+              </div>
+              <div className="field">
+                <label htmlFor="birthday">
+                  Birthday <span className="optionalTag">(optional)</span>
+                </label>
+                <DatePicker
+                  id="birthday"
+                  value={fields.birthday}
+                  onChange={(v) => setField("birthday", v)}
+                  placeholder="Select date"
+                  max={TODAY_ISO}
+                  modalQuery={MODAL_QUERY}
+                />
+                {errors.birthday && <p className="error">{errors.birthday}</p>}
+              </div>
+            </div>
+
+            {fields.birthday && (
+              <label className="consentRow">
+                <input
+                  type="checkbox"
+                  checked={fields.birthdayConsent}
+                  onChange={(e) => setField("birthdayConsent", e.target.checked)}
+                />
+                <span>
+                  I consent to my birthday being visible on the SOE Hub shared calendar
+                  (e.g. for birthday shoutouts). Leaving this unchecked keeps it private.
+                </span>
+              </label>
+            )}
+
+            <div className="field">
+              <label htmlFor="studentId">Student ID</label>
+              <input
+                id="studentId"
+                name="studentId"
+                type="text"
+                placeholder="e.g. SOE12345678"
+                value={fields.studentId}
+                onChange={(e) => setField("studentId", e.target.value.toUpperCase())}
+              />
+              {errors.studentId && <p className="error">{errors.studentId}</p>}
+            </div>
+
+            <div className="field">
+              <label htmlFor="program">Program</label>
+              <Select
+                id="program"
+                value={fields.program}
+                onChange={(v) => setField("program", v)}
+                options={courseOptions}
+                placeholder="Select program"
+              />
+              {errors.program && <p className="error">{errors.program}</p>}
+            </div>
+
+            <div className="field">
+              <label htmlFor="password">Password</label>
+              <div className="passField">
+                <input
+                  id="password"
+                  name="password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Enter your password"
+                  value={fields.password}
+                  onChange={(e) => setField("password", e.target.value)}
+                />
+                <button
+                  type="button"
+                  className="toggleVis"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  onClick={() => setShowPassword((v) => !v)}
+                >
+                  <EyeIcon open={showPassword} />
+                </button>
+              </div>
+              {errors.password && <p className="error">{errors.password}</p>}
+            </div>
+
+            <div className="field">
+              <label htmlFor="confirmPassword">Confirm Password</label>
+              <div className="passField">
+                <input
+                  id="confirmPassword"
+                  type={showConfirm ? "text" : "password"}
+                  placeholder="Enter the same password"
+                  value={fields.confirmPassword}
+                  onChange={(e) => setField("confirmPassword", e.target.value)}
+                />
+                <button
+                  type="button"
+                  className="toggleVis"
+                  aria-label={showConfirm ? "Hide password" : "Show password"}
+                  onClick={() => setShowConfirm((v) => !v)}
+                >
+                  <EyeIcon open={showConfirm} />
+                </button>
+              </div>
+              {errors.confirmPassword && <p className="error">{errors.confirmPassword}</p>}
+            </div>
+
+            {state.error && !emailTaken && <p className="formError" role="alert">{state.error}</p>}
+
+            <button
+              type="submit"
+              disabled={pending}
+              className="btn submitBtn"
+              style={{ width: "100%", marginTop: 8 }}
+            >
+              {pending ? "Working..." : "Request account" }
+            </button> 
+          </form>
+          <div className="divider">
+            <span>or</span>
+          </div>
+
+          <button
+            type="button"
+            className="btn googleBtn"
+            style={{ width: "100%" }}
+            onClick={handleGoogleSignup}
+            disabled={googleLoading}
+          >
+            <GoogleIcon />
+            {googleLoading ? "Redirecting…" : "Sign up with Google"}
+          </button>
+
+          {shownGoogleError && <p className="error">{shownGoogleError}</p>}
+          
+        </div>
+      )}
+
+      {emailTakenOpen && (
+        <ConfirmDialog
+          tone="warning"
+          eyebrow="ALREADY REGISTERED"
+          icon={USER_ICON}
+          title="Account already exists"
+          message={
+            <>
+              There&apos;s already an account for <strong>{fields.email.trim()}</strong>.
+              Do you want to log in instead?
+            </>
+          }
+          confirmLabel="Go to log in"
+          busyLabel="Opening…"
+          cancelLabel="Cancel"
+          onCancel={() => setHandledState(state)}
+          onConfirm={() => router.push("/login")}
+        />
+      )}
+
+      <style jsx global>{`
+        .split {
+          height: 100vh;
+          display: grid;
+          grid-template-columns: 3fr 2fr;
+          background: var(--vellum) url("/promo-bg.svg") center center / cover no-repeat;
+        }
+
+        .promo {
+          color: var(--white);
+          padding: 56px;
+          display: flex;
+          flex-direction: column;
+          justify-content: space-between;
+          position: relative;
+          overflow: hidden;
+        }
+
+        .seal {
+          width: 40px;
+          height: 40px;
+          flex-shrink: 0;
+          object-fit: contain;
+        }
+
+        .promo h1 {
+          color: var(--white);
+          font-size: 44px;
+          line-height: 1.08;
+          max-width: 9.5em;
+          margin-top: auto;
+        }
+
+        .promo .sub {
+          color: #afc2dc;
+          font-size: 15px;
+          max-width: 32em;
+          margin-top: 18px;
+        }
+
+        .promo .footMono {
+          font-family: "IBM Plex Mono", monospace;
+          font-size: 11.5px;
+          color: #6e86a8;
+          margin-top: 48px;
+        }
+
+        .brandText {
+          display: inline;
+        }
+
+        .formside {
+          padding: 32px 48px;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          justify-content: safe center;
+          align-items: center;
+          overflow-y: auto;
+        }
+
+        .card {
+          width: 100%;
+          max-width: 360px;
+        }
+
+        .card label {
+          margin-bottom: 4px;
+        }
+
+        .card input,
+        .card select {
+          margin-bottom: 0;
+        }
+
+        .field {
+          margin-bottom: 4px;
+        }
+
+        .field .error {
+          margin-top: 6px;
+          margin-bottom: 0;
+        }
+
+        .optionalTag {
+          font-weight: 400;
+          color: var(--ink-soft);
+          font-size: 11.5px;
+        }
+
+        .fieldHint {
+          font-size: 11.5px;
+          color: var(--ink-soft);
+          margin-top: 4px;
+        }
+
+        .formError {
+          border-radius: 5px;
+        }
+
+        .consentRow {
+          display: flex;
+          align-items: flex-start;
+          gap: 8px;
+          font-size: 12.5px;
+          font-weight: 400;
+          color: var(--ink-soft);
+          margin: 2px 0 12px;
+          cursor: pointer;
+        }
+
+        .consentRow input {
+          margin: 2px 0 0;
+          width: auto;
+          flex-shrink: 0;
+        }
+
+        .stepHint {
+          font-size: 13px;
+          color: var(--ink-soft);
+          margin-bottom: 18px;
+        }
+
+        .stepActions {
+          display: flex;
+          gap: 12px;
+          margin-top: 8px;
+        }
+
+        .summaryList {
+          list-style: none;
+          border: 1px solid #c9bfa0;
+          border-radius: 6px;
+          overflow: hidden;
+          margin-bottom: 16px;
+          background: var(--white);
+        }
+
+        .summaryList li {
+          display: flex;
+          justify-content: space-between;
+          gap: 12px;
+          padding: 10px 14px;
+          font-size: 13px;
+        }
+
+        .summaryList li + li {
+          border-top: 1px solid #e4dcc9;
+        }
+
+        .summaryList li span {
+          color: var(--ink-soft);
+        }
+
+        .formside h2 {
+          font-size: 26px;
+          margin-bottom: 4px;
+        }
+
+        .headRow {
+          display: flex;
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 0px;
+          margin-bottom: 20px;
+        }
+
+        .headRowCompact {
+          margin-bottom: 0px;
+        }
+
+        .loginLine {
+          margin-top: -5px;
+        }
+
+        .headRow a {
+          font-size: 13px;
+          white-space: nowrap;
+          color: #c86437;
+        }
+
+        .headRow a:hover {
+          color: #a84f29;
+        }
+
+        .fieldRow {
+          display: flex;
+          gap: 16px;
+        }
+
+        .fieldRow > .field {
+          flex: 1;
+          min-width: 0;
+          margin-bottom: 4px;
+        }
+
+        .fieldRow > .fieldNarrow {
+          flex: 0 0 130px;
+        }
+
+        .fieldRow > .fieldWide {
+          flex: 1;
+        }
+
+        .passField {
+          position: relative;
+        }
+
+        .passField input {
+          padding-right: 40px;
+        }
+
+        .toggleVis {
+          position: absolute;
+          right: 10px;
+          top: 9px;
+          background: none;
+          border: none;
+          padding: 4px;
+          cursor: pointer;
+          color: var(--ink-soft);
+          display: flex;
+        }
+
+        .toggleVis:hover {
+          color: var(--navy);
+        }
+
+        .error {
+          font-size: 12px;
+          color: var(--orange);
+          margin: 6px 0 0;
+        }
+
+        .formError {
+          font-size: 13px;
+          color: var(--orange);
+          background: rgba(217, 83, 30, 0.08);
+          border: 1px solid var(--orange);
+          padding: 10px 12px;
+          margin-bottom: 16px;
+        }
+
+        .submitBtn {
+          background: #011f3b;
+          border-color: #011f3b;
+          color: var(--white);
+        }
+
+        .submitBtn:hover {
+          background: #010f1e;
+        }
+
+        .divider {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          margin: 16px 0;
+          color: var(--ink-soft);
+          font-size: 12px;
+        }
+
+        .divider::before,
+        .divider::after {
+          content: "";
+          flex: 1;
+          height: 1px;
+          background: #c9bfa0;
+        }
+
+        .googleBtn {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 10px;
+          background: var(--white);
+          color: var(--ink);
+          border: 1px solid #c9bfa0;
+        }
+
+        .googleBtn:hover {
+          background: var(--vellum-2);
+        }
+
+        /* ---------- Request submitted ---------- */
+
+        .success {
+          text-align: center;
+        }
+
+        /* Staggered entrance: seal first, then each block. */
+        .success > * {
+          animation: fadeInUp 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+        }
+        .success > :nth-child(2) { animation-delay: 0.55s; }
+        .success > :nth-child(3) { animation-delay: 0.62s; }
+        .success > :nth-child(4) { animation-delay: 0.69s; }
+        .success > :nth-child(5) { animation-delay: 0.78s; }
+        .success > :nth-child(6) { animation-delay: 0.87s; }
+        .success > :nth-child(n + 7) { animation-delay: 0.96s; }
+
+        .successSeal {
+          position: relative;
+          width: 108px;
+          height: 108px;
+          margin: 0 auto 14px;
+          animation: popIn 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+        }
+
+        .successSeal svg {
+          width: 100%;
+          height: 100%;
+          overflow: visible;
+        }
+
+        /* Dashed blueprint ring that slowly turns. */
+        .sealOrbit {
+          fill: none;
+          stroke: var(--rule);
+          stroke-width: 1.5;
+          stroke-dasharray: 3 7;
+          transform-origin: 60px 60px;
+          animation: sealSpin 24s linear infinite;
+        }
+
+        .sealDisc {
+          fill: var(--navy);
+          transform-origin: 60px 60px;
+          animation: sealDisc 0.5s 0.15s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+        }
+
+        .sealStroke {
+          fill: none;
+          stroke: var(--orange);
+          stroke-width: 3;
+          stroke-linecap: round;
+          stroke-dasharray: 264;
+          stroke-dashoffset: 264;
+          transform: rotate(-90deg);
+          transform-origin: 60px 60px;
+          animation: sealDraw 0.7s 0.2s ease-out forwards;
+        }
+
+        .sealCheck {
+          fill: none;
+          stroke: var(--white);
+          stroke-width: 6;
+          stroke-linecap: round;
+          stroke-linejoin: round;
+          stroke-dasharray: 60;
+          stroke-dashoffset: 60;
+          animation: sealDraw 0.35s 0.55s cubic-bezier(0.65, 0, 0.35, 1) forwards;
+        }
+
+        /* Little burst of ticks once the check lands. */
+        .sealSpark {
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          width: 3px;
+          height: 10px;
+          margin: -5px 0 0 -1.5px;
+          border-radius: 2px;
+          background: var(--orange);
+          opacity: 0;
+          transform: rotate(calc(var(--i) * 45deg)) translateY(-48px);
+          animation: sealSpark 0.6s 0.75s ease-out forwards;
+        }
+
+        .sealSpark:nth-of-type(even) {
+          background: var(--navy);
+          height: 7px;
+        }
+
+        .successEyebrow {
+          color: var(--orange);
+          letter-spacing: 0.08em;
+          margin-bottom: 6px;
+        }
+
+        .successTitle {
+          font-size: 28px;
+          letter-spacing: -0.01em;
+          margin-bottom: 8px;
+        }
+
+        .successLead {
+          font-size: 13.5px;
+          line-height: 1.6;
+          color: var(--ink-soft);
+          max-width: 30em;
+          margin: 0 auto 18px;
+        }
+
+        /* Receipt-style card with a perforated edge. */
+        .successTicket {
+          position: relative;
+          margin: 0 0 18px;
+          padding: 4px 16px;
+          background: var(--white);
+          border: 1px solid var(--rule);
+          border-left: 3px solid var(--navy);
+          border-radius: 6px;
+          text-align: left;
+          box-shadow: 0 1px 0 var(--rule-soft), 0 8px 24px -16px rgba(13, 30, 56, 0.35);
+        }
+
+        .successTicket::after {
+          content: "";
+          position: absolute;
+          left: 12px;
+          right: 12px;
+          bottom: -1px;
+          height: 1px;
+          background: repeating-linear-gradient(90deg, var(--rule) 0 6px, transparent 6px 11px);
+        }
+
+        .successTicket > div {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          padding: 10px 0;
+        }
+
+        .successTicket > div + div {
+          border-top: 1px dashed var(--rule-soft);
+        }
+
+        .successTicket dt {
+          font-family: "IBM Plex Mono", monospace;
+          font-size: 10.5px;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          color: var(--ink-soft);
+          flex-shrink: 0;
+        }
+
+        .successTicket dd {
+          margin: 0;
+          font-size: 13.5px;
+          font-weight: 600;
+          color: var(--ink);
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .statusPill {
+          display: inline-flex;
+          align-items: center;
+          gap: 7px;
+          padding: 3px 10px 3px 8px;
+          border-radius: 999px;
+          background: rgba(217, 83, 30, 0.1);
+          color: #b84418;
+          font-size: 12px;
+          font-weight: 600;
+        }
+
+        .statusPill i {
+          position: relative;
+          width: 7px;
+          height: 7px;
+          border-radius: 50%;
+          background: var(--orange);
+        }
+
+        .statusPill i::after {
+          content: "";
+          position: absolute;
+          inset: 0;
+          border-radius: 50%;
+          background: var(--orange);
+          animation: statusPulse 1.6s ease-out infinite;
+        }
+
+        /* Submitted -> Council review -> Account ready */
+        .successSteps {
+          list-style: none;
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          margin: 0 0 20px;
+          padding: 0;
+        }
+
+        .successSteps li {
+          position: relative;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 7px;
+        }
+
+        /* Connector to the previous step. */
+        .successSteps li + li::before {
+          content: "";
+          position: absolute;
+          top: 8px;
+          right: calc(50% + 14px);
+          width: calc(100% - 28px);
+          height: 2px;
+          background: repeating-linear-gradient(90deg, var(--rule) 0 4px, transparent 4px 8px);
+        }
+
+        .successSteps li.isCurrent::before {
+          background: var(--navy);
+        }
+
+        .stepDot {
+          position: relative;
+          z-index: 1;
+          width: 18px;
+          height: 18px;
+          border-radius: 50%;
+          border: 2px solid var(--rule);
+          background: var(--white);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: var(--white);
+        }
+
+        .isDone .stepDot {
+          background: var(--navy);
+          border-color: var(--navy);
+        }
+
+        .isCurrent .stepDot {
+          border-color: var(--orange);
+          box-shadow: 0 0 0 4px rgba(217, 83, 30, 0.14);
+        }
+
+        .isCurrent .stepDot::after {
+          content: "";
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: var(--orange);
+          animation: statusBlink 1.6s ease-in-out infinite;
+        }
+
+        .stepLabel {
+          font-family: "IBM Plex Mono", monospace;
+          font-size: 10.5px;
+          letter-spacing: 0.04em;
+          text-transform: uppercase;
+          color: var(--ink-soft);
+        }
+
+        .isDone .stepLabel,
+        .isCurrent .stepLabel {
+          color: var(--navy-deep);
+        }
+
+        .successCta {
+          width: 100%;
+          text-decoration: none;
+        }
+
+        .successCta svg {
+          transition: transform 0.2s ease;
+        }
+
+        .successCta:hover svg {
+          transform: translateX(3px);
+        }
+
+        .successBack {
+          display: block;
+          margin: 12px auto 0;
+          background: none;
+          border: none;
+          padding: 2px 0;
+          font-size: 12.5px;
+          color: var(--ink-soft);
+          cursor: pointer;
+        }
+
+        .successBack:hover {
+          color: var(--navy);
+          text-decoration: underline;
+        }
+
+        @keyframes sealSpin {
+          to {
+            transform: rotate(360deg);
+          }
+        }
+
+        @keyframes sealDisc {
+          from {
+            transform: scale(0.6);
+            opacity: 0;
+          }
+          to {
+            transform: none;
+            opacity: 1;
+          }
+        }
+
+        @keyframes sealDraw {
+          to {
+            stroke-dashoffset: 0;
+          }
+        }
+
+        @keyframes sealSpark {
+          0% {
+            opacity: 0;
+            transform: rotate(calc(var(--i) * 45deg)) translateY(-40px) scaleY(0.4);
+          }
+          40% {
+            opacity: 1;
+          }
+          100% {
+            opacity: 0;
+            transform: rotate(calc(var(--i) * 45deg)) translateY(-62px) scaleY(1);
+          }
+        }
+
+        @keyframes statusPulse {
+          from {
+            transform: scale(1);
+            opacity: 0.6;
+          }
+          to {
+            transform: scale(2.8);
+            opacity: 0;
+          }
+        }
+
+        @keyframes statusBlink {
+          50% {
+            opacity: 0.35;
+          }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .success *,
+          .success > *,
+          .success *::before,
+          .success *::after {
+            animation: none !important;
+          }
+          .sealStroke,
+          .sealCheck {
+            stroke-dashoffset: 0;
+          }
+          .sealSpark {
+            display: none;
+          }
+        }
+
+        @media (max-width: 1024px), (orientation: portrait) {
+          .split {
+            grid-template-columns: 1fr;
+            align-content: start;
+            height: auto;
+            min-height: 100vh;
+            overflow: visible;
+            /* One zoom for every phone width so the header grows smoothly with the screen */
+            background: var(--vellum) url("/Background-Mobile.svg") top center / 130% auto no-repeat;
+          }
+
+          .promo {
+            justify-content: flex-start;
+            /* At 130% zoom the wave bottoms out at ~0.37 x width */
+            aspect-ratio: 820 / 305;
+            padding: max(16px, 5vw);
+          }
+
+          .promo h1,
+          .promo .sub,
+          .footMono,
+          .brandText {
+            display: none;
+          }
+
+          .promo .brand {
+            gap: 0;
+          }
+
+          .seal {
+            width: clamp(40px, 12vw, 64px);
+            height: clamp(40px, 12vw, 64px);
+          }
+
+          .formside {
+            padding: 32px 24px 40px;
+          }
+
+          .formside h2 {
+            font-size: 24px;
+          }
+
+          .successTitle {
+            font-size: 25px;
+          }
+        }
+
+        /* Tablet: desktop wave pinned to the left, form beside it */
+        @media (min-width: 600px) and (max-width: 1024px) {
+          .split {
+            grid-template-columns: 2fr 3fr;
+            align-content: stretch;
+            height: 100vh;
+            height: 100dvh;
+            min-height: 0;
+            /* Fit the SVG to the height, then shift it so the wave's widest
+               point (x=876 of 820 tall) lands at 38% of the width */
+            background: var(--vellum) url("/promo-bg.svg") calc(38vw - 106.8vh) 0 / auto 100% no-repeat;
+            background-position-x: calc(38vw - 106.8dvh);
+          }
+
+          .promo {
+            aspect-ratio: auto;
+            padding: 32px;
+          }
+
+          .seal {
+            width: 64px;
+            height: 64px;
+          }
+
+          .formside {
+            padding: 32px 32px 32px 0;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .fieldRow {
+            flex-direction: column;
+            gap: 0;
+          }
+
+          .formside {
+            padding: 20px 16px;
+          }
+
+          .formside h2 {
+            font-size: 22px;
+          }
+
+          .successTitle {
+            font-size: 23px;
+          }
+        }
+      `}</style>
+    </>
+  );
+}
+
+function GoogleIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24">
+      <path
+        fill="#4285F4"
+        d="M23.52 12.27c0-.85-.08-1.67-.22-2.45H12v4.64h6.46a5.52 5.52 0 0 1-2.4 3.62v3h3.87c2.27-2.09 3.59-5.17 3.59-8.81Z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 24c3.24 0 5.96-1.07 7.94-2.92l-3.87-3c-1.08.72-2.46 1.15-4.07 1.15-3.13 0-5.78-2.11-6.73-4.96H1.27v3.11A12 12 0 0 0 12 24Z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M5.27 14.27a7.2 7.2 0 0 1 0-4.54v-3.1H1.27a12 12 0 0 0 0 10.75l4-3.11Z"
+      />
+      <path
+        fill="#EA4335"
+        d="M12 4.77c1.76 0 3.34.6 4.58 1.79l3.44-3.44C17.95 1.19 15.24 0 12 0A12 12 0 0 0 1.27 6.63l4 3.1C6.22 6.88 8.87 4.77 12 4.77Z"
+      />
+    </svg>
+  );
+}
+
+function EyeIcon({ open }: { open: boolean }) {
+  if (open) {
+    return (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z" />
+        <circle cx="12" cy="12" r="3" />
+      </svg>
+    );
+  }
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a20.3 20.3 0 0 1 5.06-6.06M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a20.32 20.32 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+      <line x1="1" y1="1" x2="23" y2="23" />
+    </svg>
+  );
+}

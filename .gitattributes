@@ -1,0 +1,4 @@
+# Keep SQL files LF on every OS. Checked out as CRLF on Windows, functions
+# created from migrations contain carriage returns, and `supabase db diff`
+# reports them as changed even though the code is identical.
+*.sql text eol=lf

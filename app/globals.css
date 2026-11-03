@@ -1,68 +1,1096 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap');
+@import "tailwindcss";
 
-@layer base {
+:root {
+  --navy: #132a4d;
+  --navy-deep: #0d1e38;
+  --navy-tint: #c6d3e5;
+  --blue: #2e5c8a;
+  --grid: #9fc1de;
+  --vellum: #ede7d9;
+  --vellum-2: #e4dcc9;
+  --ink: #1c2333;
+  --ink-soft: #4b5468;
+  --orange: #d9531e;
+  --yellow: #fdf701;
+  --white: #fbfaf6;
+  --rule: #c9bfa0;
+  --rule-soft: #e4dcc9;
+  --control-h: 40px;
+
+  /* Responsive type scale. Display text shrinks on tablets and phones so the
+     desktop hierarchy still reads comfortably on narrower screens. */
+  --fs-display: 44px;
+  --fs-error: 48px;
+  --fs-section: 30px;
+  --fs-card: 24px;
+  --fs-stat: 30px;
+  --fs-stat-sm: 26px;
+  --fs-body: 15px;
+}
+
+@media (max-width: 1024px) {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 3.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 3.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 3.9%;
-    --primary: 0 0% 9%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 0 0% 96.1%;
-    --secondary-foreground: 0 0% 9%;
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
-    --accent: 0 0% 96.1%;
-    --accent-foreground: 0 0% 9%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 89.8%;
-    --input: 0 0% 89.8%;
-    --ring: 0 0% 3.9%;
-    --chart-1: 12 76% 61%;
-    --chart-2: 173 58% 39%;
-    --chart-3: 197 37% 24%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
-    --radius: 0.5rem;
+    --fs-display: 36px;
+    --fs-error: 38px;
+    --fs-section: 26px;
+    --fs-card: 21px;
+    --fs-stat: 26px;
+    --fs-stat-sm: 23px;
+    --fs-body: 14.5px;
   }
-  .dark {
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --ring: 0 0% 83.1%;
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
+}
+
+@media (max-width: 640px) {
+  :root {
+    --fs-display: 30px;
+    --fs-error: 32px;
+    --fs-section: 23px;
+    --fs-card: 19px;
+    --fs-stat: 22px;
+    --fs-stat-sm: 20px;
+    --fs-body: 14px;
   }
+}
+
+@theme inline {
+  --color-navy: var(--navy);
+  --color-navy-deep: var(--navy-deep);
+  --color-navy-tint: var(--navy-tint);
+  --color-blue: var(--blue);
+  --color-grid: var(--grid);
+  --color-vellum: var(--vellum);
+  --color-vellum-2: var(--vellum-2);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-orange: var(--orange);
+  --color-yellow: var(--yellow);
+  --color-paper: var(--white);
+  --color-rule: var(--rule);
+  --color-rule-soft: var(--rule-soft);
+
+  --font-display: 'Space Grotesk', sans-serif;
+  --font-sans: 'Inter', sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+
+  --animate-fade-in-up: fadeInUp 0.4s ease backwards;
+  --animate-fade-in: fadeIn 0.3s ease backwards;
+  --animate-fade-out: fadeOut 0.22s ease-out forwards;
+  --animate-pop-in: popIn 0.2s ease backwards;
+  --animate-scan-sweep: scanSweep 2.2s ease-in-out infinite alternate;
+  --animate-sheen: sheen 0.9s ease-out both;
+  --animate-shrink-x: shrinkX 3s linear forwards;
 }
 
 @layer base {
   * {
-    @apply border-border;
+    box-sizing: border-box;
+    padding: 0;
+    margin: 0;
   }
+
+  html {
+    height: 100%;
+    /* Stop mobile browsers from inflating text on their own. */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  /* min-height, not height: a fixed-height body would cut sticky children (the nav bar) loose after one screen. */
   body {
-    @apply bg-background text-foreground;
+    min-height: 100%;
+  }
+
+  body {
+    background: var(--vellum);
+    color: var(--ink);
+    font-family: 'Inter', sans-serif;
+    font-size: var(--fs-body);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background-image:
+      linear-gradient(var(--vellum-2) 1px, transparent 1px),
+      linear-gradient(90deg, var(--vellum-2) 1px, transparent 1px);
+    background-size: 32px 32px;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: 'Space Grotesk', sans-serif;
+    color: var(--navy-deep);
+    margin: 0 0 0.4em;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  p {
+    margin: 0 0 1em;
+  }
+
+  a {
+    color: var(--blue);
+  }
+
+  input[type='text'],
+  input[type='password'],
+  input[type='email'],
+  textarea,
+  select {
+    width: 100%;
+    border: 1px solid #c9bfa0;
+    border-radius: 5px;
+    background: var(--white);
+    padding: 11px 12px;
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    color: var(--ink);
+    margin-bottom: 16px;
+    box-shadow: inset 3px 3px 10px rgba(28, 35, 51, 0.14);
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--ink-soft);
+    opacity: 1;
+  }
+
+  select {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    padding-right: 36px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%234b5468' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    color-scheme: light;
+  }
+
+  select option {
+    background: var(--white);
+    color: var(--ink);
+    font-family: 'Inter', sans-serif;
+  }
+
+  select option:disabled {
+    color: var(--ink-soft);
+  }
+
+  input:focus,
+  textarea:focus,
+  select:focus {
+    outline: 2px solid var(--blue);
+    outline-offset: 1px;
+  }
+
+  /* ---------- Shared micro-animations ---------- */
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes fadeOut {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
+  }
+
+  @keyframes popIn {
+    from {
+      opacity: 0;
+      transform: scale(0.92);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  /* Laser line over the live camera, bouncing between the frame edges. */
+  @keyframes scanSweep {
+    from {
+      top: 10%;
+    }
+    to {
+      top: 90%;
+    }
+  }
+
+  /* One pass of light down a freshly drawn QR code. */
+  @keyframes sheen {
+    from {
+      transform: translateY(-100%);
+      opacity: 0;
+    }
+    25% {
+      opacity: 1;
+    }
+    to {
+      transform: translateY(300%);
+      opacity: 0;
+    }
+  }
+
+  /* Countdown bar that empties toward the left. */
+  @keyframes shrinkX {
+    from {
+      transform: scaleX(1);
+    }
+    to {
+      transform: scaleX(0);
+    }
+  }
+
+  /* A band of light sweeping across a loading placeholder. */
+  @keyframes skeletonShimmer {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(100%);
+    }
+  }
+
+  @keyframes heartPop {
+    0% {
+      transform: scale(1);
+    }
+    35% {
+      transform: scale(1.35);
+    }
+    65% {
+      transform: scale(0.92);
+    }
+    100% {
+      transform: scale(1);
+    }
   }
 }
+
+@layer components {
+  .mono {
+    font-family: 'IBM Plex Mono', monospace;
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 700;
+    font-size: 18px;
+    color: var(--white);
+    text-decoration: none;
+  }
+
+  .brand .mark {
+    width: 26px;
+    height: 26px;
+    border: 2px solid var(--white);
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  .brand .mark::before,
+  .brand .mark::after {
+    content: '';
+    position: absolute;
+    background: var(--orange);
+  }
+
+  .brand .mark::before {
+    top: 50%;
+    left: 2px;
+    right: 2px;
+    height: 2px;
+    transform: translateY(-50%);
+  }
+
+  .brand .mark::after {
+    left: 50%;
+    top: 2px;
+    bottom: 2px;
+    width: 2px;
+    transform: translateX(-50%);
+  }
+
+  .eyebrow {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--ink-soft);
+    margin-bottom: 10px;
+    display: block;
+  }
+
+  /* Page hero title, matching the home and calendar heroes. */
+  .page-eyebrow {
+    margin-bottom: 8px;
+    letter-spacing: 0.08em;
+  }
+
+  .page-title {
+    font-size: var(--fs-display);
+    line-height: 1;
+    margin-bottom: 0;
+    text-transform: uppercase;
+  }
+
+  /* ---------- Layout shells ---------- */
+  /* Sticky wrapper for the header + accent stripe; slides up out of view while scrolling down. */
+  .site-nav-bar {
+    position: sticky;
+    top: 0;
+    z-index: 90;
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+  }
+
+  /* Keyboard users tabbing into a hidden bar get it back. */
+  .site-nav-bar.is-hidden:not(:has(:focus-visible)) {
+    transform: translateY(-100%);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .site-nav-bar {
+      transition: none;
+    }
+  }
+
+  /* Drops a soft shadow once the page has scrolled, so the bar reads as floating over content. */
+  .site-nav-bar.is-scrolled {
+    box-shadow: 0 6px 18px rgba(13, 30, 56, 0.18);
+  }
+
+  .site-header {
+    background-color: var(--navy);
+    /* Faint blueprint grid, brightest behind the brand and fading out to the right. */
+    background-image:
+      radial-gradient(ellipse 420px 140% at 0% 50%, rgba(46, 92, 138, 0.55), transparent 70%),
+      linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+    background-size: auto, 16px 16px, 16px 16px;
+    color: var(--white);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 32px;
+    height: 64px;
+    border-bottom: 3px solid var(--orange);
+  }
+
+  .site-header .brand img {
+    transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .site-header .brand:hover img {
+    transform: rotate(-10deg) scale(1.08);
+  }
+
+  .site-header .brand:focus-visible {
+    outline: 2px solid var(--grid);
+    outline-offset: 4px;
+    border-radius: 4px;
+  }
+
+  .header-accent {
+    height: 3px;
+    background: var(--yellow);
+  }
+
+  .main-nav {
+    display: flex;
+    gap: 4px;
+    height: 100%;
+  }
+
+  .main-nav a {
+    position: relative;
+    color: #c6d3e5;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    height: 100%;
+    transition: color 0.15s ease, background-color 0.15s ease;
+  }
+
+  /* Tab indicator: grows out of the orange rule from the centre. */
+  .main-nav a::after {
+    content: '';
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: 0;
+    height: 3px;
+    border-radius: 3px 3px 0 0;
+    background: var(--orange);
+    transform: scaleX(0);
+    transition: transform 0.2s ease;
+  }
+
+  .main-nav a:hover {
+    color: var(--white);
+    background-color: rgba(255, 255, 255, 0.04);
+  }
+
+  .main-nav a:hover::after {
+    transform: scaleX(0.5);
+  }
+
+  .main-nav a.current {
+    color: var(--white);
+    font-weight: 600;
+    background-color: rgba(255, 255, 255, 0.06);
+  }
+
+  .main-nav a.current::after {
+    transform: scaleX(1);
+  }
+
+  .main-nav a:focus-visible {
+    outline: 2px solid var(--grid);
+    outline-offset: -6px;
+    border-radius: 6px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .site-header .brand img,
+    .main-nav a::after {
+      transition: none;
+    }
+  }
+
+  .user-chip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--white);
+    text-decoration: none;
+    font-size: 13px;
+  }
+
+  .user-chip .dot {
+    width: 30px;
+    height: 30px;
+    background: var(--blue);
+    border: 1px solid #c6d3e5;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 600;
+    font-size: 12px;
+    flex-shrink: 0;
+  }
+
+  .page-wrap {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 36px 32px 80px;
+  }
+
+  /* ---------- Corner-tick card: the recurring structural motif ---------- */
+  .tick-frame {
+    position: relative;
+    border: 1px solid #c9bfa0;
+    background: var(--white);
+    padding: 20px;
+    border-radius: 6px;
+  }
+
+  .tick-frame::before,
+  .tick-frame::after,
+  .tick-frame .tick-br,
+  .tick-frame .tick-bl {
+    content: '';
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    border-color: var(--navy);
+    border-style: solid;
+  }
+
+  .tick-frame::before {
+    top: -1px;
+    left: -1px;
+    border-width: 2px 0 0 2px;
+    border-radius: 6px 0 0 0;
+  }
+
+  .tick-frame::after {
+    top: -1px;
+    right: -1px;
+    border-width: 2px 2px 0 0;
+    border-radius: 0 6px 0 0;
+  }
+
+  .tick-frame .tick-bl {
+    bottom: -1px;
+    left: -1px;
+    border-width: 0 0 2px 2px;
+    border-radius: 0 0 0 6px;
+  }
+
+  .tick-frame .tick-br {
+    bottom: -1px;
+    right: -1px;
+    border-width: 0 2px 2px 0;
+    border-radius: 0 0 6px 0;
+  }
+
+  .tag {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10.5px;
+    padding: 3px 7px;
+    border: 1px solid var(--blue);
+    color: var(--blue);
+    white-space: nowrap;
+  }
+
+  .tag.orange {
+    border-color: var(--orange);
+    color: var(--orange);
+  }
+
+  .tag.grey {
+    border: none;
+    color: var(--ink-soft);
+    background-color: #d9d9d9;
+  }
+
+  .hairline {
+    border: none;
+    border-top: 1px solid #c9bfa0;
+    margin: 14px 0;
+  }
+
+  /* ---------- Skeleton placeholders (see components/Skeleton.tsx) ---------- */
+  /* Stands in for text, avatars and controls while a page loads; size it with utilities. */
+  .skeleton {
+    display: block;
+    position: relative;
+    overflow: hidden;
+    border-radius: 4px;
+    background: var(--vellum-2);
+  }
+
+  .skeleton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, rgba(251, 250, 246, 0.65), transparent);
+    animation: skeletonShimmer 1.4s ease-in-out infinite;
+  }
+
+  /* On the navy nav bar and banners. */
+  .skeleton.on-dark {
+    background: rgba(255, 255, 255, 0.12);
+  }
+
+  .skeleton.on-dark::after {
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.14), transparent);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .skeleton::after {
+      animation: none;
+    }
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: var(--navy);
+    color: var(--white);
+    border: 1px solid var(--navy);
+    border-radius: 5px;
+    padding: 11px 20px;
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.1s ease;
+  }
+
+  .btn:hover {
+    background: var(--navy-deep);
+  }
+
+  .btn:active {
+    transform: scale(0.97);
+  }
+
+  .btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .btn.primary {
+    background: var(--orange);
+    border-color: var(--orange);
+  }
+
+  .btn.primary:hover {
+    background: #b84418;
+  }
+
+  .btn.ghost {
+    background: transparent;
+    color: var(--navy);
+  }
+
+  .btn.ghost:hover {
+    background: rgba(19, 42, 77, 0.06);
+  }
+
+  label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ink-soft);
+    margin-bottom: 6px;
+  }
+
+  @media (max-width: 820px) {
+    .main-nav {
+      display: none;
+    }
+
+    .page-wrap {
+      padding: 24px 18px 60px;
+    }
+  }
+
+  /* ---------- Rich text (announcement bodies + Create post editor) ---------- */
+  .richText {
+    font-size: var(--fs-body);
+    line-height: 1.65;
+    color: var(--ink);
+    overflow-wrap: anywhere;
+  }
+
+  .richText > * + * {
+    margin-top: 0.7em;
+  }
+
+  .richText p {
+    margin: 0;
+  }
+
+  .richText h1,
+  .richText h2,
+  .richText h3 {
+    margin: 1em 0 0;
+    line-height: 1.25;
+  }
+
+  .richText > :first-child {
+    margin-top: 0;
+  }
+
+  /* Relative to the body token, so post headings shrink with it. */
+  .richText h1 {
+    font-size: 1.45em;
+  }
+
+  .richText h2 {
+    font-size: 1.25em;
+  }
+
+  .richText h3 {
+    font-size: 1.1em;
+  }
+
+  .richText ul,
+  .richText ol {
+    padding-left: 1.4em;
+  }
+
+  /* Tailwind's reset strips list markers; posts need them back. */
+  .richText ul {
+    list-style: disc;
+  }
+
+  .richText ul ul {
+    list-style: circle;
+  }
+
+  .richText ul ul ul {
+    list-style: square;
+  }
+
+  /* Markers hang outside the content box; the mono "10. " is ~2.2em wide,
+     so a narrower gutter pushes it past the left edge where it gets clipped. */
+  .richText ol {
+    list-style: decimal;
+    padding-left: 2.4em;
+  }
+
+  .richText ol ol {
+    list-style: lower-alpha;
+  }
+
+  .richText li + li {
+    margin-top: 0.25em;
+  }
+
+  .richText li p {
+    margin: 0;
+  }
+
+  .richText ul li::marker {
+    color: var(--orange);
+  }
+
+  .richText ol li::marker {
+    color: var(--navy);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.9em;
+  }
+
+  .richText blockquote {
+    border-left: 3px solid var(--orange);
+    background: var(--vellum);
+    padding: 8px 14px;
+    color: var(--ink-soft);
+    border-radius: 0 4px 4px 0;
+  }
+
+  .richText code {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.88em;
+    background: var(--vellum-2);
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+
+  .richText pre {
+    background: var(--navy-deep);
+    color: #e7edf6;
+    padding: 12px 14px;
+    border-radius: 6px;
+    overflow-x: auto;
+  }
+
+  .richText pre code {
+    background: none;
+    padding: 0;
+    color: inherit;
+  }
+
+  .richText hr {
+    border: none;
+    border-top: 1px dashed #c9bfa0;
+    margin: 1.2em 0;
+  }
+
+  .richText a {
+    color: var(--blue);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .richText mark {
+    background: #fdf78a;
+    color: inherit;
+    padding: 0 2px;
+    border-radius: 2px;
+  }
+
+  .richText img {
+    display: block;
+    max-width: 100%;
+    max-height: 560px;
+    height: auto;
+    border-radius: 6px;
+    border: 1px solid #c9bfa0;
+  }
+
+  /* Opens the image viewer; set by layoutBodyImages() in lib/richText.ts. */
+  .richText [data-lightbox-index] {
+    cursor: zoom-in;
+  }
+
+  .richText img[data-lightbox-index]:focus-visible {
+    outline: 2px solid var(--blue);
+    outline-offset: 2px;
+  }
+
+  /* Back-to-back images in a post, grouped Facebook-style by layoutBodyImages(). */
+  .richText .imageGallery {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-auto-rows: minmax(0, 1fr);
+    gap: 3px;
+    /* Explicit, so max-height trims the height instead of narrowing the grid through aspect-ratio. */
+    width: 100%;
+    max-height: 560px;
+    border: 1px solid #c9bfa0;
+    border-radius: 6px;
+    overflow: hidden;
+    background: #c9bfa0;
+  }
+
+  .richText .imageGallery.count2 {
+    aspect-ratio: 2 / 1;
+  }
+
+  /* One tall image on the left, two stacked on the right. */
+  .richText .imageGallery.count3 {
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+    aspect-ratio: 4 / 3;
+  }
+
+  .richText .imageGallery.count3 .galleryTile:first-child {
+    grid-row: 1 / 3;
+  }
+
+  .richText .imageGallery.count4 {
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+    aspect-ratio: 1 / 1;
+  }
+
+  .richText .galleryTile {
+    position: relative;
+    display: block;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    background: var(--vellum-2);
+  }
+
+  .richText .galleryTile img {
+    width: 100%;
+    height: 100%;
+    max-height: none;
+    object-fit: cover;
+    border: none;
+    border-radius: 0;
+    transition: transform 0.3s ease;
+  }
+
+  .richText .galleryTile:hover img {
+    transform: scale(1.04);
+  }
+
+  .richText .galleryTile:focus-visible {
+    outline: 3px solid var(--blue);
+    outline-offset: -3px;
+  }
+
+  /* "+3" over the last tile when more images are hidden behind it. */
+  .richText .galleryTile[data-more]::after {
+    content: attr(data-more);
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(13, 30, 56, 0.55);
+    color: var(--white);
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 600;
+    font-size: 30px;
+  }
+
+  .richText video {
+    display: block;
+    width: 100%;
+    max-height: 480px;
+    border-radius: 6px;
+    border: 1px solid #c9bfa0;
+    background: var(--navy-deep);
+  }
+
+  .richText a.fileAttachment {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    max-width: 420px;
+    padding: 10px 12px;
+    border: 1px solid #c9bfa0;
+    border-radius: 6px;
+    background: var(--vellum);
+    color: var(--ink);
+    text-decoration: none;
+    transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .richText a.fileAttachment:hover {
+    border-color: var(--navy);
+    transform: translate(-1px, -1px);
+    box-shadow: 2px 2px 0 var(--orange);
+  }
+
+  .richText .fileExt {
+    width: 40px;
+    height: 40px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    background: var(--navy);
+    color: var(--white);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.04em;
+  }
+
+  .richText .fileMeta {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .richText .fileName {
+    font-weight: 600;
+    font-size: 13.5px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .richText .fileSize {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--ink-soft);
+  }
+
+  .richText.plain {
+    white-space: pre-line;
+  }
+}
+
+/* The toggle only exists below the desktop breakpoint. */
+.nav-toggle {
+  display: none;
+}
+ 
+/* ---------- Tablet and phone: collapse links into a dropdown panel ---------- */
+@media (max-width: 900px) {
+  .site-header {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding-inline: 1rem;
+  }
+ 
+  .nav-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;            /* 44px = comfortable touch target */
+    height: 44px;
+    margin-left: -0.5rem;
+    border: 0;
+    border-radius: 0.5rem;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+  }
+  .nav-toggle:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+  }
+ 
+  /* Three bars drawn with one element + pseudo-elements; morphs into an X when open. */
+  .nav-toggle-bars,
+  .nav-toggle-bars::before,
+  .nav-toggle-bars::after {
+    display: block;
+    width: 20px;
+    height: 2px;
+    border-radius: 2px;
+    background: currentColor;
+    transition: transform 0.2s ease, background-color 0.2s ease;
+  }
+  .nav-toggle-bars { position: relative; }
+  .nav-toggle-bars::before,
+  .nav-toggle-bars::after { content: ""; position: absolute; left: 0; }
+  .nav-toggle-bars::before { top: -6px; }
+  .nav-toggle-bars::after  { top: 6px; }
+ 
+  .is-menu-open .nav-toggle-bars { background: transparent; }
+  .is-menu-open .nav-toggle-bars::before { transform: translateY(6px) rotate(45deg); }
+  .is-menu-open .nav-toggle-bars::after  { transform: translateY(-6px) rotate(-45deg); }
+ 
+  /* Brand takes the free space so the user chip stays pinned right. */
+  .brand { margin-right: auto; }
+ 
+  /* Dropdown panel anchored under the header. */
+  .main-nav {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 40;
+    display: none;
+    flex-direction: column;
+    gap: 0;
+    padding: 0.5rem 1rem 1rem;
+    background: var(--nav-bg, #fff);          /* swap for your header background */
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+    box-shadow: 0 12px 24px -12px rgba(0, 0, 0, 0.25);
+    max-height: calc(100dvh - 100%);
+    overflow-y: auto;
+  }
+  .main-nav.is-open { display: flex; }
+ 
+  .main-nav a {
+    display: block;
+    padding: 0.875rem 0.5rem;
+    border-radius: 0.5rem;
+    min-height: 44px;
+  }
+  .main-nav a + a { border-top: 1px solid rgba(0, 0, 0, 0.06); }
+  .main-nav a.current { font-weight: 600; }
+}
+ 
+/* ---------- Phone: tighten spacing, shorten the user chip ---------- */
+@media (max-width: 520px) {
+  .site-header {
+    gap: 0.5rem;
+    padding-inline: 0.75rem;
+  }
+ 
+  /* Icon-only user chip on phones is handled inside UserMenu's scoped styles
+     (global selectors can't reach styled-jsx-scoped classes). */
+  /* (name-hiding rule lives in components/UserMenu.tsx) */
+}
+ 
+@media (prefers-reduced-motion: reduce) {
+  .nav-toggle-bars,
+  .nav-toggle-bars::before,
+  .nav-toggle-bars::after {
+    transition: none;
+  }
+}
+ 

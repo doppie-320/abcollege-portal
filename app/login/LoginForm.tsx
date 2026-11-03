@@ -1,0 +1,665 @@
+"use client";
+
+import { startTransition, useActionState, useEffect, useState, type FormEvent } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+import ConfirmDialog, { USER_ICON } from "@/app/home/ConfirmDialog";
+// Forgot password is off until custom auth emails are set up (Supabase paid feature).
+// import ForgotPasswordModal from "./ForgotPasswordModal";
+import StatusNotice from "./StatusNotice";
+import { toNotice, type Notice } from "./messages";
+import { login } from "./actions";
+
+type Fields = {
+  email: string;
+  studentId: string;
+  password: string;
+};
+
+const EMPTY_FIELDS: Fields = {
+  email: "",
+  studentId: "",
+  password: "",
+};
+
+type Errors = Partial<Record<keyof Fields, string>>;
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function validate(fields: Fields): Errors {
+  const errors: Errors = {};
+
+  if (!fields.email.trim()) {
+    errors.email = "Email address is required.";
+  } else if (!EMAIL_RE.test(fields.email.trim())) {
+    errors.email = "Enter a valid email address.";
+  }
+
+  // Student ID field is hidden for now — re-enable this check with it.
+  // if (!fields.studentId.trim()) errors.studentId = "Student ID is required.";
+
+  if (!fields.password) {
+    errors.password = "Password is required.";
+  }
+
+  return errors;
+}
+
+type LoginFormProps = {
+  /** Status/error from the URL, e.g. after Google sends the user back. */
+  initialNotice: Notice | null;
+  /** Set when a Google account with no account request just signed in. */
+  noAccountEmail: string;
+};
+
+export default function LoginForm({ initialNotice, noAccountEmail }: LoginFormProps) {
+  const router = useRouter();
+  const [fields, setFields] = useState<Fields>(EMPTY_FIELDS);
+  const [errors, setErrors] = useState<Errors>({});
+  const [showPassword, setShowPassword] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  // Only for a failed click here; errors from the URL come in fresh as props,
+  // because cacheComponents keeps this component's state across navigations.
+  const [googleError, setGoogleError] = useState("");
+  // const [forgotOpen, setForgotOpen] = useState(false);
+  const [dismissedEmail, setDismissedEmail] = useState("");
+  // Derived from props (not initial state) so coming back to this page later,
+  // e.g. after finishing sign-up, doesn't reopen a stale dialog.
+  const noAccountOpen = noAccountEmail !== "" && noAccountEmail !== dismissedEmail;
+  const [state, formAction, pending] = useActionState(login, {});
+
+  // The notice is for one moment, not for the page:
+  // - the URL notice (?error=...) only lasts until the next attempt, and the
+  //   param is stripped so a refresh doesn't bring it back;
+  // - cacheComponents keeps this component alive when you leave /login (e.g.
+  //   log in, then log out), so a result from that earlier visit is "stale".
+  const [urlNoticeUsed, setUrlNoticeUsed] = useState(false);
+  const [staleState, setStaleState] = useState<typeof state | null>(null);
+  const [noticeHidden, setNoticeHidden] = useState(false);
+
+  const [prevInitialNotice, setPrevInitialNotice] = useState(initialNotice);
+  if (initialNotice !== prevInitialNotice) {
+    setPrevInitialNotice(initialNotice);
+    setUrlNoticeUsed(false);
+    setNoticeHidden(false);
+  }
+
+  // Most recent first: a failed Google click, then the last form submit, then
+  // whatever the URL brought in.
+  const notice: Notice | null = googleError
+    ? toNotice(undefined, googleError)
+    : state.error && state !== staleState
+      ? toNotice(state.status, state.error)
+      : urlNoticeUsed
+        ? null
+        : initialNotice;
+  // Hidden while a new attempt is in flight, so the old result doesn't linger.
+  const showNotice = notice !== null && !noticeHidden && !pending;
+
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.has("error")) {
+      url.searchParams.delete("error");
+      window.history.replaceState(null, "", url);
+    }
+  }, []);
+
+  // Runs when this page is left (unmounted or hidden by cacheComponents), and
+  // when a newer result replaces `state`. Either way that result is now old.
+  // (No need to touch the URL notice: coming back brings fresh props.)
+  useEffect(() => {
+    return () => {
+      setStaleState(state);
+      setGoogleError("");
+      setGoogleLoading(false);
+    };
+  }, [state]);
+
+  function startAttempt() {
+    setGoogleError("");
+    setUrlNoticeUsed(true);
+    setNoticeHidden(false);
+  }
+
+  function setField<K extends keyof Fields>(key: K, value: Fields[K]) {
+    setFields((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const nextErrors = validate(fields);
+    setErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) return;
+
+    // Calling formAction by hand (not via a form/button prop) needs startTransition,
+    // otherwise `pending` never flips to true.
+    const formData = new FormData(event.currentTarget);
+    startAttempt();
+    startTransition(() => formAction(formData));
+  }
+
+  const handleGoogleLogin = async () => {
+    setGoogleLoading(true);
+    startAttempt();
+    // Clear a leftover "came from sign-up" marker from an abandoned sign-up.
+    document.cookie = "oauth_from=; path=/; max-age=0";
+    const supabase = createClient();
+
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
+    });
+
+    if (error) {      
+      setGoogleLoading(false);      
+      setGoogleError("Log in with Google failed. Please try again.");
+
+      console.error("google login failed:", error);      
+    };
+  }
+
+  async function declineSignup() {
+    // They don't want an account, so drop the Google session the callback kept.
+    setDismissedEmail(noAccountEmail);
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.replace("/login");
+  }
+
+  return (
+    <div className="card">
+      <div className="headRow">
+        <div>
+          <span className="eyebrow">LOG IN ACCOUNT</span>
+          <h2>Welcome back</h2>
+        </div>
+        <span className="signupLine">
+          Don&apos;t have an account? <Link href="/signup">Sign up</Link>
+        </span>
+      </div>
+
+      {showNotice && (
+        <StatusNotice notice={notice} onDismiss={() => setNoticeHidden(true)} />
+      )}
+
+      {/* handleSubmit runs the action once the page is interactive. `action` covers a tap
+          before then (slow phones in dev): the browser POSTs to the server action instead of
+          falling back to a GET that puts the email and password in the URL. */}
+      <form action={formAction} onSubmit={handleSubmit} noValidate>
+        <div className="field">
+          <label htmlFor="email">Email Address</label>
+          <input
+            id="email"
+            name="email"
+            type="email"
+            placeholder="e.g. lyarei@gmail.com"
+            value={fields.email}
+            onChange={(e) => setField("email", e.target.value)}
+          />
+          {errors.email && <p className="error">{errors.email}</p>}
+        </div>
+
+        {/* <div className="field">
+          <label htmlFor="studentId">Student ID</label>
+          <input
+            id="studentId"
+            type="text"
+            placeholder="e.g. 20XX-XXXXX"
+            value={fields.studentId}
+            onChange={(e) => setField("studentId", e.target.value)}
+          />
+          {errors.studentId && <p className="error">{errors.studentId}</p>}
+        </div> */}
+
+        <div className="field">
+          <div className="labelRow">
+            <label htmlFor="password">Password</label>
+            {/* <button
+              type="button"
+              className="forgotLink"
+              onClick={() => setForgotOpen(true)}
+            >
+              Forgot password?
+            </button> */}
+          </div>
+          <div className="passField">
+            <input
+              id="password"
+              name="password"
+              type={showPassword ? "text" : "password"}
+              placeholder="Enter your password"
+              value={fields.password}
+              onChange={(e) => setField("password", e.target.value)}
+            />
+            <button
+              type="button"
+              className="toggleVis"
+              aria-label={showPassword ? "Hide password" : "Show password"}
+              onClick={() => setShowPassword((v) => !v)}
+            >
+              <EyeIcon open={showPassword} />
+            </button>
+          </div>
+          {errors.password && <p className="error">{errors.password}</p>}
+        </div>
+
+
+        <button
+          type="submit"
+          disabled={pending}
+          className="btn submitBtn"
+          style={{ width: "100%", marginTop: 8 }}
+        >
+          {pending ? "Logging in..." : "Log in"}
+        </button>
+      </form>
+
+      {/* <ForgotPasswordModal
+        open={forgotOpen}
+        onClose={() => setForgotOpen(false)}
+        initialEmail={fields.email.trim()}
+      /> */}
+
+      {noAccountOpen && (
+        <ConfirmDialog
+          tone="warning"
+          eyebrow="NEW TO THE PORTAL?"
+          icon={USER_ICON}
+          title="Account not found"
+          message={
+            <>
+              There&apos;s no account for <strong>{noAccountEmail}</strong> yet. Do you want
+              to request an account?
+            </>
+          }
+          confirmLabel="Sign up"
+          busyLabel="Opening…"
+          cancelLabel="No"
+          onCancel={declineSignup}
+          // Keeps the Google session, so sign-up opens on the "few more details" step.
+          // replace, not push, so Back doesn't return to this dialog.
+          onConfirm={() => router.replace("/signup")}
+        />
+      )}
+
+      <div className="divider">
+        <span>or</span>
+      </div>
+
+      <button
+        type="button"
+        className="btn googleBtn"
+        style={{ width: "100%" }}
+        onClick={handleGoogleLogin}
+        disabled={googleLoading}
+      >
+        <GoogleIcon />
+        {googleLoading ? "Redirecting…" : "Continue with Google"}
+      </button>
+
+
+      <style jsx global>{`
+        .split {
+          height: 100vh;
+          display: grid;
+          grid-template-columns: 3fr 2fr;
+          background: var(--vellum) url("/promo-bg.svg") center center / cover no-repeat;
+        }
+
+        .promo {
+          color: var(--white);
+          padding: 56px;
+          display: flex;
+          flex-direction: column;
+          justify-content: space-between;
+          position: relative;
+          overflow: hidden;
+        }
+
+        .seal {
+          width: 40px;
+          height: 40px;
+          flex-shrink: 0;
+          object-fit: contain;
+        }
+
+        .promo h1 {
+          color: var(--white);
+          font-size: 44px;
+          line-height: 1.08;
+          max-width: 9.5em;
+          margin-top: auto;
+        }
+
+        .promo .sub {
+          color: #afc2dc;
+          font-size: 15px;
+          max-width: 32em;
+          margin-top: 18px;
+        }
+
+        .promo .footMono {
+          font-family: "IBM Plex Mono", monospace;
+          font-size: 11.5px;
+          color: #6e86a8;
+          margin-top: 48px;
+        }
+
+        .brandText {
+          display: inline;
+        }
+
+        .formside {
+          padding: 32px 48px;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          justify-content: safe center;
+          align-items: center;
+          overflow-y: auto;
+        }
+
+        .card {
+          width: 100%;
+          max-width: 360px;
+        }
+
+        .card label {
+          margin-bottom: 1px;
+        }
+
+        .card input {
+          margin-bottom: 0;
+        }
+
+        .field {
+          margin-bottom: 10px;
+        }
+
+        .field .error {
+          margin-top: 6px;
+          margin-bottom: 0;
+        }
+
+        .labelRow {
+          display: flex;
+          align-items: baseline;
+          justify-content: space-between;
+          gap: 12px;
+          margin-bottom: 4px;
+        }
+
+        .labelRow label {
+          margin-bottom: 0;
+        }
+
+        .forgotLink {
+          background: none;
+          border: none;
+          padding: 0;
+          font-size: 12.5px;
+          color: var(--blue);
+          cursor: pointer;
+        }
+
+        .forgotLink:hover {
+          color: var(--navy);
+          text-decoration: underline;
+        }
+
+        .formside h2 {
+          font-size: 26px;
+          margin-bottom: 4px;
+        }
+
+        .headRow {
+          display: flex;
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 0px;
+          margin-bottom: 20px;
+        }
+
+        .signupLine {
+          margin-top: -5px;
+        }
+
+        .headRow a {
+          font-size: 13px;
+          white-space: nowrap;
+          color: #c86437;
+        }
+
+        .headRow a:hover {
+          color: #a84f29;
+        }
+
+        .passField {
+          position: relative;
+        }
+
+        .passField input {
+          padding-right: 40px;
+        }
+
+        .toggleVis {
+          position: absolute;
+          right: 10px;
+          top: 9px;
+          background: none;
+          border: none;
+          padding: 4px;
+          cursor: pointer;
+          color: var(--ink-soft);
+          display: flex;
+        }
+
+        .formError {
+          border-radius: 5px;
+        }
+
+        .toggleVis:hover {
+          color: var(--navy);
+        }
+
+        .error {
+          font-size: 12px;
+          color: var(--orange);
+          margin: 6px 0 0;
+        }
+
+        .formError {
+          font-size: 13px;
+          color: var(--orange);
+          background: rgba(217, 83, 30, 0.08);
+          border: 1px solid var(--orange);
+          padding: 10px 12px;
+          margin-bottom: 16px;
+        }
+
+        .submitBtn {
+          background: #011f3b;
+          border-color: #011f3b;
+          color: var(--white);
+        }
+
+        .submitBtn:hover {
+          background: #010f1e;
+        }
+
+        .divider {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          margin: 16px 0;
+          color: var(--ink-soft);
+          font-size: 12px;
+        }
+
+        .divider::before,
+        .divider::after {
+          content: "";
+          flex: 1;
+          height: 1px;
+          background: #c9bfa0;
+        }
+
+        .googleBtn {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 10px;
+          background: var(--white);
+          color: var(--ink);
+          border: 1px solid #c9bfa0;
+        }
+
+        .googleBtn:hover {
+          background: var(--vellum-2);
+        }
+
+        .success {
+          text-align: center;
+        }
+
+        .successIcon {
+          width: 48px;
+          height: 48px;
+          border-radius: 50%;
+          background: var(--navy);
+          color: var(--white);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 22px;
+          margin: 0 auto 18px;
+        }
+
+        @media (max-width: 1024px), (orientation: portrait) {
+          .split {
+            grid-template-columns: 1fr;
+            align-content: start;
+            height: auto;
+            min-height: 100vh;
+            overflow: visible;
+            /* One zoom for every phone width so the header grows smoothly with the screen */
+            background: var(--vellum) url("/Background-Mobile.svg") top center / 130% auto no-repeat;
+          }
+
+          .promo {
+            justify-content: flex-start;
+            /* At 130% zoom the wave bottoms out at ~0.37 x width */
+            aspect-ratio: 820 / 305;
+            padding: max(16px, 5vw);
+          }
+
+          .promo h1,
+          .promo .sub,
+          .footMono,
+          .brandText {
+            display: none;
+          }
+
+          .promo .brand {
+            gap: 0;
+          }
+
+          .seal {
+            width: clamp(40px, 12vw, 64px);
+            height: clamp(40px, 12vw, 64px);
+          }
+
+          .formside {
+            padding: 32px 24px 40px;
+          }
+
+          .formside h2 {
+            font-size: 24px;
+          }
+        }
+
+        /* Tablet: desktop wave pinned to the left, form beside it */
+        @media (min-width: 600px) and (max-width: 1024px) {
+          .split {
+            grid-template-columns: 2fr 3fr;
+            align-content: stretch;
+            height: 100vh;
+            height: 100dvh;
+            min-height: 0;
+            /* Fit the SVG to the height, then shift it so the wave's widest
+               point (x=876 of 820 tall) lands at 38% of the width */
+            background: var(--vellum) url("/promo-bg.svg") calc(38vw - 106.8vh) 0 / auto 100% no-repeat;
+            background-position-x: calc(38vw - 106.8dvh);
+          }
+
+          .promo {
+            aspect-ratio: auto;
+            padding: 32px;
+          }
+
+          .seal {
+            width: 64px;
+            height: 64px;
+          }
+
+          .formside {
+            padding: 32px 32px 32px 0;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .formside {
+            padding: 20px 16px;
+          }
+
+          .formside h2 {
+            font-size: 22px;
+          }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+function GoogleIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24">
+      <path
+        fill="#4285F4"
+        d="M23.52 12.27c0-.85-.08-1.67-.22-2.45H12v4.64h6.46a5.52 5.52 0 0 1-2.4 3.62v3h3.87c2.27-2.09 3.59-5.17 3.59-8.81Z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 24c3.24 0 5.96-1.07 7.94-2.92l-3.87-3c-1.08.72-2.46 1.15-4.07 1.15-3.13 0-5.78-2.11-6.73-4.96H1.27v3.11A12 12 0 0 0 12 24Z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M5.27 14.27a7.2 7.2 0 0 1 0-4.54v-3.1H1.27a12 12 0 0 0 0 10.75l4-3.11Z"
+      />
+      <path
+        fill="#EA4335"
+        d="M12 4.77c1.76 0 3.34.6 4.58 1.79l3.44-3.44C17.95 1.19 15.24 0 12 0A12 12 0 0 0 1.27 6.63l4 3.1C6.22 6.88 8.87 4.77 12 4.77Z"
+      />
+    </svg>
+  );
+}
+
+function EyeIcon({ open }: { open: boolean }) {
+  if (open) {
+    return (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z" />
+        <circle cx="12" cy="12" r="3" />
+      </svg>
+    );
+  }
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a20.3 20.3 0 0 1 5.06-6.06M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a20.32 20.32 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+      <line x1="1" y1="1" x2="23" y2="23" />
+    </svg>
+  );
+}
