@@ -7,6 +7,7 @@ import CountdownCard from "./CountdownCard";
 import CreatePostModal, { type NewPost } from "./CreatePostModal";
 import Select from "@/components/Select";
 import SiteNav, { ADMIN_MENU_LINKS, HOME_ADMIN_NAV_LINKS, PAGE_RESELECT_EVENT } from "@/components/NavigationHeader";
+import { SkeletonPost } from "@/components/Skeleton";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "../../lib/supabase/client"
 import { useRouter } from "next/navigation";
@@ -214,6 +215,8 @@ export default function HomeContent({ current_user, is_admin, today, birthdays, 
   const [dateLine, setDateLine] = useState("");
   var [announcements, setAnnouncements] = useState<Announcement[]>(ANNOUNCEMENTS);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  // Posts are fetched in the browser; until the first fetch settles the feed shows placeholders.
+  const [feedLoaded, setFeedLoaded] = useState(false);
   const pendingReactionIds = useRef(new Set<string>());
   const supabase = createClient();
   const router = useRouter();
@@ -294,6 +297,8 @@ export default function HomeContent({ current_user, is_admin, today, birthdays, 
 
       } catch (err) {
         console.error(err);
+      } finally {
+        setFeedLoaded(true);
       };
     };
 
@@ -638,13 +643,20 @@ export default function HomeContent({ current_user, is_admin, today, birthdays, 
                 </span>
                 <span className="mono feedHeadLabel">Announcements</span>
                 <span className="mono feedHeadMeta">
-                  {visibleAnnouncements.length === announcements.length
+                  {!feedLoaded
+                    ? ""
+                    : visibleAnnouncements.length === announcements.length
                     ? `${announcements.length} posted`
                     : `${visibleAnnouncements.length} of ${announcements.length}`}
                 </span>
               </header>
 
-              {!currentUser ? null : visibleAnnouncements.length === 0 ? (
+              {!currentUser || !feedLoaded ? (
+                <>
+                  <SkeletonPost />
+                  <SkeletonPost />
+                </>
+              ) : visibleAnnouncements.length === 0 ? (
                 <p className="emptyState">
                   <span className="emptyIcon">
                     <SearchIcon />
