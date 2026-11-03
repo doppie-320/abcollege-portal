@@ -291,7 +291,7 @@ export default function PostContent({
           display: flex;
           align-items: center;
           justify-content: center;
-          font-family: "Roboto Mono", monospace;
+          font-family: "Sora", sans-serif;
           font-weight: 600;
           font-size: 13px;
           flex-shrink: 0;
@@ -382,7 +382,7 @@ export default function PostContent({
           border: none;
           padding: 2px 4px;
           color: var(--ink-soft);
-          font-family: "IBM Plex Mono", monospace;
+          font-family: "JetBrains Mono", monospace;
           font-size: 12px;
           cursor: pointer;
         }

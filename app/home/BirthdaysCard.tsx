@@ -401,7 +401,7 @@ const styles = css.global`
     align-items: center;
     justify-content: center;
     color: var(--white);
-    font-family: "Roboto Mono", monospace;
+    font-family: "Sora", sans-serif;
     font-weight: 700;
   }
 
@@ -552,7 +552,7 @@ const styles = css.global`
     justify-content: center;
     background: var(--navy);
     border: 2px solid var(--white);
-    font-family: "Roboto Mono", monospace;
+    font-family: "Sora", sans-serif;
     font-size: 13px;
     font-weight: 700;
   }
@@ -578,7 +578,7 @@ const styles = css.global`
   .hbGreeting {
     position: relative;
     max-width: 100%;
-    font-family: "Roboto Mono", monospace;
+    font-family: "Sora", sans-serif;
     font-size: 22px;
     font-weight: 700;
     line-height: 1.15;
@@ -723,7 +723,7 @@ const styles = css.global`
   }
 
   .hbSpotName {
-    font-family: "Roboto Mono", monospace;
+    font-family: "Sora", sans-serif;
     font-size: 15px;
     line-height: 1.2;
     color: var(--navy);
@@ -747,7 +747,7 @@ const styles = css.global`
   }
 
   .hbSpotNum {
-    font-family: "Roboto Mono", monospace;
+    font-family: "Sora", sans-serif;
     font-size: 20px;
     font-weight: 700;
     line-height: 1;

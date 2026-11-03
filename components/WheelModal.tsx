@@ -114,7 +114,7 @@ export default function WheelModal({ title, subtitle, columns, children, onClear
         }
 
         .wdTitle {
-          font-family: "Roboto Mono", monospace;
+          font-family: "Sora", sans-serif;
           font-size: 18px;
           color: var(--navy);
           margin: 0 0 12px 4px;

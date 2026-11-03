@@ -389,7 +389,7 @@ export default function DatePicker({
 
         .dateWeekdays span {
           text-align: center;
-          font-family: "IBM Plex Mono", monospace;
+          font-family: "JetBrains Mono", monospace;
           font-size: 10px;
           color: var(--ink-soft);
         }

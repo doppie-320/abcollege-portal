@@ -318,7 +318,7 @@ const styles = css.global`
 
   .hcName {
     margin-top: 6px;
-    font-family: "Roboto Mono", monospace;
+    font-family: "Sora", sans-serif;
     font-size: 21px;
     font-weight: 700;
     line-height: 1.15;
@@ -348,7 +348,7 @@ const styles = css.global`
     flex-shrink: 0;
     padding-top: 7px;
     text-align: center;
-    font-family: "Roboto Mono", monospace;
+    font-family: "Sora", sans-serif;
     font-size: 20px;
     font-weight: 700;
     color: rgba(253, 247, 1, 0.7);
@@ -391,7 +391,7 @@ const styles = css.global`
 
   .hcValue {
     display: block;
-    font-family: "Roboto Mono", monospace;
+    font-family: "Sora", sans-serif;
     font-size: 24px;
     font-weight: 700;
     line-height: 1.1;

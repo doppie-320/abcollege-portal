@@ -159,7 +159,7 @@ export default function MediaGrid({
           display: flex;
           align-items: center;
           justify-content: center;
-          font-family: "Roboto Mono", monospace;
+          font-family: "Sora", sans-serif;
           font-weight: 600;
           font-size: 22px;
         }

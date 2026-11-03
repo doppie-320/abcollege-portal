@@ -107,7 +107,7 @@ export default function RichTextBody({ content, collapsible = false }: { content
           background: none;
           border: none;
           padding: 2px 0;
-          font-family: "IBM Plex Mono", monospace;
+          font-family: "JetBrains Mono", monospace;
           font-size: 11.5px;
           letter-spacing: 0.04em;
           text-transform: uppercase;

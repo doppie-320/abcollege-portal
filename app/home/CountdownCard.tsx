@@ -171,7 +171,7 @@ const styles = css.global`
   }
 
   .hcRowDay {
-    font-family: "Roboto Mono", monospace;
+    font-family: "Sora", sans-serif;
     font-size: 15px;
     font-weight: 700;
     line-height: 1;
