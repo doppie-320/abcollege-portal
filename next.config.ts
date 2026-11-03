@@ -1,5 +1,11 @@
 import type { NextConfig } from "next";
 
+// Avatars are served by whichever Supabase project this build points at (dev for
+// previews, prod for production), so allow that project's host rather than a fixed one.
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+if (!supabaseUrl) throw new Error("NEXT_PUBLIC_SUPABASE_URL is not set.");
+const supabaseHost = new URL(supabaseUrl).hostname;
+
 const nextConfig: NextConfig = {
   cacheComponents: true,
   // Dev only: let phones on the same Wi-Fi open `pnpm dev` by the laptop's IP. Without
@@ -26,7 +32,7 @@ const nextConfig: NextConfig = {
 
   images: {
     remotePatterns: [
-      { protocol: "https", hostname: "zuvsgspwhhirrfmhociv.supabase.co", pathname: "/storage/v1/object/public/avatars/**" },
+      { protocol: "https", hostname: supabaseHost, pathname: "/storage/v1/object/public/avatars/**" },
     ],
   },
 };
