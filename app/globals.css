@@ -185,6 +185,15 @@
     outline-offset: 1px;
   }
 
+  /* Match the subtle focus treatment used by the home search field. */
+  .formside input:not([type='checkbox']):not([type='radio']):focus,
+  .formside textarea:focus,
+  .formside select:focus {
+    outline: none;
+    border-color: #b9ae92;
+    box-shadow: 0 0 0 3px rgba(19, 42, 77, 0.08);
+  }
+
   /* ---------- Shared micro-animations ---------- */
   @keyframes fadeInUp {
     from {
