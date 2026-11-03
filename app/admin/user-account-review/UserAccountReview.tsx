@@ -52,9 +52,11 @@ const BLUEPRINT_GRID =
 export default function UserAccountReview({ profile, applicants }: UserAccountReviewProps) {
   const [reviewApplicants, setReviewApplicants] = useState(applicants);
   const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("pending");
   const [pageIndex, setPageIndex] = useState(0);
-  const [selectedId, setSelectedId] = useState<string | null>(applicants[0]?.id ?? null);
+  const [selectedId, setSelectedId] = useState<string | null>(
+    applicants.find((applicant) => applicant.status === "pending")?.id ?? null,
+  );
   const [decisions, setDecisions] = useState<
     Record<string, Partial<Pick<Applicant, "status" | "rejectDate">>>
   >({});
