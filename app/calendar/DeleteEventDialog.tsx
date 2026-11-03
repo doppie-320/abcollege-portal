@@ -1,14 +1,19 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { settle } from "@/lib/actionResult";
 import { useBackdropDismiss } from "@/lib/useBackdropDismiss";
+import { countEventAttendance } from "./actions";
 import { TAG_LABELS, formatEventDates, formatEventTime, type CalendarEvent } from "@/lib/calendar";
 
 type Props = {
   event: CalendarEvent;
   onCancel: () => void;
-  /** Starts the delete. The event leaves the calendar at once; the calendar restores it if that fails. */
-  onConfirm: () => void;
+  /**
+   * Starts the delete. The event leaves the calendar at once; the calendar restores it if that fails.
+   * `withAttendance` is set once the admin has been warned the event's attendance records go too.
+   */
+  onConfirm: (withAttendance: boolean) => void;
   /** Called once the toss animation has played. */
   onDeleted: () => void;
 };
@@ -19,8 +24,12 @@ const FADE_MS = 220;
 
 export default function DeleteEventDialog({ event, onCancel, onConfirm, onDeleted }: Props) {
   const [phase, setPhase] = useState<"idle" | "tossing" | "closing">("idle");
+  /** Attendance records that would go with the event; null while checking, -1 if the check failed. */
+  const [attendance, setAttendance] = useState<number | null>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
   const tossed = phase !== "idle";
+  const hasAttendance = attendance !== null && attendance > 0;
+  const records = `${attendance} attendance record${attendance === 1 ? "" : "s"}`;
   const backdrop = useBackdropDismiss(onCancel, !tossed);
 
   useEffect(() => {
@@ -33,6 +42,16 @@ export default function DeleteEventDialog({ event, onCancel, onConfirm, onDelete
   }, []);
 
   useEffect(() => {
+    let current = true;
+    settle(countEventAttendance(event.id)).then((result) => {
+      if (current) setAttendance("count" in result ? result.count : -1);
+    });
+    return () => {
+      current = false;
+    };
+  }, [event.id]);
+
+  useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape" && !tossed) onCancel();
     }
@@ -41,7 +60,7 @@ export default function DeleteEventDialog({ event, onCancel, onConfirm, onDelete
   }, [tossed, onCancel]);
 
   function confirm() {
-    onConfirm();
+    onConfirm(hasAttendance);
 
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       onDeleted();
@@ -84,15 +103,32 @@ export default function DeleteEventDialog({ event, onCancel, onConfirm, onDelete
             </span>
           </div>
 
+          {attendance === null && <p className="delCheck">Checking attendance records…</p>}
+          {attendance === -1 && (
+            <p className="delCheck">
+              Couldn&apos;t check for attendance records. If this event has any, the delete will be refused.
+            </p>
+          )}
+          {hasAttendance && (
+            <p className="delWarn" role="alert">
+              This event has <strong>{records}</strong>. Deleting it deletes them too, and they can&apos;t be
+              recovered. Export the attendance first if you need it.
+            </p>
+          )}
         </div>
 
         <div className="delActions">
           <button ref={cancelRef} type="button" className="btn ghost" onClick={onCancel} disabled={tossed}>
             Keep it
           </button>
-          <button type="button" className="btn delConfirm" onClick={confirm} disabled={tossed}>
+          <button
+            type="button"
+            className="btn delConfirm"
+            onClick={confirm}
+            disabled={tossed || attendance === null}
+          >
             <TrashIcon size={15} />
-            {tossed ? "Deleted" : "Delete event"}
+            {tossed ? "Deleted" : hasAttendance ? "Delete event and attendance" : "Delete event"}
           </button>
         </div>
       </div>
@@ -289,6 +325,25 @@ export default function DeleteEventDialog({ event, onCancel, onConfirm, onDelete
         .delTicketMeta {
           font-size: 12px;
           color: var(--ink-soft);
+        }
+
+        .delBody > .delCheck {
+          margin: 10px auto 0;
+          font-size: 12.5px;
+          color: var(--ink-soft);
+        }
+
+        .delBody > .delWarn {
+          margin: 12px 0 0;
+          max-width: none;
+          padding: 10px 12px;
+          text-align: left;
+          font-size: 13px;
+          line-height: 1.5;
+          color: #8f1e18;
+          background: #fbe9e7;
+          border: 1px solid rgba(179, 38, 30, 0.25);
+          border-radius: 6px;
         }
 
         /* Tossed up into the bin. */

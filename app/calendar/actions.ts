@@ -1,7 +1,7 @@
 'use server'
 
 import { ActionResult } from "@/lib/actionResult";
-import { validateEvent, type EventInput } from "@/lib/calendar";
+import { EVENT_HAS_ATTENDANCE, validateEvent, type EventInput } from "@/lib/calendar";
 import { createClient } from "@/lib/supabase/server";
 import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
@@ -85,17 +85,52 @@ export async function setBirthdayVisibility(userIds: string[], visible: boolean)
     return { success: true };
 }
 
-export async function deleteEvent(id: number): Promise<ActionResult> {
+/** How many attendance records an event has, so the delete dialog can warn before they go with it. */
+export async function countEventAttendance(id: number): Promise<{ count: number } | { error: string }> {
     const supabase = await createClient();
 
     const denied = await requireAdmin(supabase);
     if (denied) return { error: denied };
 
-    const { data, error } = await supabase.from("events").delete().eq("event_id", id).select("event_id");
+    const { count, error } = await supabase
+        .from("attendance").select("event_id", { count: "exact", head: true }).eq("event_id", id);
 
-    if (error || !data?.length) {
-        console.error("[calendar] deleting event failed:", error ?? "no rows deleted");
-        return { error: "Couldn't delete the event. Please try again." };
+    if (error || count === null) {
+        console.error("[calendar] counting event attendance failed:", error ?? "no count returned");
+        return { error: "Couldn't check this event's attendance records." };
+    }
+    return { count };
+}
+
+/** Postgres foreign_key_violation: attendance_event_id_fkey refuses to drop an event's attendance silently. */
+const FOREIGN_KEY_VIOLATION = "23503";
+
+/**
+ * Deletes an event. If it has attendance records the delete is refused unless `withAttendance`
+ * is set, in which case the records are deleted with it in one transaction.
+ */
+export async function deleteEvent(id: number, withAttendance = false): Promise<ActionResult> {
+    const supabase = await createClient();
+
+    const denied = await requireAdmin(supabase);
+    if (denied) return { error: denied };
+
+    if (withAttendance) {
+        const { error } = await supabase.rpc("delete_event_with_attendance", { p_event_id: id });
+        if (error) {
+            console.error("[calendar] deleting event with attendance failed:", error);
+            return { error: "Couldn't delete the event. Please try again." };
+        }
+    } else {
+        const { data, error } = await supabase.from("events").delete().eq("event_id", id).select("event_id");
+
+        if (error?.code === FOREIGN_KEY_VIOLATION) {
+            return { error: "This event has attendance records.", status: EVENT_HAS_ATTENDANCE };
+        }
+        if (error || !data?.length) {
+            console.error("[calendar] deleting event failed:", error ?? "no rows deleted");
+            return { error: "Couldn't delete the event. Please try again." };
+        }
     }
 
     refresh();
