@@ -1328,7 +1328,7 @@ export default function CalendarContent({
         }
 
         .calTagChip {
-          font-family: "JetBrains Mono", monospace;
+          font-family: "DM Mono", monospace;
           font-size: 10px;
           letter-spacing: 0.04em;
           text-transform: uppercase;

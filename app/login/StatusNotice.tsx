@@ -115,7 +115,7 @@ export default function StatusNotice({
 
         .eyebrowLine {
           display: block;
-          font-family: "JetBrains Mono", monospace;
+          font-family: "DM Mono", monospace;
           font-size: 10px;
           letter-spacing: 0.08em;
           color: ${kind.accent};

@@ -2373,7 +2373,7 @@ function ToolInfoCard({
         }
 
         kbd {
-          font-family: "JetBrains Mono", monospace;
+          font-family: "DM Mono", monospace;
           font-size: 10px;
           padding: 0 4px;
           border-radius: 3px;

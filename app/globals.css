@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=DM+Mono:wght@300;400;500&display=swap');
 @import "tailwindcss";
 
 :root {
@@ -71,7 +71,7 @@
 
   --font-display: 'Sora', sans-serif;
   --font-sans: 'Inter', sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
+  --font-mono: 'DM Mono', monospace;
 
   --animate-fade-in-up: fadeInUp 0.4s ease backwards;
   --animate-fade-in: fadeIn 0.3s ease backwards;
@@ -136,7 +136,7 @@
   kbd,
   pre,
   samp {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: 'DM Mono', monospace;
   }
 
   a {
@@ -297,7 +297,7 @@
 
 @layer components {
   .mono {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: 'DM Mono', monospace;
   }
 
   .brand {
@@ -343,7 +343,7 @@
   }
 
   .eyebrow {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: 'DM Mono', monospace;
     font-size: 11px;
     color: var(--ink-soft);
     margin-bottom: 10px;
@@ -569,7 +569,7 @@
   }
 
   .tag {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: 'DM Mono', monospace;
     font-size: 10.5px;
     padding: 3px 7px;
     border: 1px solid var(--blue);
@@ -744,7 +744,7 @@
 
   .richText ol li::marker {
     color: var(--navy);
-    font-family: 'JetBrains Mono', monospace;
+    font-family: 'DM Mono', monospace;
     font-size: 0.9em;
   }
 
@@ -757,7 +757,7 @@
   }
 
   .richText code {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: 'DM Mono', monospace;
     font-size: 0.88em;
     background: var(--vellum-2);
     padding: 1px 5px;
@@ -932,7 +932,7 @@
     border-radius: 4px;
     background: var(--navy);
     color: var(--white);
-    font-family: 'JetBrains Mono', monospace;
+    font-family: 'DM Mono', monospace;
     font-size: 10px;
     letter-spacing: 0.04em;
   }
@@ -952,7 +952,7 @@
   }
 
   .richText .fileSize {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: 'DM Mono', monospace;
     font-size: 11px;
     color: var(--ink-soft);
   }

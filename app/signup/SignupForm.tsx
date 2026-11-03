@@ -847,7 +847,7 @@ export default function SignupForm({courses, yearLevels, googleUser, oauthFailed
         }
 
         .promo .footMono {
-          font-family: "JetBrains Mono", monospace;
+          font-family: "DM Mono", monospace;
           font-size: 11.5px;
           color: #6e86a8;
           margin-top: 48px;
@@ -1236,7 +1236,7 @@ export default function SignupForm({courses, yearLevels, googleUser, oauthFailed
         }
 
         .successTicket dt {
-          font-family: "JetBrains Mono", monospace;
+          font-family: "DM Mono", monospace;
           font-size: 10.5px;
           letter-spacing: 0.08em;
           text-transform: uppercase;

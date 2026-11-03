@@ -382,7 +382,7 @@ export default function PostContent({
           border: none;
           padding: 2px 4px;
           color: var(--ink-soft);
-          font-family: "JetBrains Mono", monospace;
+          font-family: "DM Mono", monospace;
           font-size: 12px;
           cursor: pointer;
         }
