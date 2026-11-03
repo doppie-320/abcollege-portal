@@ -14,6 +14,7 @@ import type { Profile } from "@/lib/auth";
 import { fetchCalendarMonth, type MonthData } from "@/lib/calendar-data";
 import { createClient } from "@/lib/supabase/client";
 import {
+  EVENT_HAS_ATTENDANCE,
   EVENT_TAGS,
   MONTH_NAMES,
   TAG_LABELS,
@@ -284,14 +285,19 @@ export default function CalendarContent({
     });
   }
 
-  function confirmDelete() {
+  function confirmDelete(withAttendance: boolean) {
     if (!deleting) return;
     const target = deleting;
     startEventChange(async () => {
       applyEventChange({ type: "delete", id: target.id });
-      const result = await settle(deleteEvent(target.id));
+      const result = await settle(deleteEvent(target.id, withAttendance));
       // The optimistic removal ends with the transition, so the event comes back on its own.
-      if (result.error !== undefined) toast(`Couldn't delete "${target.name}". It's back on the calendar.`);
+      if (result.error === undefined) return;
+      toast(
+        "status" in result && result.status === EVENT_HAS_ATTENDANCE
+          ? `"${target.name}" has attendance records now. Delete it again to review them.`
+          : `Couldn't delete "${target.name}". It's back on the calendar.`,
+      );
     });
   }
 

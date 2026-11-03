@@ -6,6 +6,9 @@ export const SCHOOL_TIME_ZONE = "Asia/Manila";
 /** Manila has no daylight saving, so a fixed offset turns a wall-clock time into an instant. */
 const SCHOOL_UTC_OFFSET = "+08:00";
 
+/** deleteEvent's status when the event has attendance records and wasn't told to delete them too. */
+export const EVENT_HAS_ATTENDANCE = "has_attendance";
+
 export const EVENT_TAGS = ["EVENT", "ACADEMIC", "DEADLINE", "HOLIDAY"] as const;
 export type EventTag = (typeof EVENT_TAGS)[number];
 
