@@ -3,7 +3,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
-SELECT plan(34);
+SELECT plan(35);
 
 -- Fixtures --------------------------------------------------------------------
 
@@ -197,6 +197,11 @@ SELECT results_eq(
   $$SELECT first_name, student_id, status FROM public.lookup_student_by_id(9001, ' TEST-0003 ')$$,
   $$VALUES ('Stu'::text, 'TEST-0003'::text, 'present'::public.attendance_status)$$,
   'scanners can look a student up by school ID'
+);
+SELECT results_eq(
+  $$SELECT student_id FROM public.lookup_student_by_id(9001, 'test-0003')$$,
+  $$VALUES ('TEST-0003'::text)$$,
+  'school ID lookups ignore case'
 );
 SELECT throws_ok(
   $$SELECT * FROM public.lookup_student_by_id(9001, 'NOPE-0000')$$,

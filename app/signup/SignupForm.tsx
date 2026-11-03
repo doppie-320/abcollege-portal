@@ -246,7 +246,10 @@ export default function SignupForm({courses, yearLevels, googleUser, oauthFailed
       const { data: existingStudent } = await supabase
         .from("students") // Adjust table name if stored in user_requests or users
         .select("id")
-        .eq("student_id", trimmedStudentId)
+        // Case-insensitive, to catch IDs saved in lowercase before they were capitalised.
+        // The ID is letters and numbers only by now, so ilike sees no wildcards.
+        .ilike("student_id", trimmedStudentId)
+        .limit(1)
         .maybeSingle();
 
       if (existingStudent) {
