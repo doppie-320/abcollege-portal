@@ -7,6 +7,7 @@ import { isAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { toAttendanceError } from "@/lib/attendance-server";
 import type { AttendanceStatus } from "@/lib/attendance";
+import { normalizeStudentId } from "@/lib/student-id";
 
 // Every action re-checks admin here; RLS and the database functions enforce it
 // again, so this only produces friendlier errors.
@@ -91,17 +92,21 @@ export async function removeScanner(_prev: ActionResult, formData: FormData): Pr
 /** Manual override by school student ID, e.g. for someone whose phone died. */
 export async function setAttendance(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
     const supabase = await requireAdmin();
-    const studentId = text(formData, "studentId");
+    const studentId = normalizeStudentId(text(formData, "studentId"));
     const status = text(formData, "status") as AttendanceStatus;
     if (!studentId) return { fieldErrors: { studentId: "Enter a student ID." } };
     if (status !== "present" && status !== "rejected") return { fieldErrors: { status: "Pick a status." } };
 
-    const { data: student, error: studentError } = await supabase
+    // Case-insensitive, since IDs saved before they were capitalised may have lowercase
+    // letters. Escape ilike's wildcards so only that exact ID can match.
+    const { data: matches, error: studentError } = await supabase
         .from("students")
-        .select("id")
-        .eq("student_id", studentId)
-        .maybeSingle();
+        .select("id, student_id")
+        .ilike("student_id", studentId.replace(/[\\%_]/g, "\\$&"))
+        .limit(2);
     if (studentError) return failed(studentError);
+    // Two IDs differing only by case: prefer the one saved in capitals.
+    const student = matches.find((row) => row.student_id === studentId) ?? matches[0];
     if (!student) return { fieldErrors: { studentId: "No student has that ID." } };
 
     const { error } = await supabase.rpc("set_attendance", {

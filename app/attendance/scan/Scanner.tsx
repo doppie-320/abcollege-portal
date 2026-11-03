@@ -393,7 +393,7 @@ export default function Scanner({ events }: { events: AttendanceEvent[] }) {
                   id="manual-student-id"
                   type="text"
                   value={manualId}
-                  onChange={(e) => setManualId(e.target.value)}
+                  onChange={(e) => setManualId(e.target.value.toUpperCase())}
                   placeholder="Student number"
                   autoComplete="off"
                   spellCheck={false}

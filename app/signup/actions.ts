@@ -2,8 +2,14 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { ActionResult } from "@/lib/actionResult";
+import { STUDENT_ID_FORMAT_ERROR, STUDENT_ID_RE, normalizeStudentId } from "@/lib/student-id";
 
 export async function register(_prev: ActionResult, formData: FormData) : Promise<ActionResult> {
+    const studentId = normalizeStudentId(String(formData.get("studentId") ?? ""));
+    if (!STUDENT_ID_RE.test(studentId)) {
+        return { error: STUDENT_ID_FORMAT_ERROR };
+    }
+
     const supabase = await createClient();
 
     const { error } = await supabase.auth.signUp({
@@ -13,7 +19,7 @@ export async function register(_prev: ActionResult, formData: FormData) : Promis
             data: {
                 first_name: formData.get("firstName") as string,
                 last_name: formData.get("lastName") as string,
-                student_id: formData.get("studentId") as string,
+                student_id: studentId,
                 year_level: Number(formData.get("yearLevelId")),
                 course_id: Number(formData.get("courseId")),
             }
@@ -47,12 +53,16 @@ export async function registerWithGoogle(_prev: ActionResult, formData: FormData
 
     const firstName = String(formData.get("firstName") ?? "").trim();
     const lastName = String(formData.get("lastName") ?? "").trim();
-    const studentId = String(formData.get("studentId") ?? "").trim();
+    const studentId = normalizeStudentId(String(formData.get("studentId") ?? ""));
     const yearLevel = Number(formData.get("yearLevelId"));
     const courseId = Number(formData.get("courseId"));
 
     if(!firstName || !lastName || !studentId || !yearLevel || !courseId) {
         return { error: "Please fill in all required details." }
+    }
+
+    if (!STUDENT_ID_RE.test(studentId)) {
+        return { error: STUDENT_ID_FORMAT_ERROR };
     }
 
     const { error: studentError } = await supabase

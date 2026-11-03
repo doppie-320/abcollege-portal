@@ -12,6 +12,7 @@ import {
   type AttendanceStatus,
 } from "@/lib/attendance";
 import type { EventScanner } from "@/lib/attendance-server";
+import { normalizeStudentId } from "@/lib/student-id";
 import LocalTime from "@/app/attendance/LocalTime";
 import { SplitBar } from "@/app/attendance/motion";
 import {
@@ -149,11 +150,11 @@ export default function EventAttendance({
   }
 
   function recordOptimistically(formData: FormData) {
-    const studentId = text(formData, "studentId");
+    const studentId = normalizeStudentId(text(formData, "studentId"));
     const status = text(formData, "status") as AttendanceStatus;
     if (!studentId || (status !== "present" && status !== "rejected")) return;
 
-    const existing = report.find((row) => row.student_id === studentId);
+    const existing = report.find((row) => row.student_id?.toUpperCase() === studentId);
     apply({
       type: "record",
       row: {
@@ -265,7 +266,23 @@ export default function EventAttendance({
                 <input type="hidden" name="eventId" value={event.event_id} />
                 <label className="m-0">
                   <span className={FIELD_LABEL}>Student ID</span>
-                  <input type="text" name="studentId" required autoComplete="off" className={`${SUBTLE_FIELD} font-mono`} />
+                  <input
+                    type="text"
+                    name="studentId"
+                    required
+                    autoComplete="off"
+                    spellCheck={false}
+                    onChange={(e) => {
+                      // Capitalise as they type, keeping the cursor where it was.
+                      const input = e.currentTarget;
+                      const upper = input.value.toUpperCase();
+                      if (upper === input.value) return;
+                      const { selectionStart, selectionEnd } = input;
+                      input.value = upper;
+                      input.setSelectionRange(selectionStart, selectionEnd);
+                    }}
+                    className={`${SUBTLE_FIELD} font-mono`}
+                  />
                 </label>
                 <div>
                   <span className={FIELD_LABEL} id="manual-status-label">
