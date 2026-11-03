@@ -127,6 +127,7 @@ export default async function AttendancePage() {
             eyebrow="SOE HUB / ATTENDANCE"
             title="ATTENDANCE"
             displayTitle
+            titleWeight="semibold"
             description={
               student
                 ? "Show your pass at council events to get checked in, and look back at every event you've attended."

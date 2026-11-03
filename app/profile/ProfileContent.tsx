@@ -36,6 +36,7 @@ export default function ProfileContent({ profile, isAdmin }: ProfileContentProps
           eyebrow="SOE HUB / PROFILE"
           title="STUDENT PROFILE"
           displayTitle
+          titleWeight="semibold"
           description="Your student record and a scratchpad for working out your GWA."
           actions={
             <Link href="/attendance" className="btn ghost rounded-lg px-4 py-2 text-[13.5px]">
