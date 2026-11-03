@@ -11,11 +11,11 @@ export const metadata: Metadata = {
 };
 
 export default async function UserAccountReviewPage() {
-  const [profile, admin] = await Promise.all([getProfile(), isAdmin()]);
+  // Read-only, so the list loads alongside the admin check; non-admins are
+  // redirected before any of it is used.
+  const [profile, admin, applicants] = await Promise.all([getProfile(), isAdmin(), fetchApplicants()]);
 
   if (!admin) redirect("/home");
-
-  const applicants = await fetchApplicants();
 
   return <UserAccountReview profile={profile} applicants={applicants} />;
 }

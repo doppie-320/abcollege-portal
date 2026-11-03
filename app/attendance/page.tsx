@@ -4,7 +4,7 @@ import type { Metadata, Viewport } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import SiteNav, { ADMIN_MENU_LINKS, HOME_ADMIN_NAV_LINKS } from "@/components/NavigationHeader";
-import { getProfile, isAdmin } from "@/lib/auth";
+import { getProfile, isAdmin, requireUserId } from "@/lib/auth";
 import { checkInState, checkInWindow, type AttendanceEvent } from "@/lib/attendance";
 import { fetchMyAttendance, fetchScannableEvents } from "@/lib/attendance-server";
 import { createClient } from "@/lib/supabase/server";
@@ -61,11 +61,15 @@ async function fetchStudentRecord(userId: string): Promise<StudentRecord | null>
 }
 
 export default async function AttendancePage() {
-  const [profile, admin] = await Promise.all([getProfile(), isAdmin()]);
-  const [student, scannable, history] = await Promise.all([
-    fetchStudentRecord(profile.id),
-    fetchScannableEvents(profile.id, admin),
-    fetchMyAttendance(profile.id),
+  // The user id comes from the token, so the attendance data loads alongside
+  // the profile instead of after it.
+  const userId = await requireUserId();
+  const [profile, admin, student, scannable, history] = await Promise.all([
+    getProfile(),
+    isAdmin(),
+    fetchStudentRecord(userId),
+    isAdmin().then((admin) => fetchScannableEvents(userId, admin)),
+    fetchMyAttendance(userId),
   ]);
   const canScan = admin || scannable.length > 0;
 

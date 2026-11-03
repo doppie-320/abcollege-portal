@@ -9,8 +9,7 @@ export const metadata: Metadata = {
 };
 
 export default async function ProfilePage() {
-  const profile = await getProfile();
-  const admin = await isAdmin();
+  const [profile, admin] = await Promise.all([getProfile(), isAdmin()]);
 
   return <ProfileContent profile={profile} isAdmin={admin} />;
 }

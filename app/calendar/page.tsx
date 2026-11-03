@@ -2,7 +2,7 @@ export const instant = false;
 
 import type { Metadata } from "next";
 import CalendarContent from "./CalendarContent";
-import { getProfile, isAdmin } from "@/lib/auth";
+import { getProfile, isAdmin, requireUserId } from "@/lib/auth";
 import { parseMonthParam, toDayKey, type MonthView } from "@/lib/calendar";
 import { fetchCalendarMonth, fetchNextEvent, type MonthData } from "@/lib/calendar-data";
 import { createClient } from "@/lib/supabase/server";
@@ -24,18 +24,20 @@ async function loadMonth(supabase: SupabaseServerClient, view: MonthView): Promi
 }
 
 export default async function CalendarPage({ searchParams }: PageProps<"/calendar">) {
-  const [profile, admin, { month }, supabase] = await Promise.all([
-    getProfile(),
-    isAdmin(),
-    searchParams,
-    createClient(),
-  ]);
+  // A token check, not a database trip. Reading the request first also has to
+  // happen before `new Date()` below.
+  await requireUserId();
+  const [{ month }, supabase] = await Promise.all([searchParams, createClient()]);
 
   // Decided on the server so the page and the browser agree on "today".
   const now = new Date();
   const today = toDayKey(now);
   const view = parseMonthParam(typeof month === "string" ? month : undefined, today);
-  const [{ events, celebrants }, nextEvent] = await Promise.all([
+
+  // The calendar doesn't depend on who's looking, so it loads alongside the profile.
+  const [profile, admin, { events, celebrants }, nextEvent] = await Promise.all([
+    getProfile(),
+    isAdmin(),
     loadMonth(supabase, view),
     fetchNextEvent(supabase, now),
   ]);
