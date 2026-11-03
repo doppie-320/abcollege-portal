@@ -114,12 +114,14 @@ export function PageHeader({
   description,
   back,
   actions,
+  displayTitle = false,
 }: {
   eyebrow: string;
   title: ReactNode;
   description?: ReactNode;
   back?: { href: string; label: string };
   actions?: ReactNode;
+  displayTitle?: boolean;
 }) {
   return (
     <div className="mb-6 flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
@@ -136,7 +138,7 @@ export function PageHeader({
           </Link>
         )}
         <span className="eyebrow">{eyebrow}</span>
-        <h1 className="mb-1 text-[length:var(--fs-section)] leading-none [overflow-wrap:anywhere]">{title}</h1>
+        <h1 className={`mb-1 ${displayTitle ? "text-[length:var(--fs-display)] font-medium" : "text-[length:var(--fs-section)]"} leading-none [overflow-wrap:anywhere]`}>{title}</h1>
         {description && <p className="mb-0 text-xs text-ink-soft">{description}</p>}
       </div>
       {actions && <div className="flex flex-wrap gap-2">{actions}</div>}

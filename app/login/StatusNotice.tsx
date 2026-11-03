@@ -123,7 +123,7 @@ export default function StatusNotice({
         }
 
         .title {
-          font-family: "Space Grotesk", sans-serif;
+          font-family: "Roboto Mono", monospace;
           font-size: 15px;
           font-weight: 600;
           color: var(--navy-deep);
