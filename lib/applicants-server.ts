@@ -4,18 +4,24 @@ import type { Applicant, ApplicantStatus } from "@/lib/applicants-db";
 export async function fetchApplicants(): Promise<Applicant[]> {
   const supabase = await createClient();
 
-  const { data: requestData, error: requestError } = await supabase
-    .from("users")
-    .select("id, first_name, last_name, email_address, birthdate, students!inner(student_id, year_level, courses(name)), user_requests!inner(request_status, reject_date, submitted_at)")
+  const [{ data: requestData, error: requestError }, { data: adminData, error: adminError }] = await Promise.all([
+    supabase
+      .from("users")
+      .select("id, first_name, last_name, email_address, birthdate, students!inner(student_id, year_level, courses(name)), user_requests!inner(request_status, reject_date, submitted_at)"),
+    supabase.from("admins").select("id"),
+  ]);
 
-  if (requestError) {
-    console.error("Supabase error:", requestError.message);
+  if (requestError || adminError) {
+    console.error("Supabase error:", (requestError ?? adminError)?.message);
     return [];
   }
 
   console.log("Fetched users:", requestData);
 
-  const applicants: Applicant[] = requestData.map((user) => {
+  // Admins are already approved, so they're never up for accepting or rejecting.
+  const adminIds = new Set(adminData.map((admin) => admin.id));
+
+  const applicants: Applicant[] = requestData.filter((user) => !adminIds.has(user.id)).map((user) => {
     const student = Array.isArray(user.students) ? user.students[0] : user.students;
     const course = Array.isArray(student?.courses) ? student?.courses[0] : student?.courses;
     const request = Array.isArray(user.user_requests) ? user.user_requests[0] : user.user_requests;
