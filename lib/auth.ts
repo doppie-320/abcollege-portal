@@ -1,6 +1,7 @@
 import { fullAvatarPath } from "@/lib/avatarPaths";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { cache } from "react";
 
 export type Profile = {
   id: string;
@@ -44,6 +45,11 @@ function toId(value: unknown): number | null {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
+/** PostgREST returns one-to-one embeds as an object, but be lenient in case one comes back as a list. */
+function one<T>(value: T | T[] | null | undefined): T | null {
+  return (Array.isArray(value) ? value[0] : value) ?? null;
+}
+
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
 /**
@@ -53,6 +59,12 @@ type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
  *   form, so there's no student record to review
  */
 export type AccountStatus = "approved" | "pending" | "rejected" | "no-account";
+
+function toStatus(isAdmin: boolean, requestStatus: string | undefined, hasStudent: boolean): AccountStatus {
+  if (isAdmin || requestStatus === "accept") return "approved";
+  if (!hasStudent) return "no-account";
+  return requestStatus === "reject" ? "rejected" : "pending";
+}
 
 export async function getAccountStatus(
   supabase: SupabaseServerClient,
@@ -64,88 +76,118 @@ export async function getAccountStatus(
     supabase.from("students").select("id").eq("id", userId).maybeSingle(),
   ]);
 
-  if (adminRow || request?.request_status === "accept") return "approved";
-  if (!student) return "no-account";
-  return request?.request_status === "reject" ? "rejected" : "pending";
+  return toStatus(adminRow !== null, request?.request_status, student !== null);
 }
 
-export async function isApproved(supabase: SupabaseServerClient, userId: string): Promise<boolean> {
-  return (await getAccountStatus(supabase, userId)) === "approved";
-}
-
-export async function getProfile(): Promise<Profile> {
+/**
+ * The signed-in user's verified token claims, read once per request.
+ *
+ * getClaims() checks the JWT's signature locally against the project's public
+ * key (cached for 10 minutes), so unlike getUser() it doesn't wait on a round
+ * trip to the Auth server. The proxy has already refreshed the session by now.
+ */
+const getSession = cache(async () => {
   const supabase = await createClient();
+  const { data, error } = await supabase.auth.getClaims();
+  return { supabase, claims: error ? null : (data?.claims ?? null) };
+});
 
-  const { data: authData, error: authError } = await supabase.auth.getUser();
-  const authUser = authData?.user;
+/** The signed-in user's id, or a redirect to log in. Doesn't touch the database. */
+export async function requireUserId(): Promise<string> {
+  const { claims } = await getSession();
+  if (!claims?.sub) redirect("/login");
+  return claims.sub;
+}
 
-  if (authError || !authUser) redirect("/login");
-  if (!(await isApproved(supabase, authUser.id))) redirect("/login?error=pending");
+type AccountRow = {
+  first_name: string | null;
+  last_name: string | null;
+  avatar_path: string | null;
+  admins: Record<string, unknown> | Record<string, unknown>[] | null;
+  user_requests: { request_status: string } | { request_status: string }[] | null;
+  students: { id: string } | { id: string }[] | null;
+};
 
-  const { data: user } = await supabase
+/**
+ * Everything needed to decide who the user is and what they may see, in one
+ * query: their users row with their admin row, account request and student row
+ * embedded. Shared by getProfile() and isAdmin() within a request.
+ */
+const getAccount = cache(async (userId: string) => {
+  const { supabase } = await getSession();
+
+  // admins(*) rather than admins(role): the table has no role column yet, and
+  // naming a missing column would fail the whole query.
+  const { data, error } = await supabase
     .from("users")
-    .select("id, first_name, last_name, avatar_path")
-    .eq("id", authUser.id)
-    .maybeSingle();
+    .select("first_name, last_name, avatar_path, admins(*), user_requests(request_status), students(id)")
+    .eq("id", userId)
+    .maybeSingle<AccountRow>();
 
-  const metadata = (authUser.user_metadata ?? {}) as AuthMetadata;
+  if (error) throw error;
 
-  const firstName = clean(user?.first_name ?? metadata.first_name);
-  const lastName = clean(user?.last_name ?? metadata.last_name);
-  const avatarPath = user?.avatar_path;
+  const adminRow = one(data?.admins);
+  const isAdmin = adminRow !== null;
 
+  return {
+    user: data,
+    isAdmin,
+    role: clean(adminRow?.role),
+    status: toStatus(isAdmin, one(data?.user_requests)?.request_status, one(data?.students) !== null),
+  };
+});
+
+export const getProfile = cache(async (): Promise<Profile> => {
+  const userId = await requireUserId();
+  const { supabase, claims } = await getSession();
+
+  const email = claims?.email;
+  const metadata = (claims?.user_metadata ?? {}) as AuthMetadata;
   const courseId = toId(metadata.course_id);
   const yearLevelId = toId(metadata.year_level);
 
-  const [{ data: course }, { data: yearLevel }, { data: adminRow }] = await Promise.all([
+  // The course and year level ids come from the token, so their lookups run
+  // alongside the account query instead of after it.
+  const [account, { data: course }, { data: yearLevel }] = await Promise.all([
+    getAccount(userId),
     courseId === null
       ? Promise.resolve({ data: null })
       : supabase.from("courses").select("id, name").eq("id", courseId).maybeSingle(),
     yearLevelId === null
       ? Promise.resolve({ data: null })
-      : supabase
-          .from("yearlevels")
-          .select("id, name")
-          .eq("id", yearLevelId)
-          .maybeSingle(),
-    // The admins table has no role column yet, so a failed read just means
-    // "no role" rather than failing the whole profile.
-    supabase.from("admins").select("role").eq("id", authUser.id).maybeSingle(),
+      : supabase.from("yearlevels").select("id, name").eq("id", yearLevelId).maybeSingle(),
   ]);
+
+  if (account.status !== "approved") redirect("/login?error=pending");
+
+  const { user } = account;
+  const firstName = clean(user?.first_name ?? metadata.first_name);
+  const lastName = clean(user?.last_name ?? metadata.last_name);
+  const avatarPath = user?.avatar_path;
 
   const avatars = supabase.storage.from("avatars");
   const avatarUrl = avatarPath ? avatars.getPublicUrl(avatarPath).data.publicUrl : "";
   const avatarFullUrl = avatarPath ? avatars.getPublicUrl(fullAvatarPath(avatarPath)).data.publicUrl : "";
 
   return {
-    id: authUser.id,
+    id: userId,
     firstName,
     lastName,
     name: toDisplay(`${firstName} ${lastName}`.trim()),
     initials: `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase(),
     studentId: toDisplay(metadata.student_id),
-    email: toDisplay(authUser.email),
+    email: toDisplay(email),
     program: toDisplay(course?.name),
     yearLevel: toDisplay(yearLevel?.name),
     avatarUrl: avatarUrl,
     avatarFullUrl,
-    role: clean(adminRow?.role)
+    role: account.role,
   };
-}
+});
 
 export async function isAdmin(): Promise<boolean> {
-  const supabase = await createClient();
+  const { claims } = await getSession();
+  if (!claims?.sub) return false;
 
-  const { data: authData } = await supabase.auth.getUser();
-  if (!authData?.user) return false;
-
-  const { data: adminRow, error } = await supabase
-    .from("admins")
-    .select("id")
-    .eq("id", authData.user.id)
-    .maybeSingle();
-
-  if (error) throw error;
-
-  return adminRow !== null;
+  return (await getAccount(claims.sub)).isAdmin;
 }

@@ -12,13 +12,17 @@ export const metadata: Metadata = {
 };
 
 export default async function EventAttendancePage(props: PageProps<"/admin/attendance/[eventId]">) {
-  const [profile, admin] = await Promise.all([getProfile(), isAdmin()]);
-  if (!admin) redirect("/home");
-
   const eventId = Number((await props.params).eventId);
-  if (!Number.isInteger(eventId) || eventId <= 0) notFound();
+  const validId = Number.isInteger(eventId) && eventId > 0;
 
-  const details = await fetchEventAttendance(eventId);
+  // Read-only, so the event loads alongside the admin check; non-admins are
+  // redirected before any of it is used.
+  const [profile, admin, details] = await Promise.all([
+    getProfile(),
+    isAdmin(),
+    validId ? fetchEventAttendance(eventId) : null,
+  ]);
+  if (!admin) redirect("/home");
   if (!details) notFound();
 
   return (

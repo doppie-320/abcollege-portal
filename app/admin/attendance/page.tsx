@@ -15,10 +15,12 @@ export const metadata: Metadata = {
 };
 
 export default async function AdminAttendancePage() {
-  const [profile, admin] = await Promise.all([getProfile(), isAdmin()]);
+  // Read-only, so the events load alongside the admin check; non-admins are
+  // redirected before any of it is used.
+  const [profile, admin, rawEvents] = await Promise.all([getProfile(), isAdmin(), fetchAttendanceEvents()]);
   if (!admin) redirect("/home");
 
-  const events = (await fetchAttendanceEvents()).map((event) => ({ ...event, state: checkInState(event) }));
+  const events = rawEvents.map((event) => ({ ...event, state: checkInState(event) }));
   const count = (state: CheckInState) => events.filter((event) => event.state === state).length;
 
   return (

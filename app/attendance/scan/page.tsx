@@ -3,7 +3,7 @@ export const instant = false;
 import type { Metadata, Viewport } from "next";
 import Link from "next/link";
 import SiteNav, { ADMIN_MENU_LINKS, HOME_ADMIN_NAV_LINKS } from "@/components/NavigationHeader";
-import { getProfile, isAdmin } from "@/lib/auth";
+import { getProfile, isAdmin, requireUserId } from "@/lib/auth";
 import { fetchScannableEvents } from "@/lib/attendance-server";
 import RegisterServiceWorker from "../RegisterServiceWorker";
 import { IdleNotice, PageHeader } from "../ui";
@@ -23,8 +23,13 @@ export const viewport: Viewport = {
 };
 
 export default async function ScanPage() {
-  const [profile, admin] = await Promise.all([getProfile(), isAdmin()]);
-  const events = await fetchScannableEvents(profile.id, admin);
+  // The user id comes from the token, so the events load alongside the profile.
+  const userId = await requireUserId();
+  const [profile, admin, events] = await Promise.all([
+    getProfile(),
+    isAdmin(),
+    isAdmin().then((admin) => fetchScannableEvents(userId, admin)),
+  ]);
 
   return (
     <>
