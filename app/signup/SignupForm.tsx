@@ -4,6 +4,7 @@ import { startTransition, useActionState, useEffect, useState, type CSSPropertie
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { STUDENT_ID_FORMAT_ERROR, STUDENT_ID_RE, normalizeStudentId } from "@/lib/student-id";
 import DatePicker from "@/components/DatePicker";
 import Select from "@/components/Select";
 import ConfirmDialog, { USER_ICON } from "@/app/home/ConfirmDialog";
@@ -66,7 +67,6 @@ const EMPTY_FIELDS: Fields = {
 type Errors = Partial<Record<keyof Fields, string>>;
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const STUDENT_ID_RE = /^[a-zA-Z]{3}\d{8}$/;
 
 function validate(fields: Fields): Errors {
   const errors: Errors = {};
@@ -82,8 +82,8 @@ function validate(fields: Fields): Errors {
 
   if (!fields.studentId.trim()) {
     errors.studentId = "Student ID is required.";
-  } else if (!STUDENT_ID_RE.test(fields.studentId.trim())) {
-    errors.studentId = "Must be 3 letters followed by 8 numbers (e.g. ABC12345678).";
+  } else if (!STUDENT_ID_RE.test(normalizeStudentId(fields.studentId))) {
+    errors.studentId = STUDENT_ID_FORMAT_ERROR;
   }
 
   if (fields.birthday && new Date(fields.birthday) > new Date()) {
@@ -138,8 +138,8 @@ function validateGoogleFields(fields: GoogleFields): GoogleErrors {
 
   if (!fields.studentId.trim()) {
     errors.studentId = "Student ID is required.";
-  } else if (!STUDENT_ID_RE.test(fields.studentId.trim())) {
-    errors.studentId = "Must be 3 letters followed by 8 numbers (e.g. ABC12345678).";
+  } else if (!STUDENT_ID_RE.test(normalizeStudentId(fields.studentId))) {
+    errors.studentId = STUDENT_ID_FORMAT_ERROR;
   }
 
   if (!fields.yearLevel) errors.yearLevel = "Select a year level.";
@@ -240,7 +240,7 @@ export default function SignupForm({courses, yearLevels, googleUser, oauthFailed
 
     if (Object.keys(nextErrors).length === 0) {
       const supabase = createClient();
-      const trimmedStudentId = fields.studentId.trim();
+      const trimmedStudentId = normalizeStudentId(fields.studentId);
 
       // Check if the student ID exists in the students table
       const { data: existingStudent } = await supabase
@@ -259,6 +259,7 @@ export default function SignupForm({courses, yearLevels, googleUser, oauthFailed
       
       const formData = new FormData(form);
 
+      formData.set("studentId", trimmedStudentId);
       formData.set("yearLevelId", fields.yearLevel);
       formData.set("courseId", fields.program);
 
@@ -314,7 +315,7 @@ export default function SignupForm({courses, yearLevels, googleUser, oauthFailed
     const formData = new FormData();
     formData.set("firstName", googleFields.firstName);
     formData.set("lastName", googleFields.lastName);
-    formData.set("studentId", googleFields.studentId);
+    formData.set("studentId", normalizeStudentId(googleFields.studentId));
     formData.set("yearLevelId", googleFields.yearLevel);
     formData.set("courseId", googleFields.program);
 
@@ -449,7 +450,7 @@ export default function SignupForm({courses, yearLevels, googleUser, oauthFailed
                 type="text"
                 placeholder="e.g. SOE12345678"
                 value={googleFields.studentId}
-                onChange={(e) => setGoogleField("studentId", e.target.value)}
+                onChange={(e) => setGoogleField("studentId", e.target.value.toUpperCase())}
               />
               {googleErrors.studentId && <p className="error">{googleErrors.studentId}</p>}
             </div>
@@ -532,7 +533,7 @@ export default function SignupForm({courses, yearLevels, googleUser, oauthFailed
             </li>
             <li>
               <span>Student ID</span>
-              <strong>{googleFields.studentId}</strong>
+              <strong>{normalizeStudentId(googleFields.studentId)}</strong>
             </li>
             <li>
               <span>Year Level</span>
@@ -689,7 +690,7 @@ export default function SignupForm({courses, yearLevels, googleUser, oauthFailed
                 type="text"
                 placeholder="e.g. SOE12345678"
                 value={fields.studentId}
-                onChange={(e) => setField("studentId", e.target.value)}
+                onChange={(e) => setField("studentId", e.target.value.toUpperCase())}
               />
               {errors.studentId && <p className="error">{errors.studentId}</p>}
             </div>
