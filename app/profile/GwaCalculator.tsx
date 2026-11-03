@@ -166,19 +166,19 @@ export default function GwaCalculator() {
           <tr>
             <th
               scope="col"
-              className="pb-2 pr-2 text-left font-mono text-[11px] font-medium uppercase tracking-[0.04em] text-ink-soft"
+              className="pb-2 pr-2 text-left text-[11px] font-medium uppercase tracking-[0.04em] text-ink-soft"
             >
               Subject
             </th>
             <th
               scope="col"
-              className="w-[96px] pb-2 pr-2 text-left font-mono text-[11px] font-medium uppercase tracking-[0.04em] text-ink-soft @max-[420px]:w-[78px]"
+              className="w-[96px] pb-2 pr-2 text-left text-[11px] font-medium uppercase tracking-[0.04em] text-ink-soft @max-[420px]:w-[78px]"
             >
               Units
             </th>
             <th
               scope="col"
-              className="w-[96px] pb-2 pr-2 text-left font-mono text-[11px] font-medium uppercase tracking-[0.04em] text-ink-soft @max-[420px]:w-[78px]"
+              className="w-[96px] pb-2 pr-2 text-left text-[11px] font-medium uppercase tracking-[0.04em] text-ink-soft @max-[420px]:w-[78px]"
             >
               Grade
             </th>

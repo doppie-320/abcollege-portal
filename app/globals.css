@@ -118,7 +118,9 @@
   h1,
   h2,
   h3,
-  h4 {
+  h4,
+  h5,
+  h6 {
     font-family: 'Sora', sans-serif;
     color: var(--navy-deep);
     margin: 0 0 0.4em;
@@ -128,6 +130,13 @@
 
   p {
     margin: 0 0 1em;
+  }
+
+  code,
+  kbd,
+  pre,
+  samp {
+    font-family: 'JetBrains Mono', monospace;
   }
 
   a {

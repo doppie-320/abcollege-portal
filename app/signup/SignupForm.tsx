@@ -1350,7 +1350,7 @@ export default function SignupForm({courses, yearLevels, googleUser, oauthFailed
         }
 
         .stepLabel {
-          font-family: "JetBrains Mono", monospace;
+          font-family: "Inter", sans-serif;
           font-size: 10.5px;
           letter-spacing: 0.04em;
           text-transform: uppercase;
