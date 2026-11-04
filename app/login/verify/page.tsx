@@ -1,15 +1,24 @@
+export const instant = false;
+
 import type { Metadata } from "next";
 import Image from "next/image";
+import { redirect } from "next/navigation";
 import VerifyForm from "./VerifyForm";
+import { needsMFA } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
   title: "Verify Your Email — SOE Student Portal",
 };
 
-// Frontend only: the real address will come from the login attempt.
-const PLACEHOLDER_EMAIL = "student@gmail.com";
+export default async function VerifyPage() {
+  const supabase = await createClient();
+  const { data } = await supabase.auth.getClaims();
+  const claims = data?.claims;
 
-export default function VerifyPage() {
+  if (!claims?.sub || !claims.email) redirect("/login");
+  if (!(await needsMFA(supabase))) redirect("/home");
+
   return (
     <div className="split">
       <div className="promo">
@@ -35,7 +44,7 @@ export default function VerifyPage() {
       </div>
 
       <div className="formside">
-        <VerifyForm email={PLACEHOLDER_EMAIL} />
+        <VerifyForm email={claims.email} />
       </div>
     </div>
   );

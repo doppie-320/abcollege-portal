@@ -1,19 +1,29 @@
 "use client";
 
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { OFFLINE_ERROR, settle } from "@/lib/actionResult";
+import { sendVerificationCode, verifyCode } from "./actions";
 
 const CODE_LENGTH = 6;
 const RESEND_COOLDOWN = 60;
 
 // How long each moment stays on screen.
-const CHECK_MS = 1200;
 const SUCCESS_MS = 2400;
 const SHAKE_MS = 600;
 
 // Frontend only: stands in for the real check. Any other code shows the incorrect state.
-const DEMO_CODE = "123456";
+type SendResult = Awaited<ReturnType<typeof sendVerificationCode>>;
+
+async function requestCode(isResend: boolean): Promise<SendResult> {
+  try {
+    return await sendVerificationCode(isResend);
+  } catch (cause) {
+    console.error("[verify] request failed:", cause);
+    return { cooldown: 0, error: OFFLINE_ERROR }
+  }
+}
 
 type Status = "entering" | "checking" | "incorrect" | "success";
 
@@ -28,12 +38,34 @@ export default function VerifyForm({ email }: { email: string }) {
   const [code, setCode] = useState("");
   const [status, setStatus] = useState<Status>("entering");
   const [cooldown, setCooldown] = useState(RESEND_COOLDOWN);
+
   const [resendCount, setResendCount] = useState(0);
+  const [codeError, setCodeError] = useState("");
+  const [sendError, setSendError] = useState("");
 
   const checking = status === "checking";
   const incorrect = status === "incorrect";
   // Also held while a wrong code is still shaking, right before it clears.
   const locked = checking || (incorrect && code !== "");
+
+  const applySendResult = useCallback((result: SendResult) => {
+    if (result.redirecTo) {
+      router.replace(result.redirecTo);
+      return;
+    }
+    setSendError(result.error ?? "");
+    setCooldown(result.cooldown);
+  }, [router]);
+
+  useEffect(() => {
+    let current = true;
+    requestCode(false).then((result) => {
+      if (current) applySendResult(result);
+    });
+    return () => {
+      current = false;
+    };
+  }, [applySendResult]);
 
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -43,8 +75,15 @@ export default function VerifyForm({ email }: { email: string }) {
 
   useEffect(() => {
     if (!checking) return;
-    const id = setTimeout(() => setStatus(code === DEMO_CODE ? "success" : "incorrect"), CHECK_MS);
-    return () => clearTimeout(id);
+    let current = true;
+    settle(verifyCode(code)).then((result) => {
+      if (!current) return;
+      setCodeError(result.error ?? "");
+      setStatus(result.error ? "incorrect" : "success");
+    });
+    return () => {
+      current = false;
+    };
   }, [checking, code]);
 
   useEffect(() => {
@@ -79,12 +118,16 @@ export default function VerifyForm({ email }: { email: string }) {
     setStatus(next.length === CODE_LENGTH ? "checking" : "entering");
   }
 
-  function handleResend() {
+  async function handleResend() {
     setCode("");
     setStatus("entering");
+    setSendError("");
     setCooldown(RESEND_COOLDOWN);
-    setResendCount((n) => n + 1);
     inputRef.current?.focus();
+
+    const result = await requestCode(true);
+    applySendResult(result);
+    if (result.sent) setResendCount((n) => n + 1);
   }
 
   return (
@@ -162,9 +205,9 @@ export default function VerifyForm({ email }: { email: string }) {
             ))}
           </div>
 
-          {incorrect ? (
+          {incorrect || sendError ? (
             <p id="verifyHint" className="hint isError" role="alert">
-              Incorrect code. Please try again.
+              {incorrect ? codeError : sendError}
             </p>
           ) : (
             <p id="verifyHint" className="hint" aria-live="polite">
