@@ -3,7 +3,7 @@
 import { ActionResult } from "@/lib/actionResult";
 import { STATUS_MESSAGES } from "./messages";
 import { createClient } from "@/lib/supabase/server";
-import { getAccountStatus } from "@/lib/auth";
+import { getAccountStatus, needsMFA } from "@/lib/auth";
 import { redirect } from "next/navigation";
 
 export async function login(_prev: ActionResult, formData: FormData) : Promise<ActionResult> {
@@ -26,5 +26,9 @@ export async function login(_prev: ActionResult, formData: FormData) : Promise<A
         return { error: STATUS_MESSAGES[status], status };
     }
 
-    redirect("/home");
+    redirect(
+        (await needsMFA(supabase)) ?
+        "/login/verify" :
+        "/home"
+    );
 }
