@@ -563,14 +563,17 @@ export default function HomeContent({ current_user, is_admin, today, birthdays, 
             <h1>SOE&apos;s HAPPENING</h1>
 
             <div className="socialLinks">
-              <Link href="#" aria-label="SOE on Facebook">
+              <Link
+                href="https://www.facebook.com/ABCollegeESC?mibextid=wwXIfr&rdid=irL0zCyghBqOW4wT&share_url=https%3A%2F%2Fwww.facebook.com%2Fshare%2F19Qcxm3UKt%2F%3Fmibextid%3DwwXIfr#"
+                aria-label="SOE on Facebook"
+              >
                 <FacebookIcon />
               </Link>
-              <Link href="#" aria-label="SOE on Messenger">
+              <Link
+                href="https://m.me/ABCollegeESC?mibextid=wwXIfr&rdid=irL0zCyghBqOW4wT&share_url=https%3A%2F%2Fwww.facebook.com%2Fshare%2F19Qcxm3UKt%2F%3Fmibextid%3DwwXIfr#"
+                aria-label="SOE on Messenger"
+              >
                 <MessengerIcon />
-              </Link>
-              <Link href="#" aria-label="SOE on Instagram">
-                <InstagramIcon />
               </Link>
             </div>
           </div>
@@ -1163,16 +1166,6 @@ function MessengerIcon() {
   return (
     <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
       <path d="M12 2C6.48 2 2 6.14 2 11.25c0 2.9 1.44 5.49 3.7 7.19V22l3.38-1.86c.9.25 1.87.38 2.92.38 5.52 0 10-4.14 10-9.27S17.52 2 12 2Zm1 12.5-2.55-2.72-4.98 2.72L10.9 8.9l2.62 2.72L18.4 8.9Z" />
-    </svg>
-  );
-}
-
-function InstagramIcon() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <rect x="3" y="3" width="18" height="18" rx="5" />
-      <circle cx="12" cy="12" r="4" />
-      <circle cx="17.2" cy="6.8" r="1" fill="currentColor" stroke="none" />
     </svg>
   );
 }
