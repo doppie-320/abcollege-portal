@@ -3,6 +3,7 @@
 import { startTransition, useActionState, useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { forgetNav } from "@/lib/navMemory";
 import { createClient } from "@/lib/supabase/client";
 import ConfirmDialog, { USER_ICON } from "@/app/home/ConfirmDialog";
 // Forgot password is off until custom auth emails are set up (Supabase paid feature).
@@ -96,6 +97,12 @@ export default function LoginForm({ initialNotice, noAccountEmail }: LoginFormPr
         : initialNotice;
   // Hidden while a new attempt is in flight, so the old result doesn't linger.
   const showNotice = notice !== null && !noticeHidden && !pending;
+
+  // Whoever logs in next shouldn't see the last user's tabs or name while /home loads.
+  // Also runs when cacheComponents brings this page back after a log out.
+  useEffect(() => {
+    forgetNav();
+  }, []);
 
   useEffect(() => {
     const url = new URL(window.location.href);

@@ -78,6 +78,8 @@ export default function UserMenu({
             alt=""
             width={30}
             height={30}
+            loading="eager"
+            decoding="sync"
             className="size-[30px] shrink-0 rounded-full border border-navy-tint object-cover"
           />
         ) : (
