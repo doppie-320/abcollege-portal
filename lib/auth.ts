@@ -80,6 +80,15 @@ export async function getAccountStatus(
 }
 
 /**
+ * Returns true for users whose current session hasn't have a valid MFA pass
+ */
+export async function needsMFA(supabase: SupabaseServerClient): Promise<boolean> {
+  const { data, error } = await supabase.rpc("mfa_pending");
+  if (error) console.error("[auth] MFA check failed:", error);
+  return data !== false;
+}
+
+/**
  * The signed-in user's verified token claims, read once per request.
  *
  * getClaims() checks the JWT's signature locally against the project's public
@@ -109,31 +118,38 @@ type AccountRow = {
 };
 
 /**
- * Everything needed to decide who the user is and what they may see, in one
- * query: their users row with their admin row, account request and student row
- * embedded. Shared by getProfile() and isAdmin() within a request.
+  * Everything needed to decide who the user is and what they may see: their
+  * users row with their admin row, account request and student row embedded, and
+  * whether this session still owes an MFA code. Shared by getProfile() and
+  * isAdmin() within a request.
  */
 const getAccount = cache(async (userId: string) => {
   const { supabase } = await getSession();
 
   // admins(*) rather than admins(role): the table has no role column yet, and
   // naming a missing column would fail the whole query.
-  const { data, error } = await supabase
-    .from("users")
-    .select("first_name, last_name, avatar_path, admins(*), user_requests(request_status), students(id)")
-    .eq("id", userId)
-    .maybeSingle<AccountRow>();
+  const [{ data, error }, { data: mfaData, error: mfaError }] = await Promise.all([
+    supabase
+      .from("users")
+      .select("first_name, last_name, avatar_path, admins(*), user_requests(request_status), students(id)")
+      .eq("id", userId)
+      .maybeSingle<AccountRow>(),
+    supabase.rpc("mfa_pending")
+  ]);
 
   if (error) throw error;
+  if (mfaError) throw mfaError;
 
   const adminRow = one(data?.admins);
-  const isAdmin = adminRow !== null;
+  const hasAdminRow = adminRow !== null;
+  const mfaPending = mfaData !== false;
 
   return {
     user: data,
-    isAdmin,
+    isAdmin: hasAdminRow && !mfaPending,
+    mfaPending,
     role: clean(adminRow?.role),
-    status: toStatus(isAdmin, one(data?.user_requests)?.request_status, one(data?.students) !== null),
+    status: toStatus(hasAdminRow, one(data?.user_requests)?.request_status, one(data?.students) !== null),
   };
 });
 
@@ -159,6 +175,7 @@ export const getProfile = cache(async (): Promise<Profile> => {
   ]);
 
   if (account.status !== "approved") redirect("/login?error=pending");
+  if (account.mfaPending) redirect("/login/verify");
 
   const { user } = account;
   const firstName = clean(user?.first_name ?? metadata.first_name);
