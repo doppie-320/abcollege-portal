@@ -21,6 +21,8 @@ UPDATE public.user_requests SET request_status = 'accept'
 WHERE user_id <> 'b0000000-0000-0000-0000-000000000005';
 
 INSERT INTO public.admins (id) VALUES ('b0000000-0000-0000-0000-000000000001');
+INSERT INTO private.mfa_sessions (session_id, user_id)
+VALUES ('b0000000-0000-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000001');
 
 INSERT INTO public.students (id, student_id, year_level, course) VALUES
   ('b0000000-0000-0000-0000-000000000003', 'STATIC-0003', 9101, 9101),
@@ -39,7 +41,7 @@ CREATE TEMP TABLE tokens (name text PRIMARY KEY, token text);
 GRANT ALL ON tokens TO "authenticated";
 
 CREATE FUNCTION pg_temp.login(uid uuid) RETURNS void LANGUAGE sql AS $$
-  SELECT set_config('request.jwt.claims', json_build_object('sub', uid, 'role', 'authenticated')::text, true),
+  SELECT set_config('request.jwt.claims', json_build_object('sub', uid, 'role', 'authenticated', 'session_id', uid)::text, true),
          set_config('role', 'authenticated', true);
 $$;
 

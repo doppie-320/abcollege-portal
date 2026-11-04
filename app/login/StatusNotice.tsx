@@ -115,7 +115,7 @@ export default function StatusNotice({
 
         .eyebrowLine {
           display: block;
-          font-family: "IBM Plex Mono", monospace;
+          font-family: "DM Mono", monospace;
           font-size: 10px;
           letter-spacing: 0.08em;
           color: ${kind.accent};
@@ -123,7 +123,7 @@ export default function StatusNotice({
         }
 
         .title {
-          font-family: "Space Grotesk", sans-serif;
+          font-family: "Sora", sans-serif;
           font-size: 15px;
           font-weight: 600;
           color: var(--navy-deep);

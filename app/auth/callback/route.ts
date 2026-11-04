@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
-import { getAccountStatus } from '@/lib/auth';
+import { needsMFA, getAccountStatus } from '@/lib/auth';
 
 export async function GET(request: Request) {
   console.log('OAuth callback reached:', request.url)
@@ -32,6 +32,9 @@ export async function GET(request: Request) {
         const status = await getAccountStatus(supabase, user.id);
 
         if (status === 'approved') {
+          if (await needsMFA(supabase)) {
+            return NextResponse.redirect(`${origin}/login/verify`);
+          }
           return NextResponse.redirect(`${origin}${fromSignup ? '/home' : next}`);
         }
 

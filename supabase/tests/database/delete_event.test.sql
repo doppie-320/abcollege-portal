@@ -12,6 +12,8 @@ INSERT INTO auth.users (id, email, raw_user_meta_data) VALUES
   ('d0000000-0000-0000-0000-000000000002', 'student@pgtap-delete.local', '{"first_name":"Stu","last_name":"Dent"}');
 
 INSERT INTO public.admins (id) VALUES ('d0000000-0000-0000-0000-000000000001');
+INSERT INTO private.mfa_sessions (session_id, user_id)
+VALUES ('d0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000001');
 
 INSERT INTO public.events (event_id, event_name, event_start, event_end, tag, takes_attendance) VALUES
   (9101, 'Event with attendance', now() - interval '1 hour', now() + interval '1 hour', 'EVENT', true),
@@ -21,7 +23,7 @@ INSERT INTO public.attendance (event_id, user_id, status, method) VALUES
   (9101, 'd0000000-0000-0000-0000-000000000002', 'present', 'manual');
 
 CREATE FUNCTION pg_temp.login(uid uuid) RETURNS void LANGUAGE sql AS $$
-  SELECT set_config('request.jwt.claims', json_build_object('sub', uid, 'role', 'authenticated')::text, true),
+  SELECT set_config('request.jwt.claims', json_build_object('sub', uid, 'role', 'authenticated', 'session_id', uid)::text, true),
          set_config('role', 'authenticated', true);
 $$;
 

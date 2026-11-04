@@ -12,6 +12,7 @@ import {
   UserCheck,
   type LucideIcon,
 } from "lucide-react";
+import { rememberNav, useRememberedNav } from "@/lib/navMemory";
 import { Skeleton } from "./Skeleton";
 import UserMenu from "./UserMenu";
 
@@ -131,6 +132,13 @@ export default function SiteNav({
     document.documentElement.style.removeProperty("--nav-offset");
   }, []);
 
+  useEffect(() => {
+    rememberNav({
+      links,
+      user: { initials, name, nameOverride, userId, avatarUrl, profileHref, profileLabel, menuLinks },
+    });
+  }, [links, initials, name, nameOverride, userId, avatarUrl, profileHref, profileLabel, menuLinks]);
+
   // Clicking a link to the page you're already on would do nothing, so jump to the top and let the page refresh itself.
   function onLinkClick(e: MouseEvent<HTMLAnchorElement>, href: string) {
     if (pathname !== href || e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
@@ -164,25 +172,32 @@ export default function SiteNav({
 }
 
 /**
- * Stands in for SiteNav while a page loads (see the loading.tsx files). The bar and tabs are
- * the real thing; only the user menu, which needs the signed-in user, is a placeholder.
- * `pathname` is the page being loaded, so the right tab is already highlighted.
+ * Stands in for SiteNav while a page loads (see the loading.tsx files). Moving between pages
+ * it repeats the tabs and user menu the last SiteNav showed, so the bar doesn't visibly change.
+ * On a full page load nothing is known about the user yet, so it shows the standard tabs and a
+ * placeholder chip. `pathname` is the page being loaded, so the right tab is already highlighted.
  */
 export function SiteNavSkeleton({
   pathname,
-  links = NAV_LINKS,
+  links,
   brandHref = "/home",
 }: {
   pathname: string;
   links?: readonly NavLink[];
   brandHref?: string;
 }) {
+  const remembered = useRememberedNav();
+
   return (
-    <NavChrome pathname={pathname} links={links} brandHref={brandHref}>
-      <span className="user-chip" aria-hidden="true">
-        <Skeleton dark className="size-[30px] shrink-0 rounded-full" />
-        <Skeleton dark className="h-3 w-24 max-[900px]:hidden" />
-      </span>
+    <NavChrome pathname={pathname} links={links ?? remembered?.links ?? NAV_LINKS} brandHref={brandHref}>
+      {remembered ? (
+        <UserMenu {...remembered.user} />
+      ) : (
+        <span className="user-chip" aria-hidden="true">
+          <Skeleton dark className="size-[30px] shrink-0 rounded-full" />
+          <Skeleton dark className="h-3 w-24 max-[900px]:hidden" />
+        </span>
+      )}
     </NavChrome>
   );
 }
@@ -217,6 +232,8 @@ function NavChrome({ pathname, links, brandHref, children, barRef, barClassName 
             alt="Andres Bonifacio College School of Engineering logo"
             width={28}
             height={28}
+            loading="eager"
+            decoding="sync"
             className="size-7 shrink-0 object-contain"
           />
           SOE HUB

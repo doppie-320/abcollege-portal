@@ -581,7 +581,7 @@ export default function PostModal({
           display: flex;
           align-items: center;
           justify-content: center;
-          font-family: "Space Grotesk", sans-serif;
+          font-family: "Sora", sans-serif;
           font-weight: 600;
           font-size: 13px;
           flex-shrink: 0;

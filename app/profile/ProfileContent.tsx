@@ -34,7 +34,9 @@ export default function ProfileContent({ profile, isAdmin }: ProfileContentProps
       <div className="page-wrap">
         <PageHeader
           eyebrow="SOE HUB / PROFILE"
-          title="Student Profile"
+          title="STUDENT PROFILE"
+          displayTitle
+          titleWeight="semibold"
           description="Your student record and a scratchpad for working out your GWA."
           actions={
             <Link href="/attendance" className="btn ghost rounded-lg px-4 py-2 text-[13.5px]">

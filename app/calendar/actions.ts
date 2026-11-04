@@ -15,13 +15,12 @@ async function requireAdmin(supabase: SupabaseServerClient): Promise<string | nu
     const { data: authData, error: authError } = await supabase.auth.getUser();
     if (authError || !authData.user) redirect("/login");
 
-    const { data: adminRow, error } = await supabase
-        .from("admins").select("id").eq("id", authData.user.id).maybeSingle();
+    const { data: admin, error } = await supabase.rpc("is_admin");
     if (error) {
         console.error("[calendar] admin check failed:", error);
         return GENERIC_ERROR;
     }
-    return adminRow ? null : "Only admins can manage calendar events.";
+    return admin ? null : "Only admins can manage calendar events.";
 }
 
 export async function saveEvent(input: EventInput): Promise<ActionResult> {

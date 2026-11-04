@@ -292,7 +292,7 @@ export default function BirthdayPanel({
         }
 
         .bdBannerText strong {
-          font-family: "Space Grotesk", sans-serif;
+          font-family: "Sora", sans-serif;
           font-size: 16px;
           line-height: 1.25;
           overflow-wrap: anywhere;
@@ -359,7 +359,7 @@ export default function BirthdayPanel({
           align-items: center;
           justify-content: center;
           flex-shrink: 0;
-          font-family: "Space Grotesk", sans-serif;
+          font-family: "Sora", sans-serif;
           font-size: 12px;
           font-weight: 600;
           transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
