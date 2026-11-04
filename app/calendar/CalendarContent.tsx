@@ -757,7 +757,7 @@ export default function CalendarContent({
         }
 
         .calStatValue {
-          font-family: "Space Grotesk", sans-serif;
+          font-family: "Sora", sans-serif;
           font-size: var(--fs-stat);
           font-weight: 700;
           line-height: 1;
@@ -1136,7 +1136,7 @@ export default function CalendarContent({
           height: 24px;
           padding: 0 6px;
           border-radius: 999px;
-          font-family: "Space Grotesk", sans-serif;
+          font-family: "Sora", sans-serif;
           font-size: 13.5px;
           font-weight: 500;
           font-variant-numeric: tabular-nums;
@@ -1328,7 +1328,7 @@ export default function CalendarContent({
         }
 
         .calTagChip {
-          font-family: "IBM Plex Mono", monospace;
+          font-family: "DM Mono", monospace;
           font-size: 10px;
           letter-spacing: 0.04em;
           text-transform: uppercase;

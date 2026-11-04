@@ -125,7 +125,9 @@ export default async function AttendancePage() {
         <div className="page-wrap">
           <PageHeader
             eyebrow="SOE HUB / ATTENDANCE"
-            title="Attendance"
+            title="ATTENDANCE"
+            displayTitle
+            titleWeight="semibold"
             description={
               student
                 ? "Show your pass at council events to get checked in, and look back at every event you've attended."

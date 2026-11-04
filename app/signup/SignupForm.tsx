@@ -610,7 +610,7 @@ export default function SignupForm({courses, yearLevels, googleUser, oauthFailed
                   id="firstName"
                   name="firstName"
                   type="text"
-                  placeholder="e.g. Iya"
+                  placeholder="e.g. John"
                   value={fields.firstName}
                   onChange={(e) => setField("firstName", e.target.value)}
                 />
@@ -622,7 +622,7 @@ export default function SignupForm({courses, yearLevels, googleUser, oauthFailed
                   id="lastName"
                   name="lastName"
                   type="text"
-                  placeholder="e.g. Rei"
+                  placeholder="e.g. Doe"
                   value={fields.lastName}
                   onChange={(e) => setField("lastName", e.target.value)}
                 />
@@ -636,7 +636,7 @@ export default function SignupForm({courses, yearLevels, googleUser, oauthFailed
                 id="email"
                 name="email"
                 type="email"
-                placeholder="e.g. lyarei@gmail.com"
+                placeholder="e.g. johndoe@gmail.com"
                 value={fields.email}
                 onChange={(e) => setField("email", e.target.value)}
               />
@@ -847,7 +847,7 @@ export default function SignupForm({courses, yearLevels, googleUser, oauthFailed
         }
 
         .promo .footMono {
-          font-family: "IBM Plex Mono", monospace;
+          font-family: "DM Mono", monospace;
           font-size: 11.5px;
           color: #6e86a8;
           margin-top: 48px;
@@ -1236,7 +1236,7 @@ export default function SignupForm({courses, yearLevels, googleUser, oauthFailed
         }
 
         .successTicket dt {
-          font-family: "IBM Plex Mono", monospace;
+          font-family: "DM Mono", monospace;
           font-size: 10.5px;
           letter-spacing: 0.08em;
           text-transform: uppercase;
@@ -1350,7 +1350,7 @@ export default function SignupForm({courses, yearLevels, googleUser, oauthFailed
         }
 
         .stepLabel {
-          font-family: "IBM Plex Mono", monospace;
+          font-family: "Inter", sans-serif;
           font-size: 10.5px;
           letter-spacing: 0.04em;
           text-transform: uppercase;

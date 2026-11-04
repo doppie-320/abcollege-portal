@@ -195,7 +195,7 @@ export default function LoginForm({ initialNotice, noAccountEmail }: LoginFormPr
             id="email"
             name="email"
             type="email"
-            placeholder="e.g. lyarei@gmail.com"
+            placeholder="Enter your email address"
             value={fields.email}
             onChange={(e) => setField("email", e.target.value)}
           />
@@ -342,7 +342,7 @@ export default function LoginForm({ initialNotice, noAccountEmail }: LoginFormPr
         }
 
         .promo .footMono {
-          font-family: "IBM Plex Mono", monospace;
+          font-family: "DM Mono", monospace;
           font-size: 11.5px;
           color: #6e86a8;
           margin-top: 48px;

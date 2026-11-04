@@ -620,7 +620,7 @@ export default function CreatePostModal({
           box-shadow: none !important;
           background: transparent !important;
           padding: 4px 0 10px !important;
-          font-family: "Space Grotesk", sans-serif !important;
+          font-family: "Sora", sans-serif !important;
           font-size: var(--fs-card) !important;
           font-weight: 600;
           color: var(--navy-deep) !important;
@@ -787,7 +787,7 @@ export default function CreatePostModal({
           display: flex;
           align-items: center;
           justify-content: center;
-          font-family: "Space Grotesk", sans-serif;
+          font-family: "Sora", sans-serif;
           font-weight: 600;
           font-size: 12px;
           flex-shrink: 0;
@@ -1402,7 +1402,7 @@ function Toolbar({ editor, onUpload }: { editor: Editor; onUpload: (files: File[
         }
 
         .textIcon {
-          font-family: "Space Grotesk", sans-serif;
+          font-family: "Sora", sans-serif;
           font-weight: 700;
           font-size: 12.5px;
           line-height: 1;
@@ -2348,7 +2348,7 @@ function ToolInfoCard({
         }
 
         .infoTitle {
-          font-family: "Space Grotesk", sans-serif;
+          font-family: "Sora", sans-serif;
           font-weight: 600;
           font-size: 13px;
         }
@@ -2373,7 +2373,7 @@ function ToolInfoCard({
         }
 
         kbd {
-          font-family: "IBM Plex Mono", monospace;
+          font-family: "DM Mono", monospace;
           font-size: 10px;
           padding: 0 4px;
           border-radius: 3px;
