@@ -129,7 +129,7 @@ begin
   where c.user_id = p_user_id and c.session_id = p_session_id and c.used_at is null;
 
   insert into private.mfa_codes(user_id, session_id, code_hash)
-  values(p_user_id, p_session_id, extensions.crypt(p_code, extensions.get_salt('bf', 8)));
+  values(p_user_id, p_session_id, extensions.crypt(p_code, extensions.gen_salt('bf', 8)));
 
   return jsonb_build_object('status', 'sent', 'email', v_email, 'retry_after', 60);
 end;
