@@ -1,5 +1,6 @@
 import { fullAvatarPath } from "@/lib/avatarPaths";
 import { createClient } from "@/lib/supabase/server";
+import type { AMREntry } from "@supabase/supabase-js";
 import { redirect } from "next/navigation";
 import { cache } from "react";
 
@@ -86,6 +87,13 @@ export async function needsMFA(supabase: SupabaseServerClient): Promise<boolean>
   const { data, error } = await supabase.rpc("mfa_pending");
   if (error) console.error("[auth] MFA check failed:", error);
   return data !== false;
+}
+
+/** True when this session came from a password reset link rather than a normal log in. */
+export async function isRecoverySession(supabase: SupabaseServerClient): Promise<boolean> {
+  const { data } = await supabase.auth.getClaims();
+  const amr: (AMREntry | string)[] = data?.claims.amr ?? [];
+  return amr.some((entry) => (typeof entry === "string" ? entry : entry.method) === "recovery");
 }
 
 /**
