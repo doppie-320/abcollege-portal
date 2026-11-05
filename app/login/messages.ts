@@ -8,6 +8,8 @@ export const STATUS_MESSAGES: Record<Exclude<AccountStatus, "approved">, string>
 
 export const LOGIN_ERRORS: Record<string, string> = {
   "oauth-failed": "Log in with Google failed. Please try again.",
+  "link-failed":
+    "That link has expired, was already used, or was opened in a different browser from the one that requested it. Please request a new one.",
   pending: STATUS_MESSAGES.pending,
   rejected: STATUS_MESSAGES.rejected,
 };

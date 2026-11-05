@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
-import { needsMFA, getAccountStatus } from '@/lib/auth';
+import { needsMFA, getAccountStatus, isRecoverySession } from '@/lib/auth';
 
 export async function GET(request: Request) {
   console.log('OAuth callback reached:', request.url)
@@ -20,6 +20,7 @@ export async function GET(request: Request) {
 
   // Send sign-up failures back to sign-up instead of the login page.
   const failurePath = fromSignup ? '/signup' : '/login';
+  let failure = 'oauth-failed';
 
   if (code) {
   try {
@@ -32,6 +33,11 @@ export async function GET(request: Request) {
         const status = await getAccountStatus(supabase, user.id);
 
         if (status === 'approved') {
+          // Password reset link. Skips the MFA step because that page signs them out when
+          // it's done, so they log in again (and verify) with the new password.
+          if (await isRecoverySession(supabase)) {
+            return NextResponse.redirect(`${origin}/auth/update-password`);
+          }
           if (await needsMFA(supabase)) {
             return NextResponse.redirect(`${origin}/login/verify`);
           }
@@ -50,13 +56,17 @@ export async function GET(request: Request) {
         return NextResponse.redirect(`${origin}/login?error=${status}`);
       }
       console.error('Auth code exchange error:', error);
+      // An email link opened in a different browser from the one that requested it.
+      if (error?.code === 'pkce_code_verifier_not_found') failure = 'link-failed';
     } catch (err) {
       console.error('Auth callback exception:', err);
     }
   } else {
     console.error('OAuth error:', searchParams.get('error_description') ?? searchParams.get('error'));
+    // An email link that expired or was already used.
+    if (searchParams.get('error_code') === 'otp_expired') failure = 'link-failed';
   }
 
-  return NextResponse.redirect(`${origin}${failurePath}?error=oauth-failed`);
+  return NextResponse.redirect(`${origin}${failurePath}?error=${failure}`);
 }
 

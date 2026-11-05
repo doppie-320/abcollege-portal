@@ -71,13 +71,24 @@ function ForgotPasswordDialog({
 
     setError("");
     setLoading(true);
+    // Clear a leftover "came from sign-up" marker, so a bad link fails back to log in.
+    document.cookie = "oauth_from=; path=/; max-age=0";
     const supabase = createClient();
+    // The callback spots a reset link and sends it on to /auth/update-password. Same exact
+    // URL as the Google buttons, so it's already on Supabase's Redirect URLs list.
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(trimmed, {
-      redirectTo: `${window.location.origin}/auth/update-password`,
+      redirectTo: `${window.location.origin}/auth/callback`,
     });
     setLoading(false);
 
-    if (resetError) return setError(resetError.message);
+    if (resetError) {
+      console.error("password reset email failed:", resetError);
+      return setError(
+        resetError.code === "over_email_send_rate_limit"
+          ? "Too many reset emails have been sent. Please try again later."
+          : "Couldn't send the reset link. Please try again.",
+      );
+    }
     setSent(true);
     setCooldown(RESEND_COOLDOWN);
   }
@@ -134,8 +145,8 @@ function ForgotPasswordDialog({
                 <h3 id="forgotTitle">Check your inbox</h3>
                 <p id="forgotSub" className="fpSub">
                   If an account exists for <strong className="mono">{email.trim()}</strong>, a
-                  reset link is on its way. It expires in 60 minutes, so check your spam folder if
-                  it doesn&apos;t show up.
+                  reset link is on its way. Open it in this browser on this device, within 60
+                  minutes. Check your spam folder if it doesn&apos;t show up.
                 </p>
                 <p className="fpSwitch">
                   Wrong address?{" "}
@@ -166,7 +177,7 @@ function ForgotPasswordDialog({
                   id="forgotEmail"
                   type="email"
                   autoComplete="email"
-                  placeholder="e.g. lyarei@gmail.com"
+                  placeholder="e.g. juan.delacruz@gmail.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   aria-invalid={error ? true : undefined}
