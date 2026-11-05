@@ -610,7 +610,7 @@ export default function SignupForm({courses, yearLevels, googleUser, oauthFailed
                   id="firstName"
                   name="firstName"
                   type="text"
-                  placeholder="e.g. John"
+                  placeholder="e.g. Juan"
                   value={fields.firstName}
                   onChange={(e) => setField("firstName", e.target.value)}
                 />
@@ -622,7 +622,7 @@ export default function SignupForm({courses, yearLevels, googleUser, oauthFailed
                   id="lastName"
                   name="lastName"
                   type="text"
-                  placeholder="e.g. Doe"
+                  placeholder="e.g. dela Cruz"
                   value={fields.lastName}
                   onChange={(e) => setField("lastName", e.target.value)}
                 />
@@ -636,7 +636,7 @@ export default function SignupForm({courses, yearLevels, googleUser, oauthFailed
                 id="email"
                 name="email"
                 type="email"
-                placeholder="e.g. johndoe@gmail.com"
+                placeholder="e.g. juan.delacruz@gmail.com"
                 value={fields.email}
                 onChange={(e) => setField("email", e.target.value)}
               />
