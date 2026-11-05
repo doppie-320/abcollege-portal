@@ -177,7 +177,7 @@ function ForgotPasswordDialog({
                   id="forgotEmail"
                   type="email"
                   autoComplete="email"
-                  placeholder="e.g. lyarei@gmail.com"
+                  placeholder="e.g. juan.delacruz@gmail.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   aria-invalid={error ? true : undefined}
