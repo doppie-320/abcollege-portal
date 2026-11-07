@@ -12,7 +12,7 @@ import { register, registerWithGoogle } from "./actions";
 
 type Course = {
   id: number;
-  name: string;
+  short_name: string;
 };
 
 type YearLevel = {
@@ -212,7 +212,7 @@ export default function SignupForm({courses, yearLevels, googleUser, oauthFailed
 
   const courseOptions = courses.map((course) => ({
     value: String(course.id),
-    label: course.name,
+    label: course.short_name,
   }));
 
   const yearLevelsOptions = yearLevels.map((yearLevel) => ({

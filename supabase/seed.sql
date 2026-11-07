@@ -7,7 +7,9 @@
 --   student2@test.local  approved student
 --   pending@test.local   student whose account request is still pending
 
-INSERT INTO public.courses (name) VALUES ('BS Civil Engineering'), ('BS Computer Engineering');
+INSERT INTO public.courses (name, short_name) VALUES
+  ('Bachelor of Science in Civil Engineering - Structural Engineering', 'BSCE-SE'),
+  ('Bachelor of Science in Computer Engineering', 'BSCPE');
 INSERT INTO public.yearlevels (name) VALUES ('1st Year'), ('2nd Year'), ('3rd Year'), ('4th Year');
 
 WITH accounts (id, email, first_name, last_name) AS (
@@ -44,7 +46,7 @@ WHERE user_id <> '00000000-0000-4000-8000-000000000005';
 INSERT INTO public.admins (id) VALUES ('00000000-0000-4000-8000-000000000001');
 
 INSERT INTO public.students (id, student_id, year_level, course)
-SELECT s.id, s.student_id, (SELECT id FROM public.yearlevels WHERE name = '2nd Year'), (SELECT id FROM public.courses WHERE name = 'BS Computer Engineering')
+SELECT s.id, s.student_id, (SELECT id FROM public.yearlevels WHERE name = '2nd Year'), (SELECT id FROM public.courses WHERE short_name = 'BSCPE')
 FROM (VALUES
   ('00000000-0000-4000-8000-000000000003'::uuid, 'SOE12345678'),
   ('00000000-0000-4000-8000-000000000004'::uuid, 'SOE76543210'),
