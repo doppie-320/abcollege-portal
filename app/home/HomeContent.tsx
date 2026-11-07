@@ -150,6 +150,8 @@ type HomeContentProps = {
   today: string;
   birthdays: UpcomingBirthday[];
   upcomingEvents: CalendarEvent[];
+  /** Release tag on main, branch type and commit elsewhere; null shows only the date. */
+  deploymentLabel: string | null;
 }
 
 export function getRelativeTime(dateString: string): string {
@@ -211,7 +213,7 @@ export async function getPerson(user_id: string): Promise<User> {
   };
 }
 
-export default function HomeContent({ current_user, is_admin, today, birthdays, upcomingEvents }: HomeContentProps) {
+export default function HomeContent({ current_user, is_admin, today, birthdays, upcomingEvents, deploymentLabel }: HomeContentProps) {
   const [dateLine, setDateLine] = useState("");
   var [announcements, setAnnouncements] = useState<Announcement[]>(ANNOUNCEMENTS);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -581,7 +583,7 @@ export default function HomeContent({ current_user, is_admin, today, birthdays, 
           <div className="heroRule">
             <span className="date mono">
               <span className="liveDot" aria-hidden="true" />
-              {dateLine}
+              {dateLine && deploymentLabel ? `${dateLine} · ${deploymentLabel}` : dateLine}
             </span>
           </div>
         </div>
