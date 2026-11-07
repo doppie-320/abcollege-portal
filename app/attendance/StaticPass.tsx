@@ -39,7 +39,7 @@ export default function StaticPass({ name, studentId }: { name: string; studentI
         <PassQrButton url={qrUrl} alt={ALT} size={240} onEnlarge={() => setEnlarged(true)} />
 
         <p className="mt-5 mb-0 max-w-[290px] text-center text-[12.5px] text-ink-soft">
-          Show this to a scanner. It&apos;s your student ID, so it never changes and you can save or print it.
+          Show this clearly to an officer for scanning.
         </p>
 
         {qrUrl && (
