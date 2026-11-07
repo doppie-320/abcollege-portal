@@ -4,6 +4,8 @@ import { startTransition, useActionState, useEffect, useState, type CSSPropertie
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import ErrorCode from "@/components/ErrorCode";
+import type { ErrorDetails } from "@/lib/authErrors";
 import { STUDENT_ID_FORMAT_ERROR, STUDENT_ID_RE, normalizeStudentId } from "@/lib/student-id";
 import DatePicker from "@/components/DatePicker";
 import Select from "@/components/Select";
@@ -32,7 +34,8 @@ type SignupFormProps = {
   yearLevels: YearLevel[];
   /** Set when the user just came back from Google and still needs to fill in their details. */
   googleUser: GoogleUser | null;
-  oauthFailed: boolean;
+  /** Why the auth callback sent the user back here. */
+  urlError: (ErrorDetails & { message: string }) | null;
 };
 
 const TODAY_ISO = new Date().toISOString().slice(0, 10);
@@ -155,7 +158,7 @@ function validateGoogleFields(fields: GoogleFields): GoogleErrors {
 
 type Step = "form" | "googleDetails" | "googleConfirm";
 
-export default function SignupForm({courses, yearLevels, googleUser, oauthFailed}: SignupFormProps) {
+export default function SignupForm({courses, yearLevels, googleUser, urlError}: SignupFormProps) {
   const [fields, setFields] = useState<Fields>(EMPTY_FIELDS);
   const [errors, setErrors] = useState<Errors>({});
   const [showPassword, setShowPassword] = useState(false);
@@ -172,8 +175,7 @@ export default function SignupForm({courses, yearLevels, googleUser, oauthFailed
   const [googleLoading, setGoogleLoading] = useState(false);
   // Only for a failed click here; the URL error comes in fresh as a prop.
   const [googleError, setGoogleError] = useState("");
-  const shownGoogleError =
-    googleError || (oauthFailed ? "Sign up with Google failed. Please try again." : "");
+  const shownGoogleError = googleError || urlError?.message || "";
 
   // cacheComponents keeps this component's state when navigating away and back,
   // so the initial values above can be stale. When a (different) Google user
@@ -568,7 +570,12 @@ export default function SignupForm({courses, yearLevels, googleUser, oauthFailed
             </label>
           )}
 
-          {googleState.error && <p className="formError" role="alert">{googleState.error}</p>}
+          {googleState.error && (
+            <p className="formError" role="alert">
+              {googleState.error}
+              <ErrorCode code={googleState.code} reference={googleState.reference} />
+            </p>
+          )}
 
           <div className="stepActions">
             <button
@@ -757,7 +764,12 @@ export default function SignupForm({courses, yearLevels, googleUser, oauthFailed
               {errors.confirmPassword && <p className="error">{errors.confirmPassword}</p>}
             </div>
 
-            {state.error && !emailTaken && <p className="formError" role="alert">{state.error}</p>}
+            {state.error && !emailTaken && (
+              <p className="formError" role="alert">
+                {state.error}
+                <ErrorCode code={state.code} reference={state.reference} />
+              </p>
+            )}
 
             <button
               type="submit"
@@ -783,7 +795,12 @@ export default function SignupForm({courses, yearLevels, googleUser, oauthFailed
             {googleLoading ? "Redirecting…" : "Sign up with Google"}
           </button>
 
-          {shownGoogleError && <p className="error">{shownGoogleError}</p>}
+          {shownGoogleError && (
+            <p className="error" role="alert">
+              {shownGoogleError}
+              {!googleError && <ErrorCode code={urlError?.code} reference={urlError?.reference} />}
+            </p>
+          )}
           
         </div>
       )}
@@ -797,7 +814,8 @@ export default function SignupForm({courses, yearLevels, googleUser, oauthFailed
           message={
             <>
               There&apos;s already an account for <strong>{fields.email.trim()}</strong>.
-              Do you want to log in instead?
+              Do you want to log in instead? If you used Google before, choose
+              &ldquo;Continue with Google&rdquo; on the next page.
             </>
           }
           confirmLabel="Go to log in"

@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { ActionResult } from "@/lib/actionResult";
+import { authFailure, unexpectedFailure } from "@/lib/authErrors";
 import { STUDENT_ID_FORMAT_ERROR, STUDENT_ID_RE, normalizeStudentId } from "@/lib/student-id";
 
 const INVALID_OPTIONS_ERROR = "Please select a valid course and year level.";
@@ -50,17 +51,11 @@ export async function register(_prev: ActionResult, formData: FormData) : Promis
     });
 
     if(error) {
-        console.error("Register failed:", error);
-
         if(error.code === "user_already_exists") {
             return { error: "An account with this email already exists.", status: "user_already_exists" }
         }
 
-        if(error.code === "over_email_send_rate_limit") {
-            return { error: "We're getting a lot of sign-ups right now. Please try again in a little while." }
-        }
-
-        return { error: "Could not complete your registration" }
+        return authFailure("signup", error);
     }
 
     return { success: true };
@@ -74,8 +69,8 @@ export async function registerWithGoogle(_prev: ActionResult, formData: FormData
     const { data: { user }, error: userError } = await supabase.auth.getUser();
 
     if(userError || !user) {
-        console.error("Google register failed:", userError);
-        return { error: "Your Google session expired. Please sign up with Google again." }
+        console.error("[auth:signup] session_expired", userError);
+        return { error: "Your Google session expired. Please sign up with Google again.", code: "session_expired" }
     }
 
     const firstName = String(formData.get("firstName") ?? "").trim();
@@ -106,12 +101,19 @@ export async function registerWithGoogle(_prev: ActionResult, formData: FormData
         });
 
     if(studentError) {
-        console.error("Google register failed:", studentError);
-        return {
-            error: studentError.code === "23505"
-                ? "This student ID is already registered."
-                : "Could not complete your registration"
+        // students has two unique keys: one row per account, and one account per student ID.
+        if(studentError.code === "23505") {
+            return studentError.message.includes("students_id_key")
+                ? { error: "You've already submitted your details, so your request is with the admins.", code: "request_already_submitted" }
+                : { error: "This student ID is already registered. Contact the student council if it's yours.", code: "student_id_taken" };
         }
+
+        return unexpectedFailure(
+            "signup",
+            `db_${studentError.code}`,
+            "We couldn't save your student details because of a problem on our side. Please try again.",
+            studentError,
+        );
     }
 
     // The signup trigger guessed the name split from Google's full name; save
@@ -132,8 +134,13 @@ export async function registerWithGoogle(_prev: ActionResult, formData: FormData
     });
 
     if(nameError || error) {
-        console.error("Google register failed:", nameError ?? error);
-        return { error: "Could not complete your registration" }
+        // The student row is already saved, so the request itself did go through.
+        return unexpectedFailure(
+            "signup",
+            "profile_update_failed",
+            "Your request was submitted, but we couldn't save your name. Contact the student council if it looks wrong.",
+            nameError ?? error,
+        );
     }
 
     // Same as email sign-ups: no session until an admin approves the request.

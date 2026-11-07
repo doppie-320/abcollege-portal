@@ -3,6 +3,9 @@ export type ActionResult = {
     error?: string;
     /** Extra context for `error`, e.g. the account status on login. */
     status?: string;
+    /** See ErrorDetails in lib/authErrors. */
+    code?: string;
+    reference?: string;
     fieldErrors?: Record<string, string>
 };
 export const OFFLINE_ERROR = "Couldn't reach the server. Check your connection and try again.";

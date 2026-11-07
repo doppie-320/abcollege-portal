@@ -6,6 +6,8 @@ import SignupForm from "./SignupForm";
 
 import { createPublicClient } from "@/lib/supabase/public";
 import { createClient } from "@/lib/supabase/server";
+import { readErrorDetails } from "@/lib/authErrors";
+import { SIGNUP_ERRORS } from "@/app/login/messages";
 
 export const metadata: Metadata = {
   title: "Sign Up — SOE Student Portal",
@@ -32,11 +34,11 @@ function splitGoogleName(metadata: GoogleMetadata) {
 export default async function SignupPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; reason?: string; ref?: string }>;
 }) {
   const supabase = createPublicClient();
   const authClient = await createClient();
-  const { error: oauthError } = await searchParams;
+  const { error: oauthError, reason, ref } = await searchParams;
 
   const [{ data: courses, error: coursesError },  { data: yearLevels, error: yearLevelErrors }] =
     await Promise.all([
@@ -106,7 +108,11 @@ export default async function SignupPage({
           courses = { courses ?? [] }
           yearLevels = { yearLevels ?? [] }
           googleUser = { googleUser }
-          oauthFailed = { oauthError === "oauth-failed" }
+          urlError = {
+            oauthError && SIGNUP_ERRORS[oauthError]
+              ? { message: SIGNUP_ERRORS[oauthError], ...readErrorDetails(reason, ref) }
+              : null
+          }
         />
       </div>
     </div>
