@@ -42,7 +42,7 @@ export default async function SignupPage({
     await Promise.all([
       supabase
         .from("courses")
-        .select("id, short_name")
+        .select("id, name, short_name")
         .eq("is_selectable", true)
         .order("short_name"),
 
