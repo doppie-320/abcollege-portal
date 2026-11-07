@@ -169,7 +169,7 @@ export const getProfile = cache(async (): Promise<Profile> => {
   const metadata = (claims?.user_metadata ?? {}) as AuthMetadata;
   const account = await getAccount(userId);
 
-  if (account.status !== "approved") redirect("/login?error=pending");
+  if (account.status !== "approved") redirect(`/login?error=${account.status}`);
   if (account.mfaPending) redirect("/login/verify");
 
   const { user } = account;

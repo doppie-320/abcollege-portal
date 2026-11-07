@@ -797,7 +797,8 @@ export default function SignupForm({courses, yearLevels, googleUser, oauthFailed
           message={
             <>
               There&apos;s already an account for <strong>{fields.email.trim()}</strong>.
-              Do you want to log in instead?
+              Do you want to log in instead? If you used Google before, choose
+              &ldquo;Continue with Google&rdquo; on the next page.
             </>
           }
           confirmLabel="Go to log in"
