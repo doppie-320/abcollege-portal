@@ -1,7 +1,8 @@
 "use client";
 
+import { settle } from "@/lib/actionResult";
+import { decideApplicant } from "./actions";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { createClient } from "@/lib/supabase/client";
 import SiteNav, { ADMIN_MENU_LINKS, HOME_ADMIN_NAV_LINKS } from "@/components/NavigationHeader";
 import RejectDialog, { type RejectMode } from "./RejectDialog";
 import {
@@ -145,7 +146,6 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
 
   // Decisions show at once and are undone (with a toast) if Supabase refuses them.
   async function decide(status: ApplicantStatus, rejectDate?: string) {
-    const supabase = createClient();
     const target = selected;
     if (!target) return;
     const name = applicantName(target);
@@ -168,12 +168,10 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
       setSelectedId(nextSelected?.id ?? null);
       setPageIndex((prev) => Math.min(prev, nextPageCount - 1));
 
-      const { error: rejectError } = await supabase.rpc("reject_user", {
-        target_user: target.id,
-      });
+      const result = await settle(decideApplicant(target.id, "reject-immediate"));
 
-      if (rejectError) {
-        console.error("Error rejecting applicant:", rejectError);
+      if (result.error) {
+        console.error("Error rejecting applicant:", result.error);
         setReviewApplicants((prev) => {
           const next = [...prev];
           next.splice(Math.min(index, next.length), 0, target);
@@ -183,6 +181,7 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
         setSelectedId(target.id);
         toast(`Couldn't reject ${name}'s application. Please try again.`);
       }
+      warnIfEmailFailed(result, name, target.email);
       return;
     }
 
@@ -192,16 +191,12 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
       [target.id]: { status, rejectDate },
     }));
 
-    const { error: decisionError } = await supabase
-      .from("user_requests")
-      .update({
-        request_status: status,
-        reject_date: rejectDate || null,
-      })
-      .eq("user_id", target.id);
+    const result = await settle(
+      decideApplicant(target.id, status === "accept" ? "accept" : "reject"),
+    );
 
-    if (decisionError) {
-      console.error("Error saving applicant decision:", decisionError);
+    if (result.error) {
+      console.error("Error saving applicant decision:", result.error);
       setDecisions((prev) => {
         const next = { ...prev };
         if (previousDecision) next[target.id] = previousDecision;
@@ -214,6 +209,7 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
           : `Couldn't reject ${name}'s application. Please try again.`,
       );
     }
+    warnIfEmailFailed(result, name, target.email);
   }
 
   function requestReject(mode: RejectMode) {
@@ -628,6 +624,12 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
       )}
     </>
   );
+}
+
+function warnIfEmailFailed(result: object, name: string, email: string) {
+  if ("emailFailed" in result && result.emailFailed) {
+    toast(`Decision saved, but the email to ${name} could not send. Please contact them at ${email}.`);
+  }
 }
 
 function StatusBadge({ status, live = false }: { status: ApplicantStatus; live?: boolean }) {
