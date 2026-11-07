@@ -56,6 +56,10 @@ export async function register(_prev: ActionResult, formData: FormData) : Promis
             return { error: "An account with this email already exists.", status: "user_already_exists" }
         }
 
+        if(error.code === "over_email_send_rate_limit") {
+            return { error: "We're getting a lot of sign-ups right now. Please try again in a little while." }
+        }
+
         return { error: "Could not complete your registration" }
     }
 

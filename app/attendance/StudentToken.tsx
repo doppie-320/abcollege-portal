@@ -109,7 +109,7 @@ export default function StudentToken({ name, studentId }: { name: string; studen
         className="flex w-full cursor-pointer items-center justify-between gap-3 rounded-md border-none bg-transparent p-0 text-left focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-blue"
       >
         <span>
-          <span className="mono block text-[10px] tracking-[0.1em] text-ink-soft uppercase">Scanner asks for it?</span>
+          <span className="mono block text-[10px] tracking-[0.1em] text-ink-soft uppercase">Use this when required</span>
           <span className="block text-[13.5px] font-semibold text-navy-deep">Live code</span>
         </span>
         <span className={`text-ink-soft transition-transform duration-200 ${open ? "rotate-180" : ""}`}>
@@ -120,7 +120,7 @@ export default function StudentToken({ name, studentId }: { name: string; studen
       {open && (
         <div className="animate-fade-in mt-3">
           <p className="mb-4 text-[12.5px] text-ink-soft">
-            Some events only take this code. It changes every 30 seconds, so screenshots and printouts stop working.
+            Use this Live Code when an officer asks you to.
           </p>
 
           {error ? (

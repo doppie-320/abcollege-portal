@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getProfile, isAdmin, requireUserId } from "@/lib/auth";
 import { toDayKey } from "@/lib/calendar";
 import { fetchUpcomingBirthdays, fetchUpcomingEvents } from "@/lib/calendar-data";
+import { getDeploymentLabel } from "@/lib/deployment";
 
 export const metadata: Metadata = {
   title: "Home — SOE Hub",
@@ -25,11 +26,12 @@ export default async function HomePage() {
 
   // All in one go: the profile (which redirects unapproved accounts) and the
   // cards' data don't depend on each other.
-  const [profile, admin, birthdays, upcomingEvents] = await Promise.all([
+  const [profile, admin, birthdays, upcomingEvents, deploymentLabel] = await Promise.all([
     getProfile(),
     isAdmin(),
     fetchUpcomingBirthdays(supabase, today),
     fetchUpcomingEvents(supabase, now, 8),
+    getDeploymentLabel(),
   ]);
 
   return (
@@ -44,6 +46,7 @@ export default async function HomePage() {
       today={today}
       birthdays={birthdays}
       upcomingEvents={upcomingEvents}
+      deploymentLabel={deploymentLabel}
     />
   );
 }
