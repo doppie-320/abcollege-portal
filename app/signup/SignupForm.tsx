@@ -329,9 +329,6 @@ export default function SignupForm({courses, yearLevels, googleUser, urlError}: 
     startTransition(() => googleFormAction(formData));
   }
 
-  const googleConfirmDisabled =
-    googlePending || (Boolean(googleFields.birthday) && !googleFields.birthdayConsent);
-
   return (
     <>
       {showSuccess ? (
@@ -591,7 +588,7 @@ export default function SignupForm({courses, yearLevels, googleUser, urlError}: 
               className="btn submitBtn"
               style={{ flex: 1 }}
               onClick={handleGoogleConfirm}
-              disabled={googleConfirmDisabled}
+              disabled={googlePending}
             >
               {googlePending ? "Working..." : "Request account"}
             </button>
