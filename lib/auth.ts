@@ -63,11 +63,19 @@ export async function getAccountStatus(
   supabase: SupabaseServerClient,
   userId: string,
 ): Promise<AccountStatus> {
-  const [{ data: adminRow }, { data: request }, { data: student }] = await Promise.all([
+  const [
+    { data: adminRow, error: adminError },
+    { data: request, error: requestError },
+    { data: student, error: studentError },
+  ] = await Promise.all([
     supabase.from("admins").select("id").eq("id", userId).maybeSingle(),
     supabase.from("user_requests").select("request_status").eq("user_id", userId).maybeSingle(),
     supabase.from("students").select("id").eq("id", userId).maybeSingle(),
   ]);
+
+  // Missing rows mean "no account", so a failed read mustn't look like one.
+  const queryError = adminError ?? requestError ?? studentError;
+  if (queryError) throw queryError;
 
   return toStatus(adminRow !== null, request?.request_status, student !== null);
 }

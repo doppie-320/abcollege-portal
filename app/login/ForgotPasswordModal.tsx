@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import ErrorCode from "@/components/ErrorCode";
+import { describeAuthError } from "@/lib/authErrors";
 import { useBackdropDismiss } from "@/lib/useBackdropDismiss";
 import { createClient } from "@/lib/supabase/client";
 
@@ -37,6 +39,7 @@ function ForgotPasswordDialog({
 }) {
   const [email, setEmail] = useState(initialEmail);
   const [error, setError] = useState("");
+  const [errorCode, setErrorCode] = useState<string>();
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
   const [cooldown, setCooldown] = useState(0);
@@ -65,6 +68,7 @@ function ForgotPasswordDialog({
   }, [cooldown]);
 
   async function sendLink() {
+    setErrorCode(undefined);
     const trimmed = email.trim();
     if (!trimmed) return setError("Email address is required.");
     if (!EMAIL_RE.test(trimmed)) return setError("Enter a valid email address.");
@@ -83,11 +87,9 @@ function ForgotPasswordDialog({
 
     if (resetError) {
       console.error("password reset email failed:", resetError);
-      return setError(
-        resetError.code === "over_email_send_rate_limit"
-          ? "Too many reset emails have been sent. Please try again later."
-          : "Couldn't send the reset link. Please try again.",
-      );
+      const { message, code } = describeAuthError("reset", resetError);
+      setErrorCode(code);
+      return setError(message);
     }
     setSent(true);
     setCooldown(RESEND_COOLDOWN);
@@ -101,6 +103,7 @@ function ForgotPasswordDialog({
   function changeEmail() {
     setSent(false);
     setError("");
+    setErrorCode(undefined);
   }
 
   return (
@@ -191,6 +194,7 @@ function ForgotPasswordDialog({
           {error && (
             <p id="forgotError" className="fpError" role="alert">
               {error}
+              <ErrorCode code={errorCode} />
             </p>
           )}
         </div>

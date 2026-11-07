@@ -90,7 +90,7 @@ export default function LoginForm({ initialNotice, noAccountEmail }: LoginFormPr
   const notice: Notice | null = googleError
     ? toNotice(undefined, googleError)
     : state.error && state !== staleState
-      ? toNotice(state.status, state.error)
+      ? toNotice(state.status, state.error, state)
       : urlNoticeUsed
         ? null
         : initialNotice;
@@ -107,6 +107,8 @@ export default function LoginForm({ initialNotice, noAccountEmail }: LoginFormPr
     const url = new URL(window.location.href);
     if (url.searchParams.has("error")) {
       url.searchParams.delete("error");
+      url.searchParams.delete("reason");
+      url.searchParams.delete("ref");
       window.history.replaceState(null, "", url);
     }
   }, []);
