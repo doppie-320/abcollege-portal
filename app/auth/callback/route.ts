@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
 import { needsMFA, getAccountStatus, isRecoverySession } from '@/lib/auth';
+import { newErrorReference } from '@/lib/authErrors';
 
 export async function GET(request: Request) {
   console.log('OAuth callback reached:', request.url)
@@ -21,6 +22,8 @@ export async function GET(request: Request) {
   // Send sign-up failures back to sign-up instead of the login page.
   const failurePath = fromSignup ? '/signup' : '/login';
   let failure = 'oauth-failed';
+  let reason = 'unexpected_failure';
+  let cause: unknown;
 
   if (code) {
   try {
@@ -55,18 +58,30 @@ export async function GET(request: Request) {
         await supabase.auth.signOut();
         return NextResponse.redirect(`${origin}/login?error=${status}`);
       }
-      console.error('Auth code exchange error:', error);
+      cause = error;
+      reason = error?.code ?? 'no_user_returned';
       // An email link opened in a different browser from the one that requested it.
       if (error?.code === 'pkce_code_verifier_not_found') failure = 'link-failed';
     } catch (err) {
-      console.error('Auth callback exception:', err);
+      cause = err;
     }
   } else {
-    console.error('OAuth error:', searchParams.get('error_description') ?? searchParams.get('error'));
+    const providerError = searchParams.get('error');
+    const errorCode = searchParams.get('error_code');
+    cause = searchParams.get('error_description');
+    reason = errorCode ?? providerError ?? 'missing_auth_code';
     // An email link that expired or was already used.
-    if (searchParams.get('error_code') === 'otp_expired') failure = 'link-failed';
+    if (errorCode === 'otp_expired') failure = 'link-failed';
+    // They pressed cancel on Google's screen. Expired email links are access_denied too, but those have an error_code.
+    else if (providerError === 'access_denied' && !errorCode) failure = 'oauth-cancelled';
   }
 
-  return NextResponse.redirect(`${origin}${failurePath}?error=${failure}`);
+  const params = new URLSearchParams({ error: failure, reason });
+  // Only unexplained failures need finding in the logs.
+  const reference = failure === 'oauth-failed' ? newErrorReference() : undefined;
+  if (reference) params.set('ref', reference);
+  console.error(`[auth:callback] ${failure} reason=${reason} ref=${reference ?? '-'}`, cause);
+
+  return NextResponse.redirect(`${origin}${failurePath}?${params}`);
 }
 

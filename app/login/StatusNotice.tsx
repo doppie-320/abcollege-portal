@@ -1,5 +1,6 @@
 "use client";
 
+import ErrorCode from "@/components/ErrorCode";
 import type { Notice, NoticeKind } from "./messages";
 
 const KINDS: Record<
@@ -49,6 +50,7 @@ export default function StatusNotice({
         <span className="eyebrowLine">{kind.eyebrow}</span>
         <p className="title">{kind.title}</p>
         <p className="message">{notice.message}</p>
+        <ErrorCode code={notice.code} reference={notice.reference} />
       </div>
 
       <button type="button" className="close" aria-label="Dismiss" onClick={onDismiss}>

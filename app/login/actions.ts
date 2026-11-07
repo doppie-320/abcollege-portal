@@ -3,7 +3,8 @@
 import { ActionResult } from "@/lib/actionResult";
 import { STATUS_MESSAGES } from "./messages";
 import { createClient } from "@/lib/supabase/server";
-import { getAccountStatus, needsMFA } from "@/lib/auth";
+import { getAccountStatus, needsMFA, type AccountStatus } from "@/lib/auth";
+import { authFailure, unexpectedFailure } from "@/lib/authErrors";
 import { redirect } from "next/navigation";
 
 export async function login(_prev: ActionResult, formData: FormData) : Promise<ActionResult> {
@@ -14,12 +15,20 @@ export async function login(_prev: ActionResult, formData: FormData) : Promise<A
         password: formData.get("password") as string,
     });
 
-    if (error) {
-        console.error("Login failed:", error);
-        return { error: "Incorrect email or password." };
-    }
+    if (error) return authFailure("login", error);
 
-    const status = await getAccountStatus(supabase, data.user.id);
+    let status: AccountStatus;
+    try {
+        status = await getAccountStatus(supabase, data.user.id);
+    } catch (cause) {
+        await supabase.auth.signOut();
+        return unexpectedFailure(
+            "login",
+            "status_check_failed",
+            "We couldn't check your account status because of a problem on our side. Please try again.",
+            cause,
+        );
+    }
 
     if (status !== "approved") {
         await supabase.auth.signOut();
