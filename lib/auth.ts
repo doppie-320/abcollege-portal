@@ -26,9 +26,6 @@ const UNKNOWN = "—";
 type AuthMetadata = {
   first_name?: string;
   last_name?: string;
-  student_id?: string;
-  course_id?: number;
-  year_level?: number;
 };
 
 function clean(value: unknown): string {
@@ -39,11 +36,6 @@ function clean(value: unknown): string {
 
 function toDisplay(value: unknown): string {
   return clean(value) || UNKNOWN;
-}
-
-function toId(value: unknown): number | null {
-  const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
 /** PostgREST returns one-to-one embeds as an object, but be lenient in case one comes back as a list. */
@@ -116,13 +108,21 @@ export async function requireUserId(): Promise<string> {
   return claims.sub;
 }
 
+type NamedRow = { name: string };
+
+type StudentRow = {
+  student_id: string | null;
+  courses: NamedRow | NamedRow[] | null;
+  yearlevels: NamedRow | NamedRow[] | null;
+};
+
 type AccountRow = {
   first_name: string | null;
   last_name: string | null;
   avatar_path: string | null;
   admins: Record<string, unknown> | Record<string, unknown>[] | null;
   user_requests: { request_status: string } | { request_status: string }[] | null;
-  students: { id: string } | { id: string }[] | null;
+  students: StudentRow | StudentRow[] | null;
 };
 
 /**
@@ -139,7 +139,7 @@ const getAccount = cache(async (userId: string) => {
   const [{ data, error }, { data: mfaData, error: mfaError }] = await Promise.all([
     supabase
       .from("users")
-      .select("first_name, last_name, avatar_path, admins(*), user_requests(request_status), students(id)")
+      .select("first_name, last_name, avatar_path, admins(*), user_requests(request_status), students(student_id, courses(name), yearlevels(name))")
       .eq("id", userId)
       .maybeSingle<AccountRow>(),
     supabase.rpc("mfa_pending")
@@ -167,25 +167,13 @@ export const getProfile = cache(async (): Promise<Profile> => {
 
   const email = claims?.email;
   const metadata = (claims?.user_metadata ?? {}) as AuthMetadata;
-  const courseId = toId(metadata.course_id);
-  const yearLevelId = toId(metadata.year_level);
-
-  // The course and year level ids come from the token, so their lookups run
-  // alongside the account query instead of after it.
-  const [account, { data: course }, { data: yearLevel }] = await Promise.all([
-    getAccount(userId),
-    courseId === null
-      ? Promise.resolve({ data: null })
-      : supabase.from("courses").select("id, name").eq("id", courseId).maybeSingle(),
-    yearLevelId === null
-      ? Promise.resolve({ data: null })
-      : supabase.from("yearlevels").select("id, name").eq("id", yearLevelId).maybeSingle(),
-  ]);
+  const account = await getAccount(userId);
 
   if (account.status !== "approved") redirect("/login?error=pending");
   if (account.mfaPending) redirect("/login/verify");
 
   const { user } = account;
+  const student = one(user?.students);
   const firstName = clean(user?.first_name ?? metadata.first_name);
   const lastName = clean(user?.last_name ?? metadata.last_name);
   const avatarPath = user?.avatar_path;
@@ -200,10 +188,10 @@ export const getProfile = cache(async (): Promise<Profile> => {
     lastName,
     name: toDisplay(`${firstName} ${lastName}`.trim()),
     initials: `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase(),
-    studentId: toDisplay(metadata.student_id),
+    studentId: toDisplay(student?.student_id),
     email: toDisplay(email),
-    program: toDisplay(course?.name),
-    yearLevel: toDisplay(yearLevel?.name),
+    program: toDisplay(one(student?.courses)?.name),
+    yearLevel: toDisplay(one(student?.yearlevels)?.name),
     avatarUrl: avatarUrl,
     avatarFullUrl,
     role: account.role,
