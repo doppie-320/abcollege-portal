@@ -42,7 +42,7 @@ export const viewport: Viewport = {
 
 type StudentRecord = {
   student_id: string;
-  courses: { name: string } | null;
+  courses: { short_name: string } | null;
   yearlevels: { name: string } | null;
 };
 
@@ -52,7 +52,7 @@ async function fetchStudentRecord(userId: string): Promise<StudentRecord | null>
 
   const { data, error } = await supabase
     .from("students")
-    .select("student_id, courses(name), yearlevels(name)")
+    .select("student_id, courses(short_name), yearlevels(name)")
     .eq("id", userId)
     .maybeSingle<StudentRecord>();
   if (error) throw error;
@@ -74,7 +74,7 @@ export default async function AttendancePage() {
   const canScan = admin || scannable.length > 0;
 
   const studentNumber = student?.student_id || profile.studentId;
-  const program = [student?.courses?.name, student?.yearlevels?.name].filter(Boolean).join(" · ") || profile.program;
+  const program = [student?.courses?.short_name, student?.yearlevels?.name].filter(Boolean).join(" · ") || profile.program;
   const present = history.filter((row) => row.status === "present");
   const lastCheckIn = present[0];
 

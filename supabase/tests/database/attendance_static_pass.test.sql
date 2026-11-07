@@ -7,7 +7,7 @@ SELECT plan(16);
 
 -- Fixtures --------------------------------------------------------------------
 
-INSERT INTO public.courses (id, name) VALUES (9101, 'Static Course');
+INSERT INTO public.courses (id, name, short_name) VALUES (9101, 'Static Course', 'SC');
 INSERT INTO public.yearlevels (id, name) VALUES (9101, 'Static Year');
 
 INSERT INTO auth.users (id, email, raw_user_meta_data) VALUES

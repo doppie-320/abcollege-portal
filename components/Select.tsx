@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useAnchoredPopover } from "@/lib/useAnchoredPopover";
 
 const DROPDOWN_MAX_HEIGHT = 220;
 
-type Option = { value: string; label: string };
+type Option = { value: string; label: ReactNode };
 
 type Props = {
   id?: string;
@@ -204,9 +204,7 @@ export default function Select({
           font-size: 13.5px;
           color: var(--ink);
           cursor: pointer;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
+          overflow-wrap: anywhere;
           gap: 6px;
         }
 
