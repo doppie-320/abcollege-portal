@@ -268,8 +268,8 @@ export default function RosterTable({
                             </span>
                           </span>
                         </td>
-                        <td className="px-5 py-4 whitespace-nowrap text-ink-soft">
-                          <span className="block text-ink">{row.course ?? "—"}</span>
+                        <td className="px-5 py-4 text-ink-soft">
+                          <span className="block min-w-[220px] text-ink">{row.course ?? "—"}</span>
                           <span className="mono block text-[11px]">{row.year_level ?? "—"}</span>
                         </td>
                         <td className="px-5 py-4">

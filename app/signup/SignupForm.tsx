@@ -1,6 +1,6 @@
 "use client";
 
-import { startTransition, useActionState, useEffect, useState, type CSSProperties, type SubmitEvent } from "react";
+import { startTransition, useActionState, useEffect, useState, type CSSProperties, type ReactNode, type SubmitEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -13,6 +13,7 @@ import { register, registerWithGoogle } from "./actions";
 type Course = {
   id: number;
   name: string;
+  short_name: string;
 };
 
 type YearLevel = {
@@ -212,7 +213,7 @@ export default function SignupForm({courses, yearLevels, googleUser, oauthFailed
 
   const courseOptions = courses.map((course) => ({
     value: String(course.id),
-    label: course.name,
+    label: <><strong>{course.short_name}</strong> - {course.name}</>,
   }));
 
   const yearLevelsOptions = yearLevels.map((yearLevel) => ({
@@ -220,7 +221,7 @@ export default function SignupForm({courses, yearLevels, googleUser, oauthFailed
     label: yearLevel.name,
   }));
 
-  const labelOf = (options: { value: string; label: string }[], value: string) =>
+  const labelOf = (options: { value: string; label: ReactNode }[], value: string) =>
     options.find((option) => option.value === value)?.label ?? value;
 
   function setField<K extends keyof Fields>(key: K, value: Fields[K]) {
@@ -446,6 +447,39 @@ export default function SignupForm({courses, yearLevels, googleUser, oauthFailed
               </div>
             </div>
 
+            <div className="fieldRow">
+              <div className="field">
+                <label htmlFor="gYearLevel">Year Level</label>
+                <Select
+                  id="gYearLevel"
+                  value={googleFields.yearLevel}
+                  onChange={(v) => setGoogleField("yearLevel", v)}
+                  options={yearLevelsOptions}
+                  placeholder="Select Year Level"
+                />
+                {googleErrors.yearLevel && <p className="error">{googleErrors.yearLevel}</p>}
+              </div>
+              <div className="field">
+                <label htmlFor="gBirthday">
+                  Birthday <span className="optionalTag">(optional)</span>
+                </label>
+                <DatePicker
+                  id="gBirthday"
+                  value={googleFields.birthday}
+                  onChange={(v) => setGoogleField("birthday", v)}
+                  placeholder="Select date"
+                  max={TODAY_ISO}
+                  modalQuery={MODAL_QUERY}
+                />
+                {googleErrors.birthday && <p className="error">{googleErrors.birthday}</p>}
+              </div>
+            </div>
+
+            <p className="fieldHint">
+              Leave the birthday blank if you&apos;d rather not share it — you&apos;ll confirm
+              how it&apos;s used on the next step.
+            </p>
+
             <div className="field">
               <label htmlFor="gStudentId">Student ID</label>
               <input
@@ -458,48 +492,16 @@ export default function SignupForm({courses, yearLevels, googleUser, oauthFailed
               {googleErrors.studentId && <p className="error">{googleErrors.studentId}</p>}
             </div>
 
-            <div className="fieldRow">
-              <div className="field fieldNarrow">
-                <label htmlFor="gYearLevel">Year Level</label>
-                <Select
-                  id="gYearLevel"
-                  value={googleFields.yearLevel}
-                  onChange={(v) => setGoogleField("yearLevel", v)}
-                  options={yearLevelsOptions}
-                  placeholder="Select Year Level"
-                />
-                {googleErrors.yearLevel && <p className="error">{googleErrors.yearLevel}</p>}
-              </div>
-              <div className="field fieldWide">
-                <label htmlFor="gProgram">Program</label>
-                <Select
-                  id="gProgram"
-                  value={googleFields.program}
-                  onChange={(v) => setGoogleField("program", v)}
-                  options={courseOptions}
-                  placeholder="Select program"
-                />
-                {googleErrors.program && <p className="error">{googleErrors.program}</p>}
-              </div>
-            </div>
-
             <div className="field">
-              <label htmlFor="gBirthday">
-                Birthday <span className="optionalTag">(optional)</span>
-              </label>
-              <DatePicker
-                id="gBirthday"
-                value={googleFields.birthday}
-                onChange={(v) => setGoogleField("birthday", v)}
-                placeholder="Select date"
-                max={TODAY_ISO}
-                modalQuery={MODAL_QUERY}
+              <label htmlFor="gProgram">Program</label>
+              <Select
+                id="gProgram"
+                value={googleFields.program}
+                onChange={(v) => setGoogleField("program", v)}
+                options={courseOptions}
+                placeholder="Select program"
               />
-              {googleErrors.birthday && <p className="error">{googleErrors.birthday}</p>}
-              <p className="fieldHint">
-                Leave blank if you&apos;d rather not share it — you&apos;ll confirm how
-                it&apos;s used on the next step.
-              </p>
+              {googleErrors.program && <p className="error">{googleErrors.program}</p>}
             </div>
 
             <div className="stepActions">
@@ -544,7 +546,7 @@ export default function SignupForm({courses, yearLevels, googleUser, oauthFailed
             </li>
             <li>
               <span>Program</span>
-              <strong>{labelOf(courseOptions, googleFields.program)}</strong>
+              <div className="summaryValue">{labelOf(courseOptions, googleFields.program)}</div>
             </li>
             <li>
               <span>Birthday</span>
@@ -960,6 +962,10 @@ export default function SignupForm({courses, yearLevels, googleUser, oauthFailed
           color: var(--ink-soft);
         }
 
+        .summaryValue {
+          text-align: right;
+        }
+
         .formside h2 {
           font-size: 26px;
           margin-bottom: 4px;
@@ -1000,14 +1006,6 @@ export default function SignupForm({courses, yearLevels, googleUser, oauthFailed
           flex: 1;
           min-width: 0;
           margin-bottom: 4px;
-        }
-
-        .fieldRow > .fieldNarrow {
-          flex: 0 0 130px;
-        }
-
-        .fieldRow > .fieldWide {
-          flex: 1;
         }
 
         .passField {

@@ -7,7 +7,7 @@ SELECT plan(35);
 
 -- Fixtures --------------------------------------------------------------------
 
-INSERT INTO public.courses (id, name) VALUES (9001, 'Test Course');
+INSERT INTO public.courses (id, name, short_name) VALUES (9001, 'Test Course', 'TC');
 INSERT INTO public.yearlevels (id, name) VALUES (9001, 'Test Year');
 
 -- The signup trigger creates public.users and a pending user_requests row.

@@ -4,13 +4,36 @@ import { createClient } from "@/lib/supabase/server";
 import { ActionResult } from "@/lib/actionResult";
 import { STUDENT_ID_FORMAT_ERROR, STUDENT_ID_RE, normalizeStudentId } from "@/lib/student-id";
 
+const INVALID_OPTIONS_ERROR = "Please select a valid course and year level.";
+
+// The dropdowns only list selectable options, but submitted IDs can be anything.
+async function areOptionsSelectable(
+    supabase: Awaited<ReturnType<typeof createClient>>,
+    courseId: number,
+    yearLevelId: number,
+) {
+    const [{ data: course }, { data: yearLevel }] = await Promise.all([
+        supabase.from("courses").select("id").eq("id", courseId).eq("is_selectable", true).maybeSingle(),
+        supabase.from("yearlevels").select("id").eq("id", yearLevelId).eq("is_selectable", true).maybeSingle(),
+    ]);
+
+    return Boolean(course && yearLevel);
+}
+
 export async function register(_prev: ActionResult, formData: FormData) : Promise<ActionResult> {
     const studentId = normalizeStudentId(String(formData.get("studentId") ?? ""));
     if (!STUDENT_ID_RE.test(studentId)) {
         return { error: STUDENT_ID_FORMAT_ERROR };
     }
 
+    const yearLevel = Number(formData.get("yearLevelId"));
+    const courseId = Number(formData.get("courseId"));
+
     const supabase = await createClient();
+
+    if (!await areOptionsSelectable(supabase, courseId, yearLevel)) {
+        return { error: INVALID_OPTIONS_ERROR };
+    }
 
     const { error } = await supabase.auth.signUp({
         email: formData.get("email") as string,
@@ -20,8 +43,8 @@ export async function register(_prev: ActionResult, formData: FormData) : Promis
                 first_name: formData.get("firstName") as string,
                 last_name: formData.get("lastName") as string,
                 student_id: studentId,
-                year_level: Number(formData.get("yearLevelId")),
-                course_id: Number(formData.get("courseId")),
+                year_level: yearLevel,
+                course_id: courseId,
             }
         }
     });
@@ -63,6 +86,10 @@ export async function registerWithGoogle(_prev: ActionResult, formData: FormData
 
     if (!STUDENT_ID_RE.test(studentId)) {
         return { error: STUDENT_ID_FORMAT_ERROR };
+    }
+
+    if (!await areOptionsSelectable(supabase, courseId, yearLevel)) {
+        return { error: INVALID_OPTIONS_ERROR };
     }
 
     const { error: studentError } = await supabase
