@@ -268,6 +268,8 @@ export default function SignupForm({courses, yearLevels, googleUser, urlError}: 
       formData.set("studentId", trimmedStudentId);
       formData.set("yearLevelId", fields.yearLevel);
       formData.set("courseId", fields.program);
+      formData.set("birthday", fields.birthday);
+      formData.set("birthdayConsent", String(fields.birthdayConsent));
 
       setSuccessDismissed(false);
       startTransition(() => formAction(formData));
@@ -324,13 +326,12 @@ export default function SignupForm({courses, yearLevels, googleUser, urlError}: 
     formData.set("studentId", normalizeStudentId(googleFields.studentId));
     formData.set("yearLevelId", googleFields.yearLevel);
     formData.set("courseId", googleFields.program);
+    formData.set("birthday", googleFields.birthday);
+    formData.set("birthdayConsent", String(googleFields.birthdayConsent));
 
     setSuccessDismissed(false);
     startTransition(() => googleFormAction(formData));
   }
-
-  const googleConfirmDisabled =
-    googlePending || (Boolean(googleFields.birthday) && !googleFields.birthdayConsent);
 
   return (
     <>
@@ -552,7 +553,7 @@ export default function SignupForm({courses, yearLevels, googleUser, urlError}: 
             </li>
             <li>
               <span>Birthday</span>
-              <strong>{googleFields.birthday || "Not shared"}</strong>
+              <strong>{googleFields.birthdayConsent && googleFields.birthday ? googleFields.birthday : "Not shared"}</strong>
             </li>
           </ul>
 
@@ -565,7 +566,7 @@ export default function SignupForm({courses, yearLevels, googleUser, urlError}: 
               />
               <span>
                 I consent to my birthday being visible on the SOE Hub shared calendar
-                (e.g. for birthday shoutouts). Leaving this unchecked keeps it private.
+                (e.g. for birthday shoutouts). If you leave this unchecked, it won&apos;t be saved.
               </span>
             </label>
           )}
@@ -591,7 +592,7 @@ export default function SignupForm({courses, yearLevels, googleUser, urlError}: 
               className="btn submitBtn"
               style={{ flex: 1 }}
               onClick={handleGoogleConfirm}
-              disabled={googleConfirmDisabled}
+              disabled={googlePending}
             >
               {googlePending ? "Working..." : "Request account"}
             </button>
@@ -689,7 +690,7 @@ export default function SignupForm({courses, yearLevels, googleUser, urlError}: 
                 />
                 <span>
                   I consent to my birthday being visible on the SOE Hub shared calendar
-                  (e.g. for birthday shoutouts). Leaving this unchecked keeps it private.
+                  (e.g. for birthday shoutouts). If you leave this unchecked, it won&apos;t be saved.
                 </span>
               </label>
             )}

@@ -21,6 +21,21 @@ async function areOptionsSelectable(
     return Boolean(course && yearLevel);
 }
 
+// A birthday is only kept if the user ticked the consent box. The date picker
+// only produces real past dates, so anything else is a tampered request: drop it.
+function consentedBirthdate(formData: FormData): string | null {
+    const value = String(formData.get("birthday") ?? "");
+    if (formData.get("birthdayConsent") !== "true" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        return null;
+    }
+
+    const date = new Date(`${value}T00:00:00Z`);
+    const isRealPastDate =
+        !Number.isNaN(date.getTime()) && date.toISOString().startsWith(value) && date <= new Date();
+
+    return isRealPastDate ? value : null;
+}
+
 export async function register(_prev: ActionResult, formData: FormData) : Promise<ActionResult> {
     const studentId = normalizeStudentId(String(formData.get("studentId") ?? ""));
     if (!STUDENT_ID_RE.test(studentId)) {
@@ -46,6 +61,7 @@ export async function register(_prev: ActionResult, formData: FormData) : Promis
                 student_id: studentId,
                 year_level: yearLevel,
                 course_id: courseId,
+                consented_birthdate: consentedBirthdate(formData),
             }
         }
     });
@@ -117,10 +133,10 @@ export async function registerWithGoogle(_prev: ActionResult, formData: FormData
     }
 
     // The signup trigger guessed the name split from Google's full name; save
-    // what the user confirmed instead.
-    const { error: nameError } = await supabase
+    // what the user confirmed instead, along with the birthday if they consented.
+    const { error: profileError } = await supabase
         .from("users")
-        .update({ first_name: firstName, last_name: lastName })
+        .update({ first_name: firstName, last_name: lastName, birthdate: consentedBirthdate(formData) })
         .eq("id", user.id);
 
     const { error } = await supabase.auth.updateUser({
@@ -133,13 +149,13 @@ export async function registerWithGoogle(_prev: ActionResult, formData: FormData
         }
     });
 
-    if(nameError || error) {
+    if(profileError || error) {
         // The student row is already saved, so the request itself did go through.
         return unexpectedFailure(
             "signup",
             "profile_update_failed",
-            "Your request was submitted, but we couldn't save your name. Contact the student council if it looks wrong.",
-            nameError ?? error,
+            "Your request was submitted, but we couldn't save your name or birthday. Contact the student council if anything looks wrong.",
+            profileError ?? error,
         );
     }
 
