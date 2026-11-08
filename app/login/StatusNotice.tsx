@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import ErrorCode from "@/components/ErrorCode";
 import type { Notice, NoticeKind } from "./messages";
 
@@ -33,9 +34,12 @@ const KINDS: Record<
 export default function StatusNotice({
   notice,
   onDismiss,
+  children,
 }: {
   notice: Notice;
   onDismiss: () => void;
+  /** Shown under the message, e.g. a button that fixes the problem. */
+  children?: ReactNode;
 }) {
   const kind = KINDS[notice.kind];
 
@@ -51,6 +55,7 @@ export default function StatusNotice({
         <p className="title">{kind.title}</p>
         <p className="message">{notice.message}</p>
         <ErrorCode code={notice.code} reference={notice.reference} />
+        {children}
       </div>
 
       <button type="button" className="close" aria-label="Dismiss" onClick={onDismiss}>

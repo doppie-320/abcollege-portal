@@ -1,0 +1,17 @@
+<!--
+  "Confirm signup" email. Paste this into each hosted project too:
+  Authentication > Email Templates > Confirm signup.
+
+  The link carries a token hash instead of Supabase's confirmation URL, so it
+  works in any browser (app/auth/callback verifies it). RedirectTo is the site
+  the person signed up on, or the Site URL, which the proxy forwards to the callback.
+-->
+<h2>Confirm your email</h2>
+
+<p>Thanks for requesting an SOE Hub account. Confirm this email address to send your request to the student council:</p>
+
+<p><a href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=email">Confirm my email</a></p>
+
+<p>An admin still has to approve your request before you can log in. We'll email you when they do.</p>
+
+<p>If you didn't sign up for SOE Hub, you can ignore this email.</p>

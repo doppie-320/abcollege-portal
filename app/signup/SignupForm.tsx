@@ -10,7 +10,9 @@ import { STUDENT_ID_FORMAT_ERROR, STUDENT_ID_RE, normalizeStudentId } from "@/li
 import DatePicker from "@/components/DatePicker";
 import Select from "@/components/Select";
 import ConfirmDialog, { USER_ICON } from "@/app/home/ConfirmDialog";
-import { register, registerWithGoogle } from "./actions";
+import EmbeddedBrowserHint from "@/components/EmbeddedBrowserHint";
+import { settle } from "@/lib/actionResult";
+import { discardUnfinishedSignup, register, registerWithGoogle } from "./actions";
 
 type Course = {
   id: number;
@@ -213,6 +215,17 @@ export default function SignupForm({courses, yearLevels, googleUser, urlError}: 
     return () => setHandledState(state);
   }, [state]);
 
+  // Pressing Back on Google's page can restore this page from the browser's
+  // back/forward cache exactly as it was left: with the Google button still
+  // disabled on "Redirecting…".
+  useEffect(() => {
+    function handlePageShow(event: PageTransitionEvent) {
+      if (event.persisted) setGoogleLoading(false);
+    }
+    window.addEventListener("pageshow", handlePageShow);
+    return () => window.removeEventListener("pageshow", handlePageShow);
+  }, []);
+
   const courseOptions = courses.map((course) => ({
     value: String(course.id),
     label: <><strong>{course.short_name}</strong> - {course.name}</>,
@@ -311,9 +324,12 @@ export default function SignupForm({courses, yearLevels, googleUser, urlError}: 
   }
 
   async function handleGoogleCancel() {
-    // Drop the half-finished Google session so the regular form starts clean.
-    const supabase = createClient();
-    await supabase.auth.signOut();
+    // Drop the half-finished Google session so the regular form starts clean,
+    // along with the auth user Google sign-in created, so this email can still
+    // sign up with a password.
+    await settle(discardUnfinishedSignup());
+    // The server cleared the session cookies; this clears the browser client too.
+    await createClient().auth.signOut({ scope: "local" });
     setGoogleFields(EMPTY_GOOGLE_FIELDS);
     setGoogleErrors({});
     setStep("form");
@@ -796,6 +812,8 @@ export default function SignupForm({courses, yearLevels, googleUser, urlError}: 
             {googleLoading ? "Redirecting…" : "Sign up with Google"}
           </button>
 
+          <EmbeddedBrowserHint />
+
           {shownGoogleError && (
             <p className="error" role="alert">
               {shownGoogleError}
@@ -815,8 +833,9 @@ export default function SignupForm({courses, yearLevels, googleUser, urlError}: 
           message={
             <>
               There&apos;s already an account for <strong>{fields.email.trim()}</strong>.
-              Do you want to log in instead? If you used Google before, choose
-              &ldquo;Continue with Google&rdquo; on the next page.
+              Do you want to log in instead? If you started signing up with Google
+              but didn&apos;t finish, choose &ldquo;Sign up with Google&rdquo; below to
+              finish your request.
             </>
           }
           confirmLabel="Go to log in"

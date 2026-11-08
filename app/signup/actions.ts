@@ -4,8 +4,34 @@ import { createClient } from "@/lib/supabase/server";
 import { ActionResult } from "@/lib/actionResult";
 import { authFailure, unexpectedFailure } from "@/lib/authErrors";
 import { STUDENT_ID_FORMAT_ERROR, STUDENT_ID_RE, normalizeStudentId } from "@/lib/student-id";
+import { authCallbackUrl } from "@/lib/requestOrigin";
 
 const INVALID_OPTIONS_ERROR = "Please select a valid course and year level.";
+
+const STUDENT_ID_TAKEN_ERROR =
+    "This student ID is already registered. If it's yours, log in with the email you signed up with, or contact the student council.";
+
+const ALREADY_SUBMITTED_ERROR = "You've already submitted your details, so your request is with the admins.";
+
+// Which account already has this student ID, ignoring case: IDs saved before
+// they were capitalised can still be lowercase, and the primary key only stops
+// exact duplicates. The form checks this too, but only in the browser. Null when
+// nobody has it, or when the lookup fails (the unique index still has the last word).
+async function studentIdOwner(
+    supabase: Awaited<ReturnType<typeof createClient>>,
+    studentId: string,
+): Promise<string | null> {
+    // The ID is letters and numbers only by now, so ilike sees no wildcards.
+    const { data, error } = await supabase
+        .from("students")
+        .select("id")
+        .ilike("student_id", studentId)
+        .limit(1)
+        .maybeSingle();
+
+    if (error) console.error("[auth:signup] student_id_lookup_failed", error);
+    return data?.id ?? null;
+}
 
 // The dropdowns only list selectable options, but submitted IDs can be anything.
 async function areOptionsSelectable(
@@ -56,10 +82,17 @@ export async function register(_prev: ActionResult, formData: FormData) : Promis
         return { error: INVALID_OPTIONS_ERROR };
     }
 
+    if (await studentIdOwner(supabase, studentId)) {
+        return { error: STUDENT_ID_TAKEN_ERROR, code: "student_id_taken" };
+    }
+
     const { data, error } = await supabase.auth.signUp({
         email: formData.get("email") as string,
         password: formData.get("password") as string,
         options: {
+            // Without this the confirmation link goes to the Site URL, which
+            // can be a different deployment from the one the user signed up on.
+            emailRedirectTo: await authCallbackUrl(),
             data: {
                 first_name: formData.get("firstName") as string,
                 last_name: formData.get("lastName") as string,
@@ -88,6 +121,31 @@ export async function register(_prev: ActionResult, formData: FormData) : Promis
     if (data.user?.identities?.length === 0) {
         return { error: "An account with this email already exists.", status: "user_already_exists" }
     }
+
+    // With email confirmation off, sign-up also signs the new user in. They can't
+    // use the portal until an admin approves them, so don't leave that session
+    // behind (Google sign-ups sign out the same way).
+    if (data.session) {
+        await supabase.auth.signOut({ scope: "local" });
+    }
+
+    return { success: true };
+}
+
+// For "No" on the login page's "Account not found" and "Cancel" on the Google
+// details step. Google sign-in already created an auth user; signing out alone
+// would leave it behind and the email would count as taken for email sign-up.
+// The database only deletes it if nothing came of it (no student details, not
+// an admin, never accepted).
+export async function discardUnfinishedSignup() : Promise<ActionResult> {
+    const supabase = await createClient();
+
+    const { error } = await supabase.rpc("delete_own_unfinished_signup");
+    if (error) console.error("[auth:signup] discard_unfinished_failed", error);
+
+    // Signed out either way: the user asked to leave, and a failed delete is
+    // tidied up by the nightly delete_abandoned_signups job.
+    await supabase.auth.signOut();
 
     return { success: true };
 }
@@ -122,6 +180,14 @@ export async function registerWithGoogle(_prev: ActionResult, formData: FormData
         return { error: INVALID_OPTIONS_ERROR };
     }
 
+    const owner = await studentIdOwner(supabase, studentId);
+    if (owner === user.id) {
+        return { error: ALREADY_SUBMITTED_ERROR, code: "request_already_submitted" };
+    }
+    if (owner) {
+        return { error: STUDENT_ID_TAKEN_ERROR, code: "student_id_taken" };
+    }
+
     const { error: studentError } = await supabase
         .from("students")
         .insert({
@@ -135,8 +201,8 @@ export async function registerWithGoogle(_prev: ActionResult, formData: FormData
         // students has two unique keys: one row per account, and one account per student ID.
         if(studentError.code === "23505") {
             return studentError.message.includes("students_id_key")
-                ? { error: "You've already submitted your details, so your request is with the admins.", code: "request_already_submitted" }
-                : { error: "This student ID is already registered. Contact the student council if it's yours.", code: "student_id_taken" };
+                ? { error: ALREADY_SUBMITTED_ERROR, code: "request_already_submitted" }
+                : { error: STUDENT_ID_TAKEN_ERROR, code: "student_id_taken" };
         }
 
         return unexpectedFailure(
