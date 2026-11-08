@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import ConfirmDialog, { Glyph } from "@/app/home/ConfirmDialog";
-import { applicantInitials, applicantName, type Applicant } from "@/lib/applicants-db";
+import { applicantName, type Applicant } from "@/lib/applicants-db";
+import ApplicantAvatar from "./ApplicantAvatar";
 
 export type RejectMode = "delayed" | "immediate";
 
@@ -62,8 +63,11 @@ export default function RejectDialog({ mode, applicant, onCancel, onConfirm }: R
       onConfirm={onConfirm}
     >
       <div className="mt-4 flex items-center gap-3 rounded-lg border border-rule-soft bg-vellum/40 px-3 py-2.5">
-        <span className="mono relative flex size-10 shrink-0 items-center justify-center rounded-full border border-navy bg-vellum text-[12px] font-semibold text-navy-deep">
-          {applicantInitials(applicant)}
+        <ApplicantAvatar
+          applicant={applicant}
+          size={40}
+          className="mono flex size-10 shrink-0 items-center justify-center rounded-full border border-navy bg-vellum text-[12px] font-semibold text-navy-deep"
+        >
           <span
             className={`absolute -right-1 -bottom-1 flex size-[18px] items-center justify-center rounded-full border-2 border-paper text-paper ${
               delayed ? "bg-orange" : "bg-[#b3261e]"
@@ -73,7 +77,7 @@ export default function RejectDialog({ mode, applicant, onCancel, onConfirm }: R
               <path d="M18 6 6 18M6 6l12 12" />
             </Glyph>
           </span>
-        </span>
+        </ApplicantAvatar>
         <div className="min-w-0">
           <p className="mb-0 truncate text-[14px] font-semibold text-navy-deep">{name}</p>
           <p className="mono mb-0 truncate text-[11px] text-ink-soft">{applicant.email}</p>

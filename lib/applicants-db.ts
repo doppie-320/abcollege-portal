@@ -5,6 +5,8 @@ export type Applicant = {
   firstName: string;
   lastName: string;
   email: string;
+  /** Public URL of the profile picture, or "" when they haven't set one. */
+  avatarUrl: string;
   yearLevel: string;
   birthday?: string;
   studentId: string;

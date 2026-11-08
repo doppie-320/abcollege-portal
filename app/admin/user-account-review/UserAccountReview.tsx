@@ -5,10 +5,10 @@ import { decideApplicant } from "./actions";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import SiteNav, { ADMIN_MENU_LINKS, HOME_ADMIN_NAV_LINKS } from "@/components/NavigationHeader";
 import RejectDialog, { type RejectMode } from "./RejectDialog";
+import ApplicantAvatar from "./ApplicantAvatar";
 import {
   STATUS_LABELS,
   applicantBirthday,
-  applicantInitials,
   applicantName,
   formatSubmittedDate,
   type Applicant,
@@ -422,13 +422,13 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
                               : "bg-transparent hover:bg-[rgba(0,0,0,0.04)] hover:shadow-[inset_3px_0_0_var(--rule)]"
                           }`}
                         >
-                          <span
+                          <ApplicantAvatar
+                            applicant={applicant}
+                            size={36}
                             className={`mono flex size-9 shrink-0 items-center justify-center rounded-full border border-navy text-[12px] font-semibold transition-colors duration-150 ${
                               isSelected ? "bg-navy text-white" : "bg-vellum text-navy-deep"
                             }`}
-                          >
-                            {applicantInitials(applicant)}
-                          </span>
+                          />
                           <span className="min-w-0 flex-1">
                             <span className="block truncate text-[13.5px] font-semibold text-navy-deep">
                               {applicantName(applicant)}
@@ -491,9 +491,11 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
                     className="animate-fade-in flex items-center justify-between gap-4 max-[480px]:flex-wrap max-[480px]:gap-3"
                   >
                     <div className="flex min-w-0 items-center gap-4 max-[480px]:w-full max-[480px]:gap-3">
-                      <span className="mono flex size-14 shrink-0 items-center justify-center rounded-full border-2 border-paper bg-vellum text-[17px] font-semibold text-navy-deep shadow-[0_0_0_4px_rgba(217,83,30,0.35)] max-[480px]:size-11 max-[480px]:text-sm">
-                        {applicantInitials(selected)}
-                      </span>
+                      <ApplicantAvatar
+                        applicant={selected}
+                        size={56}
+                        className="mono flex size-14 shrink-0 items-center justify-center rounded-full border-2 border-paper bg-vellum text-[17px] font-semibold text-navy-deep shadow-[0_0_0_4px_rgba(217,83,30,0.35)] max-[480px]:size-11 max-[480px]:text-sm"
+                      />
                       <div className="min-w-0">
                         <h2 className="mb-1 text-xl text-paper [overflow-wrap:anywhere]">
                           {applicantName(selected)}
