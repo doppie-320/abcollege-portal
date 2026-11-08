@@ -51,7 +51,7 @@ export async function register(_prev: ActionResult, formData: FormData) : Promis
         return { error: INVALID_OPTIONS_ERROR };
     }
 
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
         email: formData.get("email") as string,
         password: formData.get("password") as string,
         options: {
@@ -72,6 +72,15 @@ export async function register(_prev: ActionResult, formData: FormData) : Promis
         }
 
         return authFailure("signup", error);
+    }
+
+    // With email confirmation on, Supabase doesn't report an email that's
+    // already registered (to stop sign-up from revealing which emails exist).
+    // It returns a stand-in user with no identities and saves nothing, so this
+    // is the only sign of it. Without this check, someone who already started
+    // with Google would see "You're on the list" while nothing reached the admins.
+    if (data.user?.identities?.length === 0) {
+        return { error: "An account with this email already exists.", status: "user_already_exists" }
     }
 
     return { success: true };
