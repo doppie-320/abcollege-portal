@@ -3,7 +3,6 @@ export const instant = false;
 import type { Metadata } from "next";
 import Image from "next/image";
 import LoginForm from "./LoginForm";
-import { createClient } from "@/lib/supabase/server";
 import { readErrorDetails } from "@/lib/authErrors";
 import { LOGIN_ERRORS, toNotice } from "./messages";
 
@@ -17,15 +16,6 @@ export default async function LoginPage({
   searchParams: Promise<{ error?: string; reason?: string; ref?: string }>;
 }) {
   const { error, reason, ref } = await searchParams;
-
-  // Signed in with a Google account that never requested one: the callback
-  // kept the session so the form can offer to continue to sign-up.
-  let noAccountEmail = "";
-  if (error === "no-account") {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    noAccountEmail = user?.email ?? "";
-  }
 
   // Force the user to the homepage if already logged in.
   // const supabase = await createClient();
@@ -67,7 +57,6 @@ export default async function LoginPage({
               ? toNotice(error, LOGIN_ERRORS[error], readErrorDetails(reason, ref))
               : null
           }
-          noAccountEmail={noAccountEmail}
         />
       </div>
     </div>

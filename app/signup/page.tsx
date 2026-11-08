@@ -34,11 +34,11 @@ function splitGoogleName(metadata: GoogleMetadata) {
 export default async function SignupPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; reason?: string; ref?: string }>;
+  searchParams: Promise<{ error?: string; reason?: string; ref?: string; from?: string }>;
 }) {
   const supabase = createPublicClient();
   const authClient = await createClient();
-  const { error: oauthError, reason, ref } = await searchParams;
+  const { error: oauthError, reason, ref, from } = await searchParams;
 
   const [{ data: courses, error: coursesError },  { data: yearLevels, error: yearLevelErrors }] =
     await Promise.all([
@@ -108,6 +108,7 @@ export default async function SignupPage({
           courses = { courses ?? [] }
           yearLevels = { yearLevels ?? [] }
           googleUser = { googleUser }
+          fromLogin = { from === "login" }
           urlError = {
             oauthError && SIGNUP_ERRORS[oauthError]
               ? { message: SIGNUP_ERRORS[oauthError], ...readErrorDetails(reason, ref) }

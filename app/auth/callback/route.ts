@@ -47,11 +47,11 @@ export async function GET(request: Request) {
           return NextResponse.redirect(`${origin}${fromSignup ? '/home' : next}`);
         }
 
-        // Google account with no sign-up yet. Keep the session so they can go
-        // straight to the sign-up form (it signs them out once submitted); the
-        // login page asks first and signs them out if they say no.
+        // Google account with no sign-up yet. Keep the session and go straight to
+        // the sign-up details step (it signs them out once submitted, or if they
+        // back out). `from=login` tells it to explain why they ended up there.
         if (status === 'no-account') {
-          return NextResponse.redirect(`${origin}${fromSignup ? '/signup' : '/login?error=no-account'}`);
+          return NextResponse.redirect(`${origin}${fromSignup ? '/signup' : '/signup?from=login'}`);
         }
 
         // Pending or rejected: no session until an admin accepts them.

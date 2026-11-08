@@ -2,10 +2,8 @@
 
 import { startTransition, useActionState, useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { forgetNav } from "@/lib/navMemory";
 import { createClient } from "@/lib/supabase/client";
-import ConfirmDialog, { USER_ICON } from "@/app/home/ConfirmDialog";
 import ForgotPasswordModal from "./ForgotPasswordModal";
 import StatusNotice from "./StatusNotice";
 import { toNotice, type Notice } from "./messages";
@@ -49,12 +47,9 @@ function validate(fields: Fields): Errors {
 type LoginFormProps = {
   /** Status/error from the URL, e.g. after Google sends the user back. */
   initialNotice: Notice | null;
-  /** Set when a Google account with no account request just signed in. */
-  noAccountEmail: string;
 };
 
-export default function LoginForm({ initialNotice, noAccountEmail }: LoginFormProps) {
-  const router = useRouter();
+export default function LoginForm({ initialNotice }: LoginFormProps) {
   const [fields, setFields] = useState<Fields>(EMPTY_FIELDS);
   const [errors, setErrors] = useState<Errors>({});
   const [showPassword, setShowPassword] = useState(false);
@@ -63,10 +58,6 @@ export default function LoginForm({ initialNotice, noAccountEmail }: LoginFormPr
   // because cacheComponents keeps this component's state across navigations.
   const [googleError, setGoogleError] = useState("");
   const [forgotOpen, setForgotOpen] = useState(false);
-  const [dismissedEmail, setDismissedEmail] = useState("");
-  // Derived from props (not initial state) so coming back to this page later,
-  // e.g. after finishing sign-up, doesn't reopen a stale dialog.
-  const noAccountOpen = noAccountEmail !== "" && noAccountEmail !== dismissedEmail;
   const [state, formAction, pending] = useActionState(login, {});
 
   // The notice is for one moment, not for the page:
@@ -169,14 +160,6 @@ export default function LoginForm({ initialNotice, noAccountEmail }: LoginFormPr
     };
   }
 
-  async function declineSignup() {
-    // They don't want an account, so drop the Google session the callback kept.
-    setDismissedEmail(noAccountEmail);
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    router.replace("/login");
-  }
-
   return (
     <div className="card">
       <div className="headRow">
@@ -270,28 +253,6 @@ export default function LoginForm({ initialNotice, noAccountEmail }: LoginFormPr
         onClose={() => setForgotOpen(false)}
         initialEmail={fields.email.trim()}
       />
-
-      {noAccountOpen && (
-        <ConfirmDialog
-          tone="warning"
-          eyebrow="NEW TO THE PORTAL?"
-          icon={USER_ICON}
-          title="Account not found"
-          message={
-            <>
-              There&apos;s no account for <strong>{noAccountEmail}</strong> yet. Do you want
-              to request an account?
-            </>
-          }
-          confirmLabel="Sign up"
-          busyLabel="Opening…"
-          cancelLabel="No"
-          onCancel={declineSignup}
-          // Keeps the Google session, so sign-up opens on the "few more details" step.
-          // replace, not push, so Back doesn't return to this dialog.
-          onConfirm={() => router.replace("/signup")}
-        />
-      )}
 
       <div className="divider">
         <span>or</span>

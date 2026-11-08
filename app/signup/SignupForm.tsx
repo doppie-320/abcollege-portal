@@ -34,6 +34,8 @@ type SignupFormProps = {
   yearLevels: YearLevel[];
   /** Set when the user just came back from Google and still needs to fill in their details. */
   googleUser: GoogleUser | null;
+  /** The Google user pressed "Continue with Google" on the login page, not here. */
+  fromLogin: boolean;
   /** Why the auth callback sent the user back here. */
   urlError: (ErrorDetails & { message: string }) | null;
 };
@@ -158,7 +160,7 @@ function validateGoogleFields(fields: GoogleFields): GoogleErrors {
 
 type Step = "form" | "googleDetails" | "googleConfirm";
 
-export default function SignupForm({courses, yearLevels, googleUser, urlError}: SignupFormProps) {
+export default function SignupForm({courses, yearLevels, googleUser, fromLogin, urlError}: SignupFormProps) {
   const [fields, setFields] = useState<Fields>(EMPTY_FIELDS);
   const [errors, setErrors] = useState<Errors>({});
   const [showPassword, setShowPassword] = useState(false);
@@ -319,6 +321,12 @@ export default function SignupForm({courses, yearLevels, googleUser, urlError}: 
     setStep("form");
   }
 
+  async function handleWrongAccount() {
+    // Picked a Google account that isn't the one they registered with.
+    await handleGoogleCancel();
+    router.replace("/login");
+  }
+
   function handleGoogleConfirm() {
     const formData = new FormData();
     formData.set("firstName", googleFields.firstName);
@@ -420,8 +428,22 @@ export default function SignupForm({courses, yearLevels, googleUser, urlError}: 
             </div>
           </div>
           <p className="stepHint">
-            Signed in with Google as <strong>{googleUser?.email}</strong>. Check that your
-            name is split correctly, then fill in the rest to set up your student profile.
+            {fromLogin ? (
+              <>
+                There&apos;s no portal account for <strong>{googleUser?.email}</strong> yet,
+                so let&apos;s request one. Check that your name is split correctly, then fill
+                in the rest to set up your student profile.
+              </>
+            ) : (
+              <>
+                Signed in with Google as <strong>{googleUser?.email}</strong>. Check that your
+                name is split correctly, then fill in the rest to set up your student profile.
+              </>
+            )}
+            {" "}
+            <button type="button" className="wrongAccount" onClick={handleWrongAccount}>
+              Wrong account? Log in with a different one
+            </button>
           </p>
 
           <form onSubmit={handleGoogleDetailsSubmit} noValidate>
@@ -948,6 +970,20 @@ export default function SignupForm({courses, yearLevels, googleUser, urlError}: 
           font-size: 13px;
           color: var(--ink-soft);
           margin-bottom: 18px;
+        }
+
+        .wrongAccount {
+          background: none;
+          border: none;
+          padding: 0;
+          font-size: inherit;
+          color: var(--blue);
+          cursor: pointer;
+        }
+
+        .wrongAccount:hover {
+          color: var(--navy);
+          text-decoration: underline;
         }
 
         .stepActions {
