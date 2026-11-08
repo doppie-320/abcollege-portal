@@ -249,6 +249,17 @@ otp_expiry = 3600
 # subject = "You have been invited"
 # content_path = "./supabase/templates/invite.html"
 
+# These links carry a token hash instead of Supabase's own confirmation URL, so
+# they work in any browser, not just the one that asked for the email. The
+# hosted projects need the same templates (Authentication > Email Templates).
+[auth.email.template.confirmation]
+subject = "Confirm your SOE Hub email"
+content_path = "./supabase/templates/confirmation.html"
+
+[auth.email.template.recovery]
+subject = "Reset your SOE Hub password"
+content_path = "./supabase/templates/recovery.html"
+
 # Uncomment to customize notification email template
 # [auth.email.notification.password_changed]
 # enabled = true

@@ -7,6 +7,7 @@ import SignupForm from "./SignupForm";
 import { createPublicClient } from "@/lib/supabase/public";
 import { createClient } from "@/lib/supabase/server";
 import { readErrorDetails } from "@/lib/authErrors";
+import { getAccountStatus, type AccountStatus } from "@/lib/auth";
 import { SIGNUP_ERRORS } from "@/app/login/messages";
 
 export const metadata: Metadata = {
@@ -60,18 +61,22 @@ export default async function SignupPage({
   }
 
   // Coming back from "Sign up with Google": the auth user exists, but the
-  // student details haven't been filled in yet.
+  // student details haven't been filled in yet. Decided by account status, not
+  // app_metadata.provider: that's only the *first* provider, so an account
+  // that started some other way and was later linked to Google would get the
+  // email form, whose sign-up then fails with "Account already exists".
   const { data: { user } } = await authClient.auth.getUser();
   let googleUser = null;
 
-  if (user?.app_metadata?.provider === "google") {
-    const { data: student } = await authClient
-      .from("students")
-      .select("id")
-      .eq("id", user.id)
-      .maybeSingle();
+  if (user) {
+    let status: AccountStatus | null = null;
+    try {
+      status = await getAccountStatus(authClient, user.id);
+    } catch (cause) {
+      console.error("[auth:signup] status_check_failed", cause);
+    }
 
-    if (!student) {
+    if (status === "no-account") {
       googleUser = {
         email: user.email ?? "",
         ...splitGoogleName((user.user_metadata ?? {}) as GoogleMetadata),

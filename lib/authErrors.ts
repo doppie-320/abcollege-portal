@@ -1,7 +1,7 @@
 import { isAuthRetryableFetchError, isAuthWeakPasswordError, type AuthError } from "@supabase/supabase-js";
 import type { ActionResult } from "@/lib/actionResult";
 
-export type AuthScope = "login" | "signup" | "reset";
+export type AuthScope = "login" | "signup" | "reset" | "confirm";
 
 /** Shown with an error so people can quote it. Neither part reveals anything about an account. */
 export type ErrorDetails = {
@@ -23,7 +23,7 @@ const MESSAGES: Record<AuthScope, Record<string, string>> = {
     invalid_credentials:
       "Incorrect email or password. If you signed up with Google, use “Continue with Google” instead.",
     email_not_confirmed:
-      "This email hasn't been confirmed yet. Look for the confirmation link in your inbox and spam folder, or contact the student council if you can't find it.",
+      "This email hasn't been confirmed yet. Use the link in the confirmation email (check your spam folder too), or send yourself a new one.",
     user_banned: "This account has been disabled. Please contact the student council.",
     email_provider_disabled: "Logging in with email is turned off right now. Try “Continue with Google” instead.",
     validation_failed: "Enter a valid email address and password.",
@@ -43,12 +43,20 @@ const MESSAGES: Record<AuthScope, Record<string, string>> = {
     over_email_send_rate_limit: "Too many reset emails have been sent. Please try again later.",
     email_address_invalid: "That email address can't be used. Check it for typos and try again.",
   },
+  // Resending the sign-up confirmation email.
+  confirm: {
+    over_email_send_rate_limit: "Too many emails have been sent to this address. Please wait a few minutes and try again.",
+    email_address_invalid: "That email address can't be used. Check it for typos and try again.",
+    email_address_not_authorized:
+      "We can't send email to that address right now. Please contact the student council.",
+  },
 };
 
 const FALLBACKS: Record<AuthScope, string> = {
   login: "We couldn't log you in because of a problem on our side. Please try again.",
   signup: "We couldn't submit your request because of a problem on our side. Please try again.",
   reset: "Couldn't send the reset link. Please try again.",
+  confirm: "Couldn't send a new confirmation email. Please try again.",
 };
 
 function weakPasswordMessage(reasons: string[]): string {
