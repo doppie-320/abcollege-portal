@@ -540,16 +540,23 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
 
                 {/* Footer */}
                 <div className={`${FOOTER_BAR} px-6 max-[480px]:h-auto max-[480px]:gap-2 max-[480px]:px-4 max-[480px]:py-3`}>
-                  <button
-                    type="button"
-                    className="ml-auto btn rounded-lg primary px-2.5 py-1 text-sm font-normal max-[480px]:min-h-11 max-[480px]:min-w-0 max-[480px]:flex-1 max-[480px]:px-2 max-[480px]:text-xs"
-                    onClick={() => void decide("accept")}
-                  >
-                    <Icon name="check" />
-                    Accept application
-                  </button>
+                  {selectedStatus !== "accept" && (
+                    <button
+                      type="button"
+                      className="ml-auto btn rounded-lg primary px-2.5 py-1 text-sm font-normal max-[480px]:min-h-11 max-[480px]:min-w-0 max-[480px]:flex-1 max-[480px]:px-2 max-[480px]:text-xs"
+                      onClick={() => void decide("accept")}
+                    >
+                      <Icon name="check" />
+                      Accept application
+                    </button>
+                  )}
 
-                  <div className="relative shrink-0 max-[480px]:min-w-0 max-[480px]:flex-1" ref={rejectRef}>
+                  <div
+                    className={`relative shrink-0 max-[480px]:min-w-0 max-[480px]:flex-1 ${
+                      selectedStatus === "accept" ? "ml-auto" : ""
+                    }`}
+                    ref={rejectRef}
+                  >
                     <button
                       type="button"
                       className="btn font-normal rounded-lg ghost border-[#b3261e] px-2 py-1 text-sm text-[#b3261e] hover:bg-[rgba(205,79,60,0.08)] max-[480px]:min-h-11 max-[480px]:w-full max-[480px]:text-xs"
