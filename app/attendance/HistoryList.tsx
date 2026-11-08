@@ -1,26 +1,22 @@
 "use client";
 
 import type { MyAttendanceRow } from "@/lib/attendance-server";
-import LocalTime, { useHydrated } from "./LocalTime";
+import { MONTH_NAMES, toDayKey } from "@/lib/calendar";
+import LocalTime from "./LocalTime";
 import { AttendanceBadge, DateChip, MethodTag } from "./ui";
 
 type MonthGroup = { key: string; label: string; rows: MyAttendanceRow[] };
 
-/**
- * Groups rows (newest first) by the month they were recorded. Until the page
- * hydrates this uses UTC so the server and browser agree, then switches to
- * the viewer's own time zone.
- */
-function groupByMonth(rows: MyAttendanceRow[], local: boolean): MonthGroup[] {
+/** Groups rows (newest first) by the school-time month they were recorded. */
+function groupByMonth(rows: MyAttendanceRow[]): MonthGroup[] {
   const groups: MonthGroup[] = [];
   for (const row of rows) {
-    const date = new Date(row.recorded_at);
-    const key = local ? `${date.getFullYear()}-${date.getMonth()}` : `${date.getUTCFullYear()}-${date.getUTCMonth()}`;
+    const key = toDayKey(row.recorded_at).slice(0, 7);
     let group = groups.at(-1);
     if (group?.key !== key) {
       group = {
         key,
-        label: date.toLocaleString(undefined, { month: "long", year: "numeric", timeZone: local ? undefined : "UTC" }),
+        label: `${MONTH_NAMES[Number(key.slice(5, 7)) - 1]} ${key.slice(0, 4)}`,
         rows: [],
       };
       groups.push(group);
@@ -31,8 +27,7 @@ function groupByMonth(rows: MyAttendanceRow[], local: boolean): MonthGroup[] {
 }
 
 export default function HistoryList({ history }: { history: MyAttendanceRow[] }) {
-  const hydrated = useHydrated();
-  const groups = groupByMonth(history, hydrated);
+  const groups = groupByMonth(history);
   let index = 0;
 
   return (

@@ -2,20 +2,20 @@
 
 import { useState } from "react";
 import { checkInWindow, type AttendanceEvent } from "@/lib/attendance";
-import LocalTime, { useHydrated } from "@/app/attendance/LocalTime";
+import LocalTime from "@/app/attendance/LocalTime";
 import { FIELD_LABEL, Icon } from "@/app/attendance/ui";
 import DatePicker from "@/components/DatePicker";
 import TimePicker from "@/components/TimePicker";
+import { instantAt, toDayKey, toTimeValue } from "@/lib/calendar";
 import { updateEventAttendance } from "../actions";
 import ActionForm from "../ActionForm";
 
 // Same pickers as the calendar's event modal: scroll wheels on phones and tablets.
 const WHEEL_QUERY = "(max-width: 1024px), (orientation: portrait)";
 
-// The pickers want "YYYY-MM-DD" and "HH:mm" in local time.
-function toLocalParts(date: Date): { day: string; time: string } {
-  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString();
-  return { day: local.slice(0, 10), time: local.slice(11, 16) };
+// The pickers want "YYYY-MM-DD" and "HH:mm" in school time, like the calendar's event form.
+function toSchoolParts(date: Date): { day: string; time: string } {
+  return { day: toDayKey(date), time: toTimeValue(date.toISOString()) };
 }
 
 /**
@@ -37,8 +37,8 @@ function DateTimeField({
   fallback: Date;
   baseYear: number;
 }) {
-  const [day, setDay] = useState(() => (value ? toLocalParts(new Date(value)).day : ""));
-  const [time, setTime] = useState(() => toLocalParts(value ? new Date(value) : fallback).time);
+  const [day, setDay] = useState(() => (value ? toSchoolParts(new Date(value)).day : ""));
+  const [time, setTime] = useState(() => toSchoolParts(value ? new Date(value) : fallback).time);
   const labelId = `${name}Label`;
 
   return (
@@ -61,7 +61,7 @@ function DateTimeField({
         />
         {day && <TimePicker value={time} onChange={setTime} aria-label={`${label} time`} modalQuery={WHEEL_QUERY} />}
       </div>
-      <input type="hidden" name={name} value={day ? new Date(`${day}T${time}`).toISOString() : ""} />
+      <input type="hidden" name={name} value={day ? new Date(instantAt(day, time)).toISOString() : ""} />
       <span className="mt-1 block text-[11.5px] font-normal text-ink-soft">{hint}</span>
     </div>
   );
@@ -84,9 +84,8 @@ export default function EventSettings({
   onSave: (settings: AttendanceSettings) => void;
 }) {
   const { opens, closes } = checkInWindow(event);
-  const hydrated = useHydrated();
   // Keeps the picker's year list around the event rather than capping it at this year.
-  const baseYear = new Date(event.event_start).getFullYear();
+  const baseYear = Number(toDayKey(event.event_start).slice(0, 4));
 
   return (
     <ActionForm
@@ -129,13 +128,12 @@ export default function EventSettings({
         <span aria-hidden="true" className={SWITCH} />
       </label>
 
-      {/* Remounted once hydrated so the fields start from the browser's time zone, not the server's. */}
-      <div className="grid grid-cols-1 gap-3" key={hydrated ? "local" : "server"}>
+      <div className="grid grid-cols-1 gap-3">
         <DateTimeField
           name="checkInOpensAt"
           label="Check-in opens"
           hint="Blank = 30 minutes before the event starts."
-          value={hydrated ? event.check_in_opens_at : null}
+          value={event.check_in_opens_at}
           fallback={opens}
           baseYear={baseYear}
         />
@@ -143,7 +141,7 @@ export default function EventSettings({
           name="checkInClosesAt"
           label="Check-in closes"
           hint="Blank = when the event ends."
-          value={hydrated ? event.check_in_closes_at : null}
+          value={event.check_in_closes_at}
           fallback={closes}
           baseYear={baseYear}
         />

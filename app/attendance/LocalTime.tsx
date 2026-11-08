@@ -1,6 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import { SCHOOL_TIME_ZONE } from "@/lib/calendar";
 
 const FORMATS = {
   datetime: { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" },
@@ -21,8 +22,9 @@ export function useHydrated(): boolean {
 }
 
 /**
- * A timestamp in the viewer's own time zone. The server would format it in
- * its zone instead, so the text is filled in once the page hydrates.
+ * A timestamp in school time, like the calendar, whatever the viewer's device
+ * says. It uses the viewer's locale, which the server doesn't know, so the text
+ * is filled in once the page hydrates.
  */
 export default function LocalTime({ value, format = "datetime" }: { value: string | Date; format?: TimeFormat }) {
   const hydrated = useHydrated();
@@ -30,7 +32,7 @@ export default function LocalTime({ value, format = "datetime" }: { value: strin
 
   return (
     <time dateTime={date.toISOString()}>
-      {hydrated ? date.toLocaleString(undefined, FORMATS[format]) : " "}
+      {hydrated ? date.toLocaleString(undefined, { ...FORMATS[format], timeZone: SCHOOL_TIME_ZONE }) : " "}
     </time>
   );
 }
