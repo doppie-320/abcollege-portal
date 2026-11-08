@@ -1,0 +1,33 @@
+# Applies every migration to a fresh local database and runs the pgTAP tests.
+# Uses no secrets, so it is safe to run on pull requests (including forks).
+name: DB tests
+
+on:
+  pull_request:
+    branches: [main, development]
+    paths:
+      - "supabase/**"
+      - ".github/workflows/db-*.yml"
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Migrations + pgTAP
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.119.0
+
+      # Starts only Postgres, applying supabase/migrations and seed.sql from scratch.
+      - name: Start local database
+        run: supabase db start
+
+      - name: Run pgTAP tests
+        run: supabase test db
