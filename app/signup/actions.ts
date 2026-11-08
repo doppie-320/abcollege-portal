@@ -92,6 +92,24 @@ export async function register(_prev: ActionResult, formData: FormData) : Promis
     return { success: true };
 }
 
+// For "No" on the login page's "Account not found" and "Cancel" on the Google
+// details step. Google sign-in already created an auth user; signing out alone
+// would leave it behind and the email would count as taken for email sign-up.
+// The database only deletes it if nothing came of it (no student details, not
+// an admin, never accepted).
+export async function discardUnfinishedSignup() : Promise<ActionResult> {
+    const supabase = await createClient();
+
+    const { error } = await supabase.rpc("delete_own_unfinished_signup");
+    if (error) console.error("[auth:signup] discard_unfinished_failed", error);
+
+    // Signed out either way: the user asked to leave, and a failed delete is
+    // tidied up by the nightly delete_abandoned_signups job.
+    await supabase.auth.signOut();
+
+    return { success: true };
+}
+
 // Google sign-ups already have an auth user (created by the OAuth redirect), so
 // instead of signUp we fill in the same metadata and student row afterwards.
 export async function registerWithGoogle(_prev: ActionResult, formData: FormData) : Promise<ActionResult> {

@@ -10,6 +10,8 @@ import ForgotPasswordModal from "./ForgotPasswordModal";
 import StatusNotice from "./StatusNotice";
 import { toNotice, type Notice } from "./messages";
 import { login } from "./actions";
+import { discardUnfinishedSignup } from "@/app/signup/actions";
+import { settle } from "@/lib/actionResult";
 
 type Fields = {
   email: string;
@@ -170,10 +172,12 @@ export default function LoginForm({ initialNotice, noAccountEmail }: LoginFormPr
   }
 
   async function declineSignup() {
-    // They don't want an account, so drop the Google session the callback kept.
+    // They don't want an account, so drop the Google session the callback kept,
+    // and the auth user Google sign-in created, so the email isn't left taken.
     setDismissedEmail(noAccountEmail);
-    const supabase = createClient();
-    await supabase.auth.signOut();
+    await settle(discardUnfinishedSignup());
+    // The server cleared the session cookies; this clears the browser client too.
+    await createClient().auth.signOut({ scope: "local" });
     router.replace("/login");
   }
 
