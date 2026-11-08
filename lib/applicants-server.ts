@@ -11,7 +11,7 @@ export async function fetchApplicants(): Promise<Applicant[]> {
   ] = await Promise.all([
     supabase
       .from("users")
-      .select("id, first_name, last_name, email_address, students!inner(student_id, yearlevels(name), courses(short_name)), user_requests!inner(request_status, reject_date, submitted_at)"),
+      .select("id, first_name, last_name, email_address, avatar_path, students!inner(student_id, yearlevels(name), courses(short_name)), user_requests!inner(request_status, reject_date, submitted_at)"),
     supabase.from("admins").select("id"),
     // birthdate can't be read from users directly; this function only answers admins.
     supabase.rpc("applicant_birthdates"),
@@ -47,6 +47,7 @@ export async function fetchApplicants(): Promise<Applicant[]> {
       firstName: user.first_name ?? "",
       lastName: user.last_name ?? "",
       email: user.email_address ?? "",
+      avatarUrl: user.avatar_path ? supabase.storage.from("avatars").getPublicUrl(user.avatar_path).data.publicUrl : "",
       studentId: student?.student_id ?? "N/A",
       yearLevel: yearLevel?.name ?? "N/A",
       birthday: birthdates.get(user.id),
