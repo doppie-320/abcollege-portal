@@ -21,11 +21,11 @@ async function areOptionsSelectable(
     return Boolean(course && yearLevel);
 }
 
-// A birthday is only kept if the user ticked the consent box. The date picker
-// only produces real past dates, so anything else is a tampered request: drop it.
-function consentedBirthdate(formData: FormData): string | null {
+// The date picker only produces real past dates, so anything else is a tampered
+// request: drop it.
+function signupBirthdate(formData: FormData): string | null {
     const value = String(formData.get("birthday") ?? "");
-    if (formData.get("birthdayConsent") !== "true" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
         return null;
     }
 
@@ -34,6 +34,11 @@ function consentedBirthdate(formData: FormData): string | null {
         !Number.isNaN(date.getTime()) && date.toISOString().startsWith(value) && date <= new Date();
 
     return isRealPastDate ? value : null;
+}
+
+// Without consent the birthday is still saved, but hidden from the calendar.
+function birthdayConsent(formData: FormData): boolean {
+    return formData.get("birthdayConsent") === "true";
 }
 
 export async function register(_prev: ActionResult, formData: FormData) : Promise<ActionResult> {
@@ -61,7 +66,8 @@ export async function register(_prev: ActionResult, formData: FormData) : Promis
                 student_id: studentId,
                 year_level: yearLevel,
                 course_id: courseId,
-                consented_birthdate: consentedBirthdate(formData),
+                signup_birthdate: signupBirthdate(formData),
+                birthdate_consent: birthdayConsent(formData),
             }
         }
     });
@@ -142,11 +148,20 @@ export async function registerWithGoogle(_prev: ActionResult, formData: FormData
     }
 
     // The signup trigger guessed the name split from Google's full name; save
-    // what the user confirmed instead, along with the birthday if they consented.
-    const { error: profileError } = await supabase
+    // what the user confirmed instead.
+    const { error: nameError } = await supabase
         .from("users")
-        .update({ first_name: firstName, last_name: lastName, birthdate: consentedBirthdate(formData) })
+        .update({ first_name: firstName, last_name: lastName })
         .eq("id", user.id);
+
+    // Hiding needs admin rights, so the birthday goes through an RPC that saves
+    // it and, without consent, hides it in one step.
+    const { error: birthdateError } = await supabase.rpc("save_signup_birthdate", {
+        birthdate: signupBirthdate(formData),
+        consent: birthdayConsent(formData),
+    });
+
+    const profileError = nameError ?? birthdateError;
 
     const { error } = await supabase.auth.updateUser({
         data: {
