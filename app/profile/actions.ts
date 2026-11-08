@@ -9,7 +9,10 @@ import { redirect } from "next/navigation";
 export async function logout() {
     const supabase = await createClient();
 
-    const { error } = await supabase.auth.signOut();
+    // Only this device. The default ("global") ended every session the user had,
+    // so logging out of a lab PC also logged them out on their phone, and admins
+    // had to enter a new emailed code everywhere.
+    const { error } = await supabase.auth.signOut({ scope: "local" });
 
     if (error) {
         throw new Error(`Error logging out: ${error.message}`);

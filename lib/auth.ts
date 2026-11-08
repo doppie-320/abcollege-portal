@@ -89,11 +89,28 @@ export async function needsMFA(supabase: SupabaseServerClient): Promise<boolean>
   return data !== false;
 }
 
-/** True when this session came from a password reset link rather than a normal log in. */
+/** How long after a reset link is opened its session still counts as a reset. */
+const RESET_SESSION_SECONDS = 60 * 60;
+
+/**
+ * True when this session came from a password reset link rather than a normal log in.
+ *
+ * A reset link that goes through the code exchange is marked "recovery". One opened
+ * from its token hash (see app/auth/callback) is marked "otp", like every link Supabase
+ * verifies that way. The portal has no other email-link log in, so both count, for an
+ * hour after the link was opened.
+ */
 export async function isRecoverySession(supabase: SupabaseServerClient): Promise<boolean> {
   const { data } = await supabase.auth.getClaims();
   const amr: (AMREntry | string)[] = data?.claims.amr ?? [];
-  return amr.some((entry) => (typeof entry === "string" ? entry : entry.method) === "recovery");
+  const now = Date.now() / 1000;
+
+  return amr.some((entry) => {
+    const method = typeof entry === "string" ? entry : entry.method;
+    const timestamp = typeof entry === "string" ? undefined : entry.timestamp;
+    const fresh = timestamp === undefined || now - timestamp < RESET_SESSION_SECONDS;
+    return (method === "recovery" || method === "otp") && fresh;
+  });
 }
 
 /**

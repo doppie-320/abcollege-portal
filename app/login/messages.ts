@@ -14,6 +14,11 @@ export const LOGIN_ERRORS: Record<string, string> = {
     "That link has expired, was already used, or was opened in a different browser from the one that requested it. Please request a new one.",
   pending: STATUS_MESSAGES.pending,
   rejected: STATUS_MESSAGES.rejected,
+  // Only shown when there's no Google session to offer sign-up to (see page.tsx).
+  "no-account": STATUS_MESSAGES["no-account"],
+  // The sign-up confirmation link worked; the request now waits for an admin.
+  "email-confirmed":
+    "Your email is confirmed, and your account request is now with the admins. We'll email you when it's approved.",
 };
 
 export const SIGNUP_ERRORS: Record<string, string> = {
@@ -29,6 +34,11 @@ export type Notice = ErrorDetails & { kind: NoticeKind; message: string };
 
 /** `status` is an account status or a `?error=` key from the URL. */
 export function toNotice(status: string | undefined, message: string, details?: ErrorDetails): Notice {
-  const kind: NoticeKind = status === "pending" || status === "rejected" ? status : "error";
+  const kind: NoticeKind =
+    status === "pending" || status === "email-confirmed"
+      ? "pending"
+      : status === "rejected"
+        ? "rejected"
+        : "error";
   return { kind, message, code: details?.code, reference: details?.reference };
 }

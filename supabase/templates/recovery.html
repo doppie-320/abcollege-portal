@@ -1,0 +1,16 @@
+<!--
+  "Reset password" email. Paste this into each hosted project too:
+  Authentication > Email Templates > Reset password.
+
+  The link carries a token hash instead of Supabase's confirmation URL, so it
+  works in any browser, not just the one that asked for the reset
+  (app/auth/callback verifies it). RedirectTo is the site the reset was requested
+  on, or the Site URL, which the proxy forwards to the callback.
+-->
+<h2>Reset your password</h2>
+
+<p>Someone asked to reset the password for your SOE Hub account. Use this link to choose a new one:</p>
+
+<p><a href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=recovery">Choose a new password</a></p>
+
+<p>If you didn't ask for this, you can ignore this email. Your password won't change.</p>

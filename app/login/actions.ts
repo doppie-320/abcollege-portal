@@ -5,7 +5,28 @@ import { STATUS_MESSAGES } from "./messages";
 import { createClient } from "@/lib/supabase/server";
 import { getAccountStatus, needsMFA, type AccountStatus } from "@/lib/auth";
 import { authFailure, unexpectedFailure } from "@/lib/authErrors";
+import { authCallbackUrl } from "@/lib/requestOrigin";
 import { redirect } from "next/navigation";
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Offered when log in says the email isn't confirmed (which Supabase only says
+// for the right password). Without it, a lost or expired confirmation email
+// left the account unusable even after an admin approved it.
+export async function resendConfirmation(email: string): Promise<ActionResult> {
+    const trimmed = String(email ?? "").trim();
+    if (!EMAIL_RE.test(trimmed)) return { error: "Enter a valid email address." };
+
+    const supabase = await createClient();
+    const { error } = await supabase.auth.resend({
+        type: "signup",
+        email: trimmed,
+        options: { emailRedirectTo: await authCallbackUrl() },
+    });
+
+    if (error) return authFailure("confirm", error);
+    return { success: true };
+}
 
 export async function login(_prev: ActionResult, formData: FormData) : Promise<ActionResult> {
     const supabase = await createClient();

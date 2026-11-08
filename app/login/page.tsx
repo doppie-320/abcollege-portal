@@ -63,7 +63,8 @@ export default async function LoginPage({
       <div className="formside">
         <LoginForm
           initialNotice={
-            error && LOGIN_ERRORS[error]
+            // With a Google session the "Account not found" dialog says it instead.
+            error && LOGIN_ERRORS[error] && !noAccountEmail
               ? toNotice(error, LOGIN_ERRORS[error], readErrorDetails(reason, ref))
               : null
           }

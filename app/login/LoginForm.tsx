@@ -9,9 +9,10 @@ import ConfirmDialog, { USER_ICON } from "@/app/home/ConfirmDialog";
 import ForgotPasswordModal from "./ForgotPasswordModal";
 import StatusNotice from "./StatusNotice";
 import { toNotice, type Notice } from "./messages";
-import { login } from "./actions";
+import { login, resendConfirmation } from "./actions";
 import { discardUnfinishedSignup } from "@/app/signup/actions";
 import { settle } from "@/lib/actionResult";
+import EmbeddedBrowserHint from "@/components/EmbeddedBrowserHint";
 
 type Fields = {
   email: string;
@@ -65,6 +66,10 @@ export default function LoginForm({ initialNotice, noAccountEmail }: LoginFormPr
   // because cacheComponents keeps this component's state across navigations.
   const [googleError, setGoogleError] = useState("");
   const [forgotOpen, setForgotOpen] = useState(false);
+  // The email of the last log in attempt, for resending its confirmation email.
+  const [submittedEmail, setSubmittedEmail] = useState("");
+  const [resendStatus, setResendStatus] = useState<"idle" | "sending" | "sent">("idle");
+  const [resendError, setResendError] = useState("");
   const [dismissedEmail, setDismissedEmail] = useState("");
   // Derived from props (not initial state) so coming back to this page later,
   // e.g. after finishing sign-up, doesn't reopen a stale dialog.
@@ -105,6 +110,17 @@ export default function LoginForm({ initialNotice, noAccountEmail }: LoginFormPr
     forgetNav();
   }, []);
 
+  // Pressing Back on Google's page can restore this page from the browser's
+  // back/forward cache exactly as it was left: with the Google button still
+  // disabled on "Redirecting…".
+  useEffect(() => {
+    function handlePageShow(event: PageTransitionEvent) {
+      if (event.persisted) setGoogleLoading(false);
+    }
+    window.addEventListener("pageshow", handlePageShow);
+    return () => window.removeEventListener("pageshow", handlePageShow);
+  }, []);
+
   useEffect(() => {
     const url = new URL(window.location.href);
     if (url.searchParams.has("error")) {
@@ -130,6 +146,20 @@ export default function LoginForm({ initialNotice, noAccountEmail }: LoginFormPr
     setGoogleError("");
     setUrlNoticeUsed(true);
     setNoticeHidden(false);
+    setResendStatus("idle");
+    setResendError("");
+  }
+
+  async function resendConfirmationEmail() {
+    setResendStatus("sending");
+    setResendError("");
+    const result = await settle(resendConfirmation(submittedEmail));
+    if (result.error) {
+      setResendStatus("idle");
+      setResendError(result.error);
+      return;
+    }
+    setResendStatus("sent");
   }
 
   function setField<K extends keyof Fields>(key: K, value: Fields[K]) {
@@ -145,6 +175,7 @@ export default function LoginForm({ initialNotice, noAccountEmail }: LoginFormPr
     // Calling formAction by hand (not via a form/button prop) needs startTransition,
     // otherwise `pending` never flips to true.
     const formData = new FormData(event.currentTarget);
+    setSubmittedEmail(fields.email.trim());
     startAttempt();
     startTransition(() => formAction(formData));
   }
@@ -194,7 +225,31 @@ export default function LoginForm({ initialNotice, noAccountEmail }: LoginFormPr
       </div>
 
       {showNotice && (
-        <StatusNotice notice={notice} onDismiss={() => setNoticeHidden(true)} />
+        <StatusNotice notice={notice} onDismiss={() => setNoticeHidden(true)}>
+          {notice.code === "email_not_confirmed" && submittedEmail && (
+            <div className="noticeAction">
+              {resendStatus === "sent" ? (
+                <p className="noticeActionNote" role="status">
+                  Sent. Check your inbox (and spam folder) for a new confirmation link.
+                </p>
+              ) : (
+                <button
+                  type="button"
+                  className="noticeActionBtn"
+                  onClick={resendConfirmationEmail}
+                  disabled={resendStatus === "sending"}
+                >
+                  {resendStatus === "sending" ? "Sending…" : "Resend confirmation email"}
+                </button>
+              )}
+              {resendError && (
+                <p className="noticeActionError" role="alert">
+                  {resendError}
+                </p>
+              )}
+            </div>
+          )}
+        </StatusNotice>
       )}
 
       {/* handleSubmit runs the action once the page is interactive. `action` covers a tap
@@ -284,7 +339,8 @@ export default function LoginForm({ initialNotice, noAccountEmail }: LoginFormPr
           message={
             <>
               There&apos;s no account for <strong>{noAccountEmail}</strong> yet. Do you want
-              to request an account?
+              to request an account? If you already signed up with a different email, choose
+              &ldquo;No&rdquo; and log in with that one instead.
             </>
           }
           confirmLabel="Sign up"
@@ -311,6 +367,8 @@ export default function LoginForm({ initialNotice, noAccountEmail }: LoginFormPr
         <GoogleIcon />
         {googleLoading ? "Redirecting…" : "Continue with Google"}
       </button>
+
+      <EmbeddedBrowserHint />
 
 
       <style jsx global>{`
@@ -531,6 +589,43 @@ export default function LoginForm({ initialNotice, noAccountEmail }: LoginFormPr
 
         .googleBtn:hover {
           background: var(--vellum-2);
+        }
+
+        .noticeAction {
+          margin-top: 8px;
+        }
+
+        .noticeActionBtn {
+          background: none;
+          border: none;
+          padding: 0;
+          font-size: 12.5px;
+          font-weight: 600;
+          color: var(--blue);
+          text-decoration: underline;
+          cursor: pointer;
+        }
+
+        .noticeActionBtn:hover {
+          color: var(--navy);
+        }
+
+        .noticeActionBtn:disabled {
+          color: var(--ink-soft);
+          text-decoration: none;
+          cursor: default;
+        }
+
+        .noticeActionNote {
+          font-size: 12.5px;
+          color: var(--ink-soft);
+          margin: 0;
+        }
+
+        .noticeActionError {
+          font-size: 12px;
+          color: var(--orange);
+          margin: 4px 0 0;
         }
 
         .success {

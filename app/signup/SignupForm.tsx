@@ -10,6 +10,7 @@ import { STUDENT_ID_FORMAT_ERROR, STUDENT_ID_RE, normalizeStudentId } from "@/li
 import DatePicker from "@/components/DatePicker";
 import Select from "@/components/Select";
 import ConfirmDialog, { USER_ICON } from "@/app/home/ConfirmDialog";
+import EmbeddedBrowserHint from "@/components/EmbeddedBrowserHint";
 import { settle } from "@/lib/actionResult";
 import { discardUnfinishedSignup, register, registerWithGoogle } from "./actions";
 
@@ -213,6 +214,17 @@ export default function SignupForm({courses, yearLevels, googleUser, urlError}: 
   useEffect(() => {
     return () => setHandledState(state);
   }, [state]);
+
+  // Pressing Back on Google's page can restore this page from the browser's
+  // back/forward cache exactly as it was left: with the Google button still
+  // disabled on "Redirecting…".
+  useEffect(() => {
+    function handlePageShow(event: PageTransitionEvent) {
+      if (event.persisted) setGoogleLoading(false);
+    }
+    window.addEventListener("pageshow", handlePageShow);
+    return () => window.removeEventListener("pageshow", handlePageShow);
+  }, []);
 
   const courseOptions = courses.map((course) => ({
     value: String(course.id),
@@ -799,6 +811,8 @@ export default function SignupForm({courses, yearLevels, googleUser, urlError}: 
             <GoogleIcon />
             {googleLoading ? "Redirecting…" : "Sign up with Google"}
           </button>
+
+          <EmbeddedBrowserHint />
 
           {shownGoogleError && (
             <p className="error" role="alert">
