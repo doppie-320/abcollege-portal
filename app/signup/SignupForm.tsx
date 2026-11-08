@@ -553,7 +553,7 @@ export default function SignupForm({courses, yearLevels, googleUser, urlError}: 
             </li>
             <li>
               <span>Birthday</span>
-              <strong>{googleFields.birthdayConsent && googleFields.birthday ? googleFields.birthday : "Not shared"}</strong>
+              <strong>{!googleFields.birthday ? "Not shared" : googleFields.birthdayConsent ? googleFields.birthday : `${googleFields.birthday} (hidden)`}</strong>
             </li>
           </ul>
 
@@ -566,7 +566,7 @@ export default function SignupForm({courses, yearLevels, googleUser, urlError}: 
               />
               <span>
                 I consent to my birthday being visible on the SOE Hub shared calendar
-                (e.g. for birthday shoutouts). If you leave this unchecked, it won&apos;t be saved.
+                (e.g. for birthday shoutouts). If you leave this unchecked, it&apos;s saved but hidden from other members.
               </span>
             </label>
           )}
@@ -690,7 +690,7 @@ export default function SignupForm({courses, yearLevels, googleUser, urlError}: 
                 />
                 <span>
                   I consent to my birthday being visible on the SOE Hub shared calendar
-                  (e.g. for birthday shoutouts). If you leave this unchecked, it won&apos;t be saved.
+                  (e.g. for birthday shoutouts). If you leave this unchecked, it&apos;s saved but hidden from other members.
                 </span>
               </label>
             )}
