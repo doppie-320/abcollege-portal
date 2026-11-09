@@ -15,9 +15,6 @@ const nextConfig: NextConfig = {
   experimental: {
     globalNotFound: true,
   },
-  images: {
-    unoptimized: true,
-  },
 
   // Always revalidate the service worker so phones pick up a new one on their next visit.
   async headers() {
@@ -34,6 +31,7 @@ const nextConfig: NextConfig = {
   },
 
   images: {
+    unoptimized: true,
     remotePatterns: [
       { protocol: "https", hostname: supabaseHost, pathname: "/storage/v1/object/public/avatars/**" },
     ],
