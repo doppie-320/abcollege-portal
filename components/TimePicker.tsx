@@ -8,7 +8,7 @@ import WheelTimeModal from "./WheelTimeModal";
 // Type a time ("2:30p", "1430", "2") or pick from the list; ↑/↓ and Enter work too.
 // While `modalQuery` matches, it opens hour/minute/AM-PM scroll wheels instead.
 
-const STEP_MINUTES = 30;
+const DEFAULT_STEP_MINUTES = 30;
 const LAST_MINUTE = 24 * 60 - 1;
 
 export function minutesOf(value: string): number {
@@ -76,6 +76,8 @@ type Props = {
   durationFrom?: string;
   /** While this media query matches, the picker opens as a modal with scroll wheels instead of the list. */
   modalQuery?: string;
+  /** Minutes between listed times. Typed times and the wheels go to the minute either way. */
+  step?: number;
 };
 
 export default function TimePicker({
@@ -85,6 +87,7 @@ export default function TimePicker({
   "aria-label": ariaLabel,
   durationFrom,
   modalQuery,
+  step = DEFAULT_STEP_MINUTES,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [wheelOpen, setWheelOpen] = useState(false);
@@ -100,7 +103,7 @@ export default function TimePicker({
 
   const optionMinutes = new Set<number>([minutesOf(current)]);
   if (durationFrom) optionMinutes.add(from);
-  for (let m = Math.ceil(from / STEP_MINUTES) * STEP_MINUTES; m <= LAST_MINUTE; m += STEP_MINUTES) optionMinutes.add(m);
+  for (let m = Math.ceil(from / step) * step; m <= LAST_MINUTE; m += step) optionMinutes.add(m);
   const options = [...optionMinutes]
     .filter((m) => m >= from || timeFromMinutes(m) === current)
     .sort((a, b) => a - b)
@@ -222,9 +225,9 @@ export default function TimePicker({
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       e.preventDefault();
       const start = active >= 0 ? active : selectedIndex;
-      const step = e.key === "ArrowDown" ? 1 : -1;
+      const delta = e.key === "ArrowDown" ? 1 : -1;
       setOpen(true);
-      setActive(Math.min(Math.max((start < 0 ? 0 : start) + (open ? step : 0), 0), options.length - 1));
+      setActive(Math.min(Math.max((start < 0 ? 0 : start) + (open ? delta : 0), 0), options.length - 1));
     } else if (e.key === "Enter") {
       // Never let Enter here submit the event form.
       e.preventDefault();
