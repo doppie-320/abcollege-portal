@@ -59,7 +59,9 @@ function DateTimeField({
           maxYear={baseYear + 5}
           modalQuery={WHEEL_QUERY}
         />
-        {day && <TimePicker value={time} onChange={setTime} aria-label={`${label} time`} modalQuery={WHEEL_QUERY} />}
+        {day && (
+          <TimePicker value={time} onChange={setTime} aria-label={`${label} time`} modalQuery={WHEEL_QUERY} step={5} />
+        )}
       </div>
       <input type="hidden" name={name} value={day ? new Date(instantAt(day, time)).toISOString() : ""} />
       <span className="mt-1 block text-[11.5px] font-normal text-ink-soft">{hint}</span>
@@ -132,7 +134,7 @@ export default function EventSettings({
         <DateTimeField
           name="checkInOpensAt"
           label="Check-in opens"
-          hint="Blank = 30 minutes before the event starts."
+          hint="Blank = 30 minutes before the event starts. Type any time, e.g. 4:57 PM."
           value={event.check_in_opens_at}
           fallback={opens}
           baseYear={baseYear}
