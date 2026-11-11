@@ -1,5 +1,6 @@
 'use server'
 
+import { refresh } from "next/cache";
 import { Resend } from "resend";
 import type { ActionResult } from "@/lib/actionResult";
 import { isAdmin } from "@/lib/auth";
@@ -67,6 +68,10 @@ export async function decideApplicant(
         console.error("[UAR] couldn't save decision:", error);
         return { error: "Couldn't save the decision" };
     }
+
+    // The list and counts are paged on the server, so re-render them in this
+    // same response; the page's optimistic update stands in until it arrives.
+    refresh();
 
     const newStatus = decision === "accept" ? "accept" : "reject";
     if(request?.request_status === newStatus || !applicant.email_address) {

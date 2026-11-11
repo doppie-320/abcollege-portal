@@ -1,30 +1,47 @@
 "use client";
 
 import { settle } from "@/lib/actionResult";
-import { decideApplicant } from "./actions";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { decideApplicant, type Decision } from "./actions";
+import { useEffect, useOptimistic, useRef, useState, useTransition, type ReactNode } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import SiteNav, { ADMIN_MENU_LINKS, HOME_ADMIN_NAV_LINKS } from "@/components/NavigationHeader";
 import RejectDialog, { type RejectMode } from "./RejectDialog";
 import ApplicantAvatar from "./ApplicantAvatar";
 import {
+  APPLICANT_PAGE_SIZE,
   STATUS_LABELS,
   applicantBirthday,
   applicantName,
+  applicantQueryHref,
   formatSubmittedDate,
-  type Applicant,
+  type ApplicantCounts,
+  type ApplicantFilter,
+  type ApplicantPage,
+  type ApplicantQuery,
   type ApplicantStatus,
 } from "@/lib/applicants-db";
 import type { Profile } from "@/lib/auth";
 import { toast } from "@/components/Toaster";
 
-type UserAccountReviewProps = {
+type UserAccountReviewProps = ApplicantPage & {
   profile: Profile;
-  applicants: Applicant[];
+  query: ApplicantQuery;
 };
 
-const PAGE_SIZE = 10;
+/** How long typing in the search box waits before asking the server. */
+const SEARCH_DEBOUNCE_MS = 300;
 
-type StatusFilter = "all" | ApplicantStatus;
+type StatusFilter = ApplicantFilter;
+
+/** The page's applicants and counts as the server sent them, plus decisions still in flight. */
+type ReviewView = Pick<ApplicantPage, "applicants" | "total" | "counts">;
+
+/** A decision shown before the server confirms it. "deleted" is an immediate reject. */
+type PendingDecision = {
+  id: string;
+  status: ApplicantStatus | "deleted";
+  rejectDate?: string;
+};
 
 const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
   { value: "all", label: "All" },
@@ -50,17 +67,60 @@ const FOOTER_BAR = "flex h-14 shrink-0 items-center gap-3 border-t border-rule-s
 const BLUEPRINT_GRID =
   "[background-image:linear-gradient(rgba(255,255,255,0.07)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.07)_1px,transparent_1px)] [background-size:24px_24px]";
 
-export default function UserAccountReview({ profile, applicants }: UserAccountReviewProps) {
-  const [reviewApplicants, setReviewApplicants] = useState(applicants);
-  const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("pending");
-  const [pageIndex, setPageIndex] = useState(0);
-  const [selectedId, setSelectedId] = useState<string | null>(
-    applicants.find((applicant) => applicant.status === "pending")?.id ?? null,
+/** Applies a decision to the page before the server's re-render arrives. */
+function applyDecision(view: ReviewView, decision: PendingDecision, filter: StatusFilter): ReviewView {
+  const target = view.applicants.find((applicant) => applicant.id === decision.id);
+  // Already gone from this page (the server's re-render got here first).
+  if (!target) return view;
+
+  const counts: ApplicantCounts = { ...view.counts };
+  counts[target.status] = Math.max(0, counts[target.status] - 1);
+  if (decision.status !== "deleted") counts[decision.status]++;
+
+  const stays = decision.status !== "deleted" && (filter === "all" || filter === decision.status);
+  if (!stays) {
+    return {
+      applicants: view.applicants.filter((applicant) => applicant.id !== decision.id),
+      total: Math.max(0, view.total - 1),
+      counts,
+    };
+  }
+
+  const status = decision.status as ApplicantStatus;
+  return {
+    applicants: view.applicants.map((applicant) =>
+      applicant.id === decision.id
+        ? { ...applicant, status, rejectDate: decision.rejectDate ?? applicant.rejectDate }
+        : applicant,
+    ),
+    total: view.total,
+    counts,
+  };
+}
+
+export default function UserAccountReview({
+  profile,
+  query,
+  applicants,
+  total,
+  page,
+  counts: serverCounts,
+  failed,
+}: UserAccountReviewProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const statusFilter = query.filter;
+  const [searchInput, setSearchInput] = useState(query.search);
+  // The search this page last asked for, and the last one the server answered.
+  const [requestedSearch, setRequestedSearch] = useState(query.search);
+  const [shownSearch, setShownSearch] = useState(query.search);
+  const [isNavigating, startNavigation] = useTransition();
+  const [, startDecision] = useTransition();
+  const [view, addPendingDecision] = useOptimistic<ReviewView, PendingDecision>(
+    { applicants, total, counts: serverCounts },
+    (current, decision) => applyDecision(current, decision, statusFilter),
   );
-  const [decisions, setDecisions] = useState<
-    Record<string, Partial<Pick<Applicant, "status" | "rejectDate">>>
-  >({});
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [pendingReject, setPendingReject] = useState<RejectMode | null>(null);
   const rejectRef = useRef<HTMLDivElement>(null);
@@ -83,133 +143,97 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
     };
   }, [rejectOpen]);
 
-  function statusOf(applicant: Applicant): ApplicantStatus {
-    return decisions[applicant.id]?.status ?? applicant.status;
+  const { applicants: pageApplicants, counts } = view;
+  const allCount = counts.pending + counts.accept + counts.reject;
+  const reviewed = counts.accept + counts.reject;
+  const reviewedPct = allCount ? Math.round((reviewed / allCount) * 100) : 0;
+
+  const pageCount = Math.max(1, Math.ceil(view.total / APPLICANT_PAGE_SIZE));
+  const pageStart = page * APPLICANT_PAGE_SIZE;
+
+  const selected =
+    pageApplicants.find((applicant) => applicant.id === selectedId) ?? pageApplicants[0] ?? null;
+  const selectedStatus = selected?.status ?? null;
+
+  // Filtering, searching and paging all happen on the server; the URL holds
+  // what's shown so it survives a reload and the back button.
+  function navigate(next: Partial<ApplicantQuery>) {
+    const target = { ...query, search: searchInput, ...next };
+    setRequestedSearch(target.search.trim());
+    setSelectedId(null);
+    startNavigation(() => router.replace(applicantQueryHref(pathname, target), { scroll: false }));
   }
 
-  const counts = useMemo(() => {
-    const tally: Record<ApplicantStatus, number> = { pending: 0, accept: 0, reject: 0 };
-    for (const applicant of reviewApplicants) {
-      tally[decisions[applicant.id]?.status ?? applicant.status]++;
+  // The search changed without this page asking (the back button): show it in
+  // the box, or the debounce below would send the old text straight back.
+  if (query.search !== shownSearch) {
+    setShownSearch(query.search);
+    if (query.search !== requestedSearch) {
+      setRequestedSearch(query.search);
+      setSearchInput(query.search);
     }
-    return tally;
-  }, [reviewApplicants, decisions]);
+  }
 
-  const reviewed = counts.accept + counts.reject;
-  const reviewedPct = reviewApplicants.length
-    ? Math.round((reviewed / reviewApplicants.length) * 100)
-    : 0;
-
-  const visible = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    return reviewApplicants.filter((applicant) => {
-      const status = decisions[applicant.id]?.status ?? applicant.status;
-      if (statusFilter !== "all" && status !== statusFilter) return false;
-      if (!needle) return true;
-      return [
-        applicant.firstName,
-        applicant.lastName,
-        applicant.email,
-        applicant.studentId,
-        applicant.program,
-        applicant.yearLevel,
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(needle);
-    });
-  }, [reviewApplicants, query, statusFilter, decisions]);
-
-  const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
-  const page = Math.min(pageIndex, pageCount - 1);
-  const pageStart = page * PAGE_SIZE;
-  const paged = visible.slice(pageStart, pageStart + PAGE_SIZE);
-
-  const selected = visible.find((applicant) => applicant.id === selectedId) ?? visible[0] ?? null;
-  const selectedStatus = selected ? statusOf(selected) : null;
+  // Search once typing pauses rather than on every key.
+  useEffect(() => {
+    if (searchInput.trim() === query.search) return;
+    const timer = setTimeout(() => navigate({ search: searchInput, page: 0 }), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+    // navigate changes every render; the timer only cares about the input.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchInput, query.search]);
 
   function goToPage(next: number) {
-    const target = Math.min(Math.max(next, 0), pageCount - 1);
-    setPageIndex(target);
-    setSelectedId(visible[target * PAGE_SIZE]?.id ?? null);
-  }
-
-  function onSearchChange(value: string) {
-    setQuery(value);
-    setPageIndex(0);
+    navigate({ page: Math.min(Math.max(next, 0), pageCount - 1) });
   }
 
   function onStatusFilterChange(value: StatusFilter) {
-    setStatusFilter(value);
-    setPageIndex(0);
+    navigate({ filter: value, page: 0 });
   }
 
-  // Decisions show at once and are undone (with a toast) if Supabase refuses them.
-  async function decide(status: ApplicantStatus, rejectDate?: string) {
+  function clearSearch() {
+    setSearchInput("");
+    navigate({ search: "", page: 0 });
+  }
+
+  // Decisions show at once. The action re-renders the page from the server when
+  // it saves; if it fails, the optimistic change falls away and a toast says so.
+  function decide(status: ApplicantStatus, rejectDate?: string) {
     const target = selected;
     if (!target) return;
     const name = applicantName(target);
+    const decision: Decision =
+      status === "accept" ? "accept" : rejectDate ? "reject" : "reject-immediate";
+    const pending: PendingDecision = {
+      id: target.id,
+      status: decision === "reject-immediate" ? "deleted" : status,
+      rejectDate,
+    };
 
-    if (status === "reject" && !rejectDate) {
-      const index = reviewApplicants.findIndex((applicant) => applicant.id === target.id);
-      const previousDecision = decisions[target.id];
-      const remainingVisible = visible.filter((applicant) => applicant.id !== target.id);
-      const selectedIndex = visible.findIndex((applicant) => applicant.id === target.id);
-      const nextSelected =
-        remainingVisible[Math.min(selectedIndex, remainingVisible.length - 1)] ?? null;
-      const nextPageCount = Math.max(1, Math.ceil(remainingVisible.length / PAGE_SIZE));
+    // When the applicant leaves this list, select whoever takes their place.
+    const leaves =
+      pending.status === "deleted" || (statusFilter !== "all" && statusFilter !== pending.status);
+    if (leaves) {
+      const index = pageApplicants.findIndex((applicant) => applicant.id === target.id);
+      const neighbour = pageApplicants[index + 1] ?? pageApplicants[index - 1] ?? null;
+      setSelectedId(neighbour?.id ?? null);
+    }
 
-      setReviewApplicants((prev) => prev.filter((applicant) => applicant.id !== target.id));
-      setDecisions((prev) => {
-        const next = { ...prev };
-        delete next[target.id];
-        return next;
-      });
-      setSelectedId(nextSelected?.id ?? null);
-      setPageIndex((prev) => Math.min(prev, nextPageCount - 1));
-
-      const result = await settle(decideApplicant(target.id, "reject-immediate"));
+    startDecision(async () => {
+      addPendingDecision(pending);
+      const result = await settle(decideApplicant(target.id, decision));
 
       if (result.error) {
-        console.error("Error rejecting applicant:", result.error);
-        setReviewApplicants((prev) => {
-          const next = [...prev];
-          next.splice(Math.min(index, next.length), 0, target);
-          return next;
-        });
-        if (previousDecision) setDecisions((prev) => ({ ...prev, [target.id]: previousDecision }));
+        console.error("Error saving applicant decision:", result.error);
         setSelectedId(target.id);
-        toast(`Couldn't reject ${name}'s application. Please try again.`);
+        toast(
+          status === "accept"
+            ? `Couldn't accept ${name}'s application. Please try again.`
+            : `Couldn't reject ${name}'s application. Please try again.`,
+        );
       }
       warnIfEmailFailed(result, name, target.email);
-      return;
-    }
-
-    const previousDecision = decisions[target.id];
-    setDecisions((prev) => ({
-      ...prev,
-      [target.id]: { status, rejectDate },
-    }));
-
-    const result = await settle(
-      decideApplicant(target.id, status === "accept" ? "accept" : "reject"),
-    );
-
-    if (result.error) {
-      console.error("Error saving applicant decision:", result.error);
-      setDecisions((prev) => {
-        const next = { ...prev };
-        if (previousDecision) next[target.id] = previousDecision;
-        else delete next[target.id];
-        return next;
-      });
-      toast(
-        status === "accept"
-          ? `Couldn't accept ${name}'s application. Please try again.`
-          : `Couldn't reject ${name}'s application. Please try again.`,
-      );
-    }
-    warnIfEmailFailed(result, name, target.email);
+    });
   }
 
   function requestReject(mode: RejectMode) {
@@ -244,8 +268,8 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
               <h1 className="page-title">User Account Review</h1>
             </div>
             <p className="mt-3.5 mb-0 text-xs text-ink-soft">
-              {reviewApplicants.length} registration
-              {reviewApplicants.length === 1 ? "" : "s"} on file. Select an applicant to review the
+              {allCount} registration
+              {allCount === 1 ? "" : "s"} on file. Select an applicant to review the
               details they applied with.
             </p>
           </div>
@@ -273,7 +297,7 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
               <div className="mono mb-1.5 flex justify-between text-[10px] tracking-[0.06em] text-ink-soft uppercase">
                 <span>Review progress</span>
                 <span className="tabular-nums">
-                  {reviewed}/{reviewApplicants.length} &middot; {reviewedPct}%
+                  {reviewed}/{allCount} &middot; {reviewedPct}%
                 </span>
               </div>
               <div
@@ -313,16 +337,16 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
                 <input
                   id="applicant-search"
                   type="text"
-                  value={query}
-                  onChange={(event) => onSearchChange(event.target.value)}
+                  value={searchInput}
+                  onChange={(event) => setSearchInput(event.target.value)}
                   placeholder="Name, ID, email, program"
                   autoComplete="off"
                   className="mb-0 py-2 pr-8 pl-9 text-[13px] outline-none focus:outline-none focus:ring-0 shadow-none rounded-lg"
                 />
-                {query && (
+                {searchInput && (
                   <button
                     type="button"
-                    onClick={() => onSearchChange("")}
+                    onClick={clearSearch}
                     aria-label="Clear search"
                     className="animate-pop-in absolute top-1/2 right-2 flex size-6 -translate-y-1/2 cursor-pointer items-center justify-center rounded-md border-none bg-transparent text-ink-soft transition-colors duration-150 hover:bg-[rgba(0,0,0,0.06)] hover:text-navy-deep"
                   >
@@ -338,7 +362,7 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
                 {STATUS_FILTERS.map((filter) => {
                   const isActive = statusFilter === filter.value;
                   const count =
-                    filter.value === "all" ? reviewApplicants.length : counts[filter.value];
+                    filter.value === "all" ? allCount : counts[filter.value];
                   return (
                     <button
                       key={filter.value}
@@ -367,19 +391,21 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
                 })}
               </div>
               <p className="mono mt-2 mb-0 text-[10px] text-ink-soft">
-                {visible.length} of {reviewApplicants.length} shown
+                {view.total} of {allCount} shown
               </p>
             </div>
 
-            {visible.length === 0 ? (
+            {pageApplicants.length === 0 ? (
               <div className="flex flex-1 flex-col items-center justify-center gap-3 px-4 py-10 text-center">
                 <span className="flex size-11 items-center justify-center rounded-full border border-dashed border-rule bg-vellum text-ink-soft">
-                  <Icon name={query.trim() ? "search" : "inbox"} size={18} />
+                  <Icon name={query.search ? "search" : "inbox"} size={18} />
                 </span>
                 <p className="mb-0 text-[13px] text-ink-soft">
-                  {query.trim() ? (
+                  {failed ? (
+                    "Couldn't load applicants. Refresh the page to try again."
+                  ) : query.search ? (
                     <>
-                      No applicants match &ldquo;{query.trim()}&rdquo;
+                      No applicants match &ldquo;{query.search}&rdquo;
                       {statusFilter !== "all" && (
                         <>
                           {" "}
@@ -401,10 +427,15 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
               </div>
             ) : (
               <>
-                <ul className="m-0 min-h-0 flex-1 list-none overflow-y-auto">
-                  {paged.map((applicant, index) => {
+                <ul
+                  aria-busy={isNavigating}
+                  className={`m-0 min-h-0 flex-1 list-none overflow-y-auto transition-opacity duration-150 ${
+                    isNavigating ? "opacity-60" : ""
+                  }`}
+                >
+                  {pageApplicants.map((applicant, index) => {
                     const isSelected = applicant.id === selected?.id;
-                    const status = statusOf(applicant);
+                    const status = applicant.status;
 
                     return (
                       <li
@@ -447,8 +478,8 @@ export default function UserAccountReview({ profile, applicants }: UserAccountRe
                 {/* Footer */}
                 <div className={`${FOOTER_BAR} justify-between px-4`}>
                   <span className="mono text-[10px] text-ink-soft">
-                    Showing {pageStart + 1}&ndash;{Math.min(pageStart + PAGE_SIZE, visible.length)} of{" "}
-                    {visible.length}
+                    Showing {pageStart + 1}&ndash;{Math.min(pageStart + APPLICANT_PAGE_SIZE, view.total)} of{" "}
+                    {view.total}
                   </span>
                   <div className="flex items-center gap-2">
                     <button
