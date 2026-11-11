@@ -31,8 +31,9 @@ jobs:
     timeout-minutes: 15
     environment: ${{ github.ref_name == 'main' && 'production' || 'development' }}
     env:
-      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      # Session pooler URL (IPv4; GitHub runners have no IPv6, and the direct DB host is IPv6-only):
+      # postgresql://postgres.<ref>:<url-encoded password>@aws-0-<region>.pooler.supabase.com:5432/postgres
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
       # Hard-coded so CI can never target the wrong project: main -> prod, development -> dev.
       SUPABASE_PROJECT_ID: ${{ github.ref_name == 'main' && 'isaihhepofinlygzhzaw' || 'zuvsgspwhhirrfmhociv' }}
     steps:
@@ -42,11 +43,15 @@ jobs:
         with:
           version: 2.119.0
 
-      - name: Link project
-        run: supabase link --project-ref "$SUPABASE_PROJECT_ID"
+      - name: Check DB URL targets the expected project
+        run: |
+          if [[ "$SUPABASE_DB_URL" != "postgresql://postgres.$SUPABASE_PROJECT_ID:"* ]]; then
+            echo "::error::SUPABASE_DB_URL is missing or does not point at project $SUPABASE_PROJECT_ID"
+            exit 1
+          fi
 
       - name: Show pending migrations
-        run: supabase db push --dry-run
+        run: supabase db push --dry-run --db-url "$SUPABASE_DB_URL"
 
       - name: Push migrations
-        run: supabase db push
+        run: supabase db push --db-url "$SUPABASE_DB_URL"
