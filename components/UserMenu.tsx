@@ -110,6 +110,14 @@ export default function UserMenu({
           >
             <span className="userMenuItemFace">{profileLabel}</span>
           </Link>
+          <Link
+            href="/about"
+            className="userMenuItem"
+            aria-current={pathname === "/about" ? "page" : undefined}
+            onClick={() => setOpen(false)}
+          >
+            <span className="userMenuItemFace">About</span>
+          </Link>
 
           <form action={logout} className="userMenuForm">
             <button type="submit" className="userMenuItem userMenuItemDanger">

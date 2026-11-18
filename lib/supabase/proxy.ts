@@ -49,6 +49,8 @@ export async function updateSession(request: NextRequest) {
 
   if (
     request.nextUrl.pathname !== "/" &&
+    // Temporary local preview for About page development; production stays protected.
+    !(process.env.NODE_ENV === "development" && request.nextUrl.pathname === "/about") &&
     !user &&
     !request.nextUrl.pathname.startsWith("/login") &&
     !request.nextUrl.pathname.startsWith("/signup") &&
